@@ -97,13 +97,15 @@ pub struct Warp {
 }
 
 impl Warp {
+    /// Signed: calendar times before the first recorded event (e.g. the session's open when the
+    /// recording starts mid-session) map to wall times before the replay started.
     pub fn to_wall(&self, rec_ns: u64) -> u64 {
-        let d = rec_ns.saturating_sub(self.rec_start_ns) as f64 / self.speed;
-        self.wall_start_ns + d as u64
+        let d = (rec_ns as i128 - self.rec_start_ns as i128) as f64 / self.speed;
+        (self.wall_start_ns as i128 + d as i128).max(0) as u64
     }
     pub fn to_rec(&self, wall_ns: u64) -> u64 {
-        let d = wall_ns.saturating_sub(self.wall_start_ns) as f64 * self.speed;
-        self.rec_start_ns + d as u64
+        let d = (wall_ns as i128 - self.wall_start_ns as i128) as f64 * self.speed;
+        (self.rec_start_ns as i128 + d as i128).max(0) as u64
     }
 }
 
@@ -495,6 +497,23 @@ mod tests {
         let st = r.status(&a).await.unwrap();
         assert_eq!(st.market, VendorMarket::Open);
         assert!(!st.halt.unwrap().halted);
+    }
+
+    #[test]
+    fn warp_maps_times_before_the_recording_start() {
+        let w = Warp {
+            rec_start_ns: 10_000,
+            wall_start_ns: 50_000,
+            speed: 1.0,
+        };
+        assert_eq!(w.to_wall(4_000), 44_000);
+        assert_eq!(w.to_rec(44_000), 4_000);
+        let fast = Warp {
+            rec_start_ns: 10_000,
+            wall_start_ns: 50_000,
+            speed: 2.0,
+        };
+        assert_eq!(fast.to_wall(4_000), 47_000);
     }
 
     #[test]

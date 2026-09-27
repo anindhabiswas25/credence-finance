@@ -281,6 +281,7 @@ impl Alpaca {
             })?;
         let status = resp.status();
         let body = resp.text().await.unwrap_or_default();
+        tracing::trace!(vendor = V, path, %status, body = %body.chars().take(300).collect::<String>(), "vendor response");
         if !status.is_success() {
             return Err(http_error(V, path, status, &body));
         }
@@ -349,6 +350,111 @@ impl Alpaca {
             )
             .await?;
         parse_daily_bar(&body, &asset.symbol, session, open)
+    }
+}
+
+// ── historical recording (credence-relayer record) ─────────────────────────────────────────────
+
+#[derive(Deserialize)]
+struct HistTradesPage {
+    #[serde(default)]
+    trades: HashMap<String, Vec<RawTrade>>,
+    next_page_token: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct HistQuotesPage {
+    #[serde(default)]
+    quotes: HashMap<String, Vec<RawQuote>>,
+    next_page_token: Option<String>,
+}
+
+/// One recorded event, in replay-file shape.
+pub enum Recorded {
+    Trade {
+        t: u64,
+        p: f64,
+        s: u64,
+        x: String,
+        c: Vec<String>,
+        z: Option<String>,
+    },
+    Quote {
+        t: u64,
+        bp: f64,
+        ap: f64,
+    },
+}
+
+impl Alpaca {
+    /// All trades and quotes of `asset` in `[start_ns, end_ns)`, paginated, capped at `max_pages` per kind.
+    pub async fn history(
+        &self,
+        asset: &Asset,
+        start_ns: u64,
+        end_ns: u64,
+        max_pages: usize,
+    ) -> VendorResult<Vec<(u64, Recorded)>> {
+        let mut out = Vec::new();
+        for kind in ["trades", "quotes"] {
+            let mut token: Option<String> = None;
+            for _ in 0..max_pages {
+                let mut q = vec![
+                    ("symbols", asset.symbol.clone()),
+                    ("start", rfc3339(start_ns)),
+                    ("end", rfc3339(end_ns)),
+                    ("limit", "10000".to_string()),
+                    ("sort", "asc".to_string()),
+                    ("feed", self.cfg.feed.clone()),
+                ];
+                if let Some(t) = &token {
+                    q.push(("page_token", t.clone()));
+                }
+                let path = format!("/v2/stocks/{kind}");
+                let body = self.get(&self.cfg.data_url, &path, &q).await?;
+                token = if kind == "trades" {
+                    let page: HistTradesPage =
+                        serde_json::from_str(&body).map_err(|e| parse_err(&path, e))?;
+                    for r in page.trades.get(&asset.symbol).into_iter().flatten() {
+                        if let Some(t) = ts_ns(&r.t) {
+                            out.push((
+                                t,
+                                Recorded::Trade {
+                                    t,
+                                    p: r.p,
+                                    s: r.s.max(0.0) as u64,
+                                    x: exchange_mic(&r.x).into(),
+                                    c: r.c.clone(),
+                                    z: r.z.clone(),
+                                },
+                            ));
+                        }
+                    }
+                    page.next_page_token
+                } else {
+                    let page: HistQuotesPage =
+                        serde_json::from_str(&body).map_err(|e| parse_err(&path, e))?;
+                    for r in page.quotes.get(&asset.symbol).into_iter().flatten() {
+                        if let Some(t) = ts_ns(&r.t) {
+                            out.push((
+                                t,
+                                Recorded::Quote {
+                                    t,
+                                    bp: r.bp,
+                                    ap: r.ap,
+                                },
+                            ));
+                        }
+                    }
+                    page.next_page_token
+                };
+                if token.is_none() {
+                    break;
+                }
+            }
+        }
+        out.sort_by_key(|(t, _)| *t);
+        Ok(out)
     }
 }
 

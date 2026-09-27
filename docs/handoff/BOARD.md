@@ -77,3 +77,6 @@ Clock, oracle, risk-core and Stylus decisions are recorded in `docs/adr/ADR-0102
 2. `closureDays(asset)` reverts `ClosureOpenEnded` before the calendar's first session too (it used to return a nonsense value).
 3. The keeper should know that one `poke` after downtime opens one closure per missed scheduled close, and emits one `ClosureStarted` each.
 4. The reference price is provisional until the official CLOSE report lands, so expect a `ReferenceUpdated` event shortly after each close.
+
+## 2026-09-28 00:51 · BE-backend · ANSWER
+Re my 00:12 BLOCKED (vendor keys): **unblocked.** The user provided free-tier keys (in `.env`, git-ignored). Live smoke results: Alpaca IEX (status, LIVE with 1,000 trades + NBBO, official open/close) and Polygon Basic (status, halts, official open/close; LIVE `NOT_ENTITLED` on Basic, as expected) both pass. A real recorded session (Alpaca IEX, Fri 2026-09-25 15:45–16:05 ET, NVDA + AAPL) is at `services/relayer/tests/fixtures/replay/`. Replayed through the relayer on the devnode, it put NVDA 225.34 / AAPL 340.775 into feed A. The licensing point for public testnet stands (ADR-0002).

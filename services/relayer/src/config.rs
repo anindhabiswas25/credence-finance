@@ -148,6 +148,9 @@ pub async fn build_vendor(common: &Common) -> Result<(DynVendor, Arc<Calendar>)>
         }
         VendorKind::Polygon => {
             let halts = halt_feed();
+            if let Err(e) = halts.refresh().await {
+                tracing::warn!(error = %e, "halt feed: first refresh failed (halts unknown until it succeeds)");
+            }
             tokio::spawn(halts.clone().run(Duration::from_secs(10)));
             let p = Polygon::new(polygon_config()?, halts);
             match p.load_conditions().await {
@@ -160,6 +163,9 @@ pub async fn build_vendor(common: &Common) -> Result<(DynVendor, Arc<Calendar>)>
         }
         VendorKind::Alpaca => {
             let halts = halt_feed();
+            if let Err(e) = halts.refresh().await {
+                tracing::warn!(error = %e, "halt feed: first refresh failed (halts unknown until it succeeds)");
+            }
             tokio::spawn(halts.clone().run(Duration::from_secs(10)));
             Ok((
                 Arc::new(Alpaca::new(alpaca_config()?, halts)),

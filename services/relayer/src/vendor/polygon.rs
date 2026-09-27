@@ -371,6 +371,7 @@ impl Polygon {
             })?;
         let status = resp.status();
         let body = resp.text().await.unwrap_or_default();
+        tracing::trace!(vendor = V, path, %status, body = %body.chars().take(300).collect::<String>(), "vendor response");
         if !status.is_success() {
             return Err(http_error(V, path, status, &body));
         }

@@ -61,6 +61,23 @@ enum Cmd {
         #[arg(long, default_value_t = 10)]
         minutes_in: u64,
     },
+    /// Record a real session window from Alpaca history (trades + quotes) into a replay file.
+    Record {
+        /// RFC 3339 start, e.g. 2026-09-25T15:50:00-04:00
+        #[arg(long)]
+        start: String,
+        /// RFC 3339 end
+        #[arg(long)]
+        end: String,
+        #[arg(long)]
+        out: std::path::PathBuf,
+        /// Max pages (10 000 rows each) per symbol and kind
+        #[arg(long, default_value_t = 20)]
+        max_pages: usize,
+        /// Keep at most one quote per symbol per this many ms (0 = all). Trades are always kept.
+        #[arg(long, default_value_t = 500)]
+        quote_sample_ms: u64,
+    },
     /// Hit every vendor endpoint once for one asset and report what the key is entitled to.
     Smoke {
         /// Asset to test (defaults to the first in ASSETS).
@@ -226,6 +243,128 @@ async fn node(
     )))
 }
 
+/// Record `[start, end)` for every asset from Alpaca history into the replay format
+/// (`vendor::replay`): a header with the calendar sessions touching the window, market events at every
+/// calendar window change, then all trades and quotes.
+async fn record(
+    common: &Common,
+    start: &str,
+    end: &str,
+    out: &std::path::Path,
+    max_pages: usize,
+    quote_sample_ms: u64,
+) -> Result<()> {
+    use credence_common::calendar::Window;
+    use credence_relayer::vendor::{
+        alpaca::{Alpaca, Recorded},
+        replay::{Event, RawSession},
+    };
+    let parse = |s: &str| -> Result<u64> {
+        Ok(chrono::DateTime::parse_from_rfc3339(s)
+            .context("RFC 3339 time")?
+            .timestamp() as u64)
+    };
+    let (from, to) = (parse(start)?, parse(end)?);
+    if to <= from {
+        bail!("--end must be after --start");
+    }
+    let halts = credence_relayer::config::halt_feed();
+    let alpaca = Alpaca::new(credence_relayer::config::alpaca_config()?, halts);
+    let cal = credence_relayer::config::load_calendar()?;
+    let sessions: Vec<RawSession> = cal
+        .sessions
+        .iter()
+        .filter(|s| s.ext_close > from && s.ext_open < to)
+        .map(|s| RawSession {
+            ext_open: s.ext_open,
+            open: s.open,
+            close: s.close,
+            ext_close: s.ext_close,
+            closure_type_after: s.closure_type_after as u8,
+        })
+        .collect();
+    if sessions.is_empty() {
+        bail!("no calendar session touches {start} .. {end} (set CALENDAR_FILES)");
+    }
+    let market = |w: Window| match w {
+        Window::Regular => "open",
+        Window::Closed => "closed",
+        _ => "extended",
+    };
+    let mut events: Vec<(u64, Event)> = vec![(
+        0,
+        Event::Header {
+            venue: cal.venue.clone(),
+            sessions,
+        },
+    )];
+    let mut marks = vec![from];
+    marks.extend(cal.boundaries_between(from, to));
+    for m in marks {
+        events.push((
+            m * 1_000_000_000,
+            Event::Market {
+                t: m * 1_000_000_000,
+                m: market(cal.window_at(m)).into(),
+            },
+        ));
+    }
+    for asset in &common.assets {
+        let rows = alpaca
+            .history(asset, from * 1_000_000_000, to * 1_000_000_000, max_pages)
+            .await?;
+        let total = rows.len();
+        let mut kept = 0usize;
+        let mut last_quote = 0u64;
+        for (t, r) in rows {
+            if let Recorded::Quote { .. } = r {
+                if quote_sample_ms > 0
+                    && last_quote != 0
+                    && t < last_quote + quote_sample_ms * 1_000_000
+                {
+                    continue;
+                }
+                last_quote = t;
+            }
+            kept += 1;
+            let e = match r {
+                Recorded::Trade { t, p, s, x, c, z } => Event::Trade {
+                    t,
+                    sym: asset.symbol.clone(),
+                    p,
+                    s,
+                    x,
+                    c,
+                    z,
+                },
+                Recorded::Quote { t, bp, ap } => Event::Quote {
+                    t,
+                    sym: asset.symbol.clone(),
+                    bp,
+                    ap,
+                },
+            };
+            events.push((t, e));
+        }
+        println!("{}: {total} rows, {kept} kept", asset.symbol);
+    }
+    events.sort_by_key(|(t, _)| *t);
+    let mut body = String::new();
+    for (_, e) in events {
+        body.push_str(&serde_json::to_string(&e)?);
+        body.push('\n');
+    }
+    std::fs::write(out, body)?;
+    println!(
+        "wrote {} (vendor alpaca, feed {})",
+        out.display(),
+        credence_relayer::config::alpaca_config()?.feed
+    );
+    Ok(())
+}
+
+use credence_relayer::price::fmt_wad;
+
 async fn smoke(
     common: &Common,
     asset: Option<String>,
@@ -274,25 +413,35 @@ async fn smoke(
             .await
             .map(|s| serde_json::to_value(s).unwrap_or_default()),
     );
+    // u128 WAD prices do not fit serde_json numbers: report them as decimal strings
+    let print = |p: Option<credence_relayer::vendor::OfficialPrint>| match p {
+        None => serde_json::Value::Null,
+        Some(p) => {
+            serde_json::json!({ "price": fmt_wad(p.price_wad), "at": p.at, "source": format!("{:?}", p.source) })
+        }
+    };
+    // the last 10 minutes of the most recent regular session
+    let since = (session.close.saturating_sub(600)) * 1_000_000_000;
     record(
         "live",
-        vendor.live(&asset, (now - 3600) * 1_000_000_000).await.map(|l| {
-            serde_json::json!({ "trades": l.trades.len(), "newest": l.trades.first(), "nbbo": l.nbbo })
+        vendor.live(&asset, since).await.map(|l| {
+            serde_json::json!({
+                "trades": l.trades.len(),
+                "newest": l.trades.first().map(|t| serde_json::json!({
+                    "price": fmt_wad(t.price_wad), "ts_ns": t.ts_ns, "exchange": t.exchange,
+                    "conditions": t.conditions, "plan": format!("{:?}", t.plan),
+                })),
+                "nbbo": l.nbbo.map(|q| serde_json::json!({ "bid": fmt_wad(q.bid_wad), "ask": fmt_wad(q.ask_wad), "ts_ns": q.ts_ns })),
+            })
         }),
     );
     record(
         "official_open",
-        vendor
-            .official_open(&asset, &session)
-            .await
-            .map(|p| serde_json::to_value(p).unwrap_or_default()),
+        vendor.official_open(&asset, &session).await.map(print),
     );
     record(
         "official_close",
-        vendor
-            .official_close(&asset, &session)
-            .await
-            .map(|p| serde_json::to_value(p).unwrap_or_default()),
+        vendor.official_close(&asset, &session).await.map(print),
     );
     if let Some(path) = out {
         let doc = serde_json::json!({ "vendor": vendor.name(), "asset": asset.symbol, "at": now, "results": results });
@@ -345,6 +494,13 @@ async fn main() -> Result<()> {
     match cli.cmd {
         Cmd::SampleReplay { .. } => unreachable!("handled above"),
         Cmd::Smoke { asset, out } => smoke(&common, asset, out).await,
+        Cmd::Record {
+            start,
+            end,
+            out,
+            max_pages,
+            quote_sample_ms,
+        } => record(&common, &start, &end, &out, max_pages, quote_sample_ms).await,
         Cmd::Run => {
             if !is_dev_chain(common.chain_id) {
                 bail!("`run` (all nodes in one process) is for dev chains; use `node` + `aggregator` on {}", common.chain_id);
