@@ -1,0 +1,9 @@
+packages:
+  - "packages/*"
+  - "services/api"
+  - "services/notifier"
+  - "indexer"
+  - "apps/*"
+onlyBuiltDependencies:
+  - esbuild
+  - better-sqlite3

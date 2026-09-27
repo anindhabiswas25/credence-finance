@@ -1,0 +1,10 @@
+{
+  "$schema": "https://turborepo.com/schema.json",
+  "tasks": {
+    "build": { "dependsOn": ["^build"], "outputs": ["dist/**"] },
+    "typecheck": { "dependsOn": ["^build"] },
+    "lint": {},
+    "test": { "dependsOn": ["^build"], "env": ["DATABASE_URL", "RPC_URL", "CHAIN_ID"] },
+    "dev": { "cache": false, "persistent": true }
+  }
+}

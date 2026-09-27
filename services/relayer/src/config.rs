@@ -1,0 +1,150 @@
+//! Relayer configuration from env (§12.1 "relayer (per feed: A or B)").
+
+use crate::{
+    asset::Asset,
+    vendor::{
+        alpaca::{Alpaca, AlpacaConfig},
+        halts::{HaltFeed, NASDAQ_HALTS_URL},
+        polygon::{Polygon, PolygonConfig},
+        replay::Replay,
+        DynVendor,
+    },
+};
+use anyhow::{bail, Context, Result};
+use credence_common::{calendar::Calendar, env};
+use std::{path::PathBuf, sync::Arc, time::Duration};
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum VendorKind {
+    Polygon,
+    Alpaca,
+    Replay,
+}
+
+impl VendorKind {
+    pub fn from_env() -> Result<Self> {
+        Ok(match env::or("VENDOR", "replay").to_lowercase().as_str() {
+            "polygon" | "massive" => Self::Polygon,
+            "alpaca" => Self::Alpaca,
+            "replay" => Self::Replay,
+            other => bail!("VENDOR={other} is not supported (polygon | alpaca | replay)"),
+        })
+    }
+}
+
+/// Everything shared by node, aggregator and all-in-one modes.
+pub struct Common {
+    pub chain_id: u64,
+    pub feed_id: String,
+    pub assets: Vec<Asset>,
+    pub vendor_kind: VendorKind,
+}
+
+impl Common {
+    pub fn from_env() -> Result<Self> {
+        let chain_id = env::chain_id()?;
+        let assets = Asset::parse_list(&env::list("ASSETS")).context("ASSETS")?;
+        let feed_id = env::or("FEED_ID", "A");
+        if !matches!(feed_id.as_str(), "A" | "B") {
+            bail!("FEED_ID must be A or B");
+        }
+        Ok(Self { chain_id, feed_id, assets, vendor_kind: VendorKind::from_env()? })
+    }
+}
+
+/// Calendar files: `CALENDAR_FILES` (comma list, merged) or the newest XNYS file under
+/// `calibration/out/calendars/` found from the working directory upwards.
+pub fn load_calendar() -> Result<Calendar> {
+    let files: Vec<PathBuf> = match env::optional("CALENDAR_FILES") {
+        Some(_) => env::list("CALENDAR_FILES").into_iter().map(PathBuf::from).collect(),
+        None => vec![find_default_calendar()?],
+    };
+    let mut cal: Option<Calendar> = None;
+    for f in files {
+        let c = Calendar::load(&f)?;
+        cal = Some(match cal {
+            None => c,
+            Some(prev) => prev.merge(c)?,
+        });
+    }
+    cal.context("no calendar")
+}
+
+fn find_default_calendar() -> Result<PathBuf> {
+    let mut dir = std::env::current_dir()?;
+    loop {
+        let d = dir.join("calibration/out/calendars");
+        if d.is_dir() {
+            let mut xs: Vec<PathBuf> = std::fs::read_dir(&d)?
+                .filter_map(|e| e.ok().map(|e| e.path()))
+                .filter(|p| p.file_name().and_then(|n| n.to_str()).is_some_and(|n| n.starts_with("XNYS-") && n.ends_with(".json")))
+                .collect();
+            xs.sort();
+            return xs.pop().context("no XNYS calendar in calibration/out/calendars (run `make calendar-gen`)");
+        }
+        if !dir.pop() {
+            bail!("calibration/out/calendars not found; set CALENDAR_FILES");
+        }
+    }
+}
+
+pub fn halt_feed() -> Arc<HaltFeed> {
+    HaltFeed::new(env::or("NASDAQ_HALTS_URL", NASDAQ_HALTS_URL))
+}
+
+pub fn polygon_config() -> Result<PolygonConfig> {
+    let api_key = env::optional("POLYGON_API_KEY")
+        .or_else(|| env::optional("VENDOR_API_KEY"))
+        .context("POLYGON_API_KEY (or VENDOR_API_KEY) is required for VENDOR=polygon")?;
+    Ok(PolygonConfig {
+        api_key,
+        base_url: env::or("POLYGON_BASE_URL", "https://api.polygon.io"),
+        max_rpm: env::parse_or("POLYGON_MAX_RPM", 5)?,
+    })
+}
+
+pub fn alpaca_config() -> Result<AlpacaConfig> {
+    let (key_id, secret) = match (env::optional("ALPACA_API_KEY_ID"), env::optional("ALPACA_API_SECRET_KEY")) {
+        (Some(k), Some(s)) => (k, s),
+        _ => match env::optional("VENDOR_API_KEY").and_then(|v| v.split_once(':').map(|(a, b)| (a.to_owned(), b.to_owned()))) {
+            Some(p) => p,
+            None => bail!("ALPACA_API_KEY_ID + ALPACA_API_SECRET_KEY (or VENDOR_API_KEY=<id>:<secret>) are required for VENDOR=alpaca"),
+        },
+    };
+    Ok(AlpacaConfig {
+        key_id,
+        secret,
+        feed: env::or("ALPACA_FEED", "iex"),
+        data_url: env::or("ALPACA_DATA_URL", "https://data.alpaca.markets"),
+        trading_url: env::or("ALPACA_TRADING_URL", "https://paper-api.alpaca.markets"),
+        max_rpm: env::parse_or("ALPACA_MAX_RPM", 200)?,
+    })
+}
+
+/// Build the vendor and the calendar the node should use (a replay carries its own warped calendar).
+pub async fn build_vendor(common: &Common) -> Result<(DynVendor, Arc<Calendar>)> {
+    match common.vendor_kind {
+        VendorKind::Replay => {
+            let path = PathBuf::from(env::required("REPLAY_FILE")?);
+            let speed: f64 = env::parse_or("REPLAY_SPEED", 1.0)?;
+            let r = Replay::load(&path, speed, common.chain_id)?;
+            let cal = Arc::new(r.calendar().clone());
+            Ok((Arc::new(r), cal))
+        }
+        VendorKind::Polygon => {
+            let halts = halt_feed();
+            tokio::spawn(halts.clone().run(Duration::from_secs(10)));
+            let p = Polygon::new(polygon_config()?, halts);
+            match p.load_conditions().await {
+                Ok(n) => tracing::info!(n, "polygon condition table loaded"),
+                Err(e) => tracing::warn!(error = %e, "polygon conditions: using the built-in table"),
+            }
+            Ok((Arc::new(p), Arc::new(load_calendar()?)))
+        }
+        VendorKind::Alpaca => {
+            let halts = halt_feed();
+            tokio::spawn(halts.clone().run(Duration::from_secs(10)));
+            Ok((Arc::new(Alpaca::new(alpaca_config()?, halts)), Arc::new(load_calendar()?)))
+        }
+    }
+}

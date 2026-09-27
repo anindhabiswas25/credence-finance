@@ -1,0 +1,33 @@
+{
+    "trades": {
+        "AAPL": [
+            {
+                "t": "2022-03-09T05:00:02.183Z",
+                "x": "D",
+                "p": 159.07,
+                "s": 1,
+                "c": [
+                    "@",
+                    "T",
+                    "I"
+                ],
+                "i": 151,
+                "z": "C"
+            },
+            {
+                "t": "2022-03-09T05:00:16.91Z",
+                "x": "D",
+                "p": 159.07,
+                "s": 2,
+                "c": [
+                    "@",
+                    "T",
+                    "I"
+                ],
+                "i": 168,
+                "z": "C"
+            }
+        ]
+    },
+    "next_page_token": "QUFQTHwyMDIyLTAzLTA5VDA1OjAwOjE2LjkxMDAwMDAwMFp8RHwwOTIyMzM3MjAzNjg1NDc3NTk3Ng=="
+}

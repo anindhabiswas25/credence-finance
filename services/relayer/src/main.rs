@@ -1,0 +1,269 @@
+//! `credence-relayer` binary.
+//!
+//! ```text
+//! credence-relayer run          # all-in-one: 3 in-process signer nodes + aggregator (dev)
+//! credence-relayer node         # one signer node (production: one per host / cloud account)
+//! credence-relayer aggregator   # the feed's aggregator, talking to RELAYER_NODE_URLS
+//! credence-relayer smoke        # live vendor smoke test (needs vendor keys)
+//! ```
+
+use alloy::primitives::Address;
+use anyhow::{bail, Context, Result};
+use clap::{Parser, Subcommand};
+use credence_common::{
+    env, is_dev_chain,
+    ops::{serve, OpsState},
+    signer::{CredenceSigner, SignerConfig},
+    telemetry,
+};
+use credence_relayer::{
+    aggregator::{Aggregator, AggregatorConfig, HttpNode, LocalNode, NodeClient},
+    chain::{ChainClient, FeedChain},
+    config::{build_vendor, Common, VendorKind},
+    filter::FilterConfig,
+    metrics::Metrics,
+    node::{Node, NodeConfig},
+    report::domain,
+    store::{MemStore, PgStore, ReportStore},
+    vendor::DynVendor,
+};
+use std::{net::SocketAddr, sync::Arc, time::Duration};
+
+#[derive(Parser)]
+#[command(name = "credence-relayer", version, about = "Credence price relayer (Build Guide §10.1)")]
+struct Cli {
+    #[command(subcommand)]
+    cmd: Cmd,
+}
+
+#[derive(Subcommand)]
+enum Cmd {
+    /// 3 in-process signer nodes + the aggregator (development and the local devnode).
+    Run,
+    /// One signer node serving /v1/observations and /v1/sign.
+    Node {
+        #[arg(long, env = "NODE_ID", default_value = "node-1")]
+        id: String,
+        #[arg(long, env = "NODE_LISTEN", default_value = "0.0.0.0:8080")]
+        listen: SocketAddr,
+    },
+    /// The aggregator of one feed.
+    Aggregator,
+    /// Hit every vendor endpoint once for one asset and report what the key is entitled to.
+    Smoke {
+        /// Asset to test (defaults to the first in ASSETS).
+        #[arg(long)]
+        asset: Option<String>,
+        /// Write the results as JSON to this file.
+        #[arg(long)]
+        out: Option<std::path::PathBuf>,
+    },
+}
+
+// Well-known dev keys (public; accepted only on dev chains, see SignerConfig).
+const ANVIL_KEYS: [&str; 4] = [
+    "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80",
+    "0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d",
+    "0x5de4111afa1a4b94908f83103eb1f1706367c2e68ca870fc3fb9a804cdab365a",
+    "0x7c852118294e51e653712a81e05800f419141751be58f605c371e15141b007a6",
+];
+const NITRO_DEV_KEY: &str = "0xb6b15c8cb491557369f3c7d2c287b053eb229daa9c22138887752191c9520659";
+
+fn signer_config(prefix: &str, dev_default: Option<&str>, chain_id: u64) -> Result<SignerConfig> {
+    match SignerConfig::from_env(prefix) {
+        Ok(c) => Ok(c),
+        Err(e) => match dev_default {
+            Some(k) if is_dev_chain(chain_id) => {
+                tracing::warn!(prefix, "no signer configured: using a well-known dev key (dev chain only)");
+                Ok(SignerConfig::LocalHex { key: k.into() })
+            }
+            _ => Err(e),
+        },
+    }
+}
+
+fn node_config(id: &str, assets: Vec<credence_relayer::asset::Asset>, vendor: VendorKind) -> Result<NodeConfig> {
+    // free vendor tiers are slow: poll less often unless told otherwise
+    let default_poll = if vendor == VendorKind::Replay { 1000 } else { 2000 };
+    Ok(NodeConfig {
+        id: id.into(),
+        assets,
+        poll_interval: Duration::from_millis(env::parse_or("RELAYER_POLL_MS", default_poll)?),
+        print_poll_interval: Duration::from_millis(env::parse_or("RELAYER_PRINT_POLL_MS", 2000)?),
+        filter: FilterConfig::default(),
+        auth_token: env::optional("RELAYER_NODE_TOKEN"),
+    })
+}
+
+fn feed_address() -> Result<Address> {
+    env::required("FEED_ADDRESS")?.parse().context("FEED_ADDRESS")
+}
+
+fn rpc_urls() -> Result<Vec<String>> {
+    let mut v = vec![env::optional("RPC_URL").or_else(|| env::optional("ARB_SEPOLIA_RPC_URL")).context("RPC_URL")?];
+    if let Some(f) = env::optional("RPC_URL_FALLBACK").or_else(|| env::optional("ARB_SEPOLIA_RPC_URL_FALLBACK")) {
+        v.push(f);
+    }
+    Ok(v)
+}
+
+async fn store() -> Result<Arc<dyn ReportStore>> {
+    match env::optional("DATABASE_URL") {
+        Some(url) => Ok(Arc::new(PgStore::new(credence_common::db::connect(&url, 4).await?))),
+        None => {
+            tracing::warn!("DATABASE_URL not set: reports are kept in memory only");
+            Ok(Arc::new(MemStore::default()))
+        }
+    }
+}
+
+async fn aggregator(
+    common: &Common,
+    nodes: Vec<Arc<dyn NodeClient>>,
+    ops: &OpsState,
+    metrics: Metrics,
+) -> Result<Aggregator> {
+    let submitter_default = match common.chain_id {
+        31_337 => Some(ANVIL_KEYS[0]),
+        412_346 => Some(NITRO_DEV_KEY),
+        _ => None,
+    };
+    let submitter = CredenceSigner::load(&signer_config("RELAYER_SUBMITTER", submitter_default, common.chain_id)?, common.chain_id).await?;
+    let other = env::optional("OTHER_FEED_ADDRESS").map(|a| a.parse()).transpose().context("OTHER_FEED_ADDRESS")?;
+    let chain = ChainClient::connect(&rpc_urls()?, submitter.wallet(), feed_address()?, other)?;
+    let actual = chain.chain_id().await?;
+    if actual != common.chain_id {
+        bail!("RPC chain id {actual} != CHAIN_ID {}", common.chain_id);
+    }
+    tracing::info!(submitter = %submitter.address(), feed = %chain.feed, "aggregator connected");
+    let committee = env::optional("RELAYER_COMMITTEE")
+        .map(|s| s.split(',').map(|a| a.trim().parse::<Address>()).collect::<Result<Vec<_>, _>>())
+        .transpose()
+        .context("RELAYER_COMMITTEE")?;
+    let cfg = AggregatorConfig {
+        feed: common.feed_id.clone(),
+        threshold: env::parse_or("RELAYER_THRESHOLD", 2usize)?,
+        tick: Duration::from_millis(env::parse_or("RELAYER_TICK_MS", 1000)?),
+        committee,
+        assets: common.assets.iter().map(|a| (a.id, a.symbol.clone())).collect(),
+    };
+    let _ = ops;
+    let chain: Arc<dyn FeedChain> = Arc::new(chain);
+    let mut agg = Aggregator::new(cfg, nodes, chain, store().await?, metrics);
+    agg.sync_seqs().await?;
+    Ok(agg)
+}
+
+async fn node(
+    common: &Common,
+    id: &str,
+    key_prefix: &str,
+    dev_key: Option<&str>,
+    vendor: DynVendor,
+    calendar: Arc<credence_common::calendar::Calendar>,
+    metrics: Metrics,
+) -> Result<Arc<Node>> {
+    let signer = CredenceSigner::load(&signer_config(key_prefix, dev_key, common.chain_id)?, common.chain_id).await?;
+    let d = domain(common.chain_id, feed_address()?);
+    tracing::info!(node = id, signer = %signer.address(), vendor = vendor.name(), "signer node ready");
+    Ok(Arc::new(Node::new(node_config(id, common.assets.clone(), common.vendor_kind.clone())?, vendor, calendar, signer, d, metrics)))
+}
+
+async fn smoke(common: &Common, asset: Option<String>, out: Option<std::path::PathBuf>) -> Result<()> {
+    use credence_relayer::{asset::Asset, vendor::VendorError};
+    let asset = match asset {
+        Some(a) => Asset::parse(&a)?,
+        None => common.assets[0].clone(),
+    };
+    let (vendor, cal) = build_vendor(common).await?;
+    let now = credence_relayer::node::now_s();
+    let session = cal.current_or_last_session(now).copied().context("no session in the calendar before now")?;
+    let mut results = serde_json::Map::new();
+    let mut fatal = false;
+    let mut record = |name: &str, r: std::result::Result<serde_json::Value, VendorError>| {
+        let (status, detail) = match r {
+            Ok(v) => ("OK", v),
+            Err(e @ VendorError::NotEntitled { .. }) => ("NOT_ENTITLED", serde_json::Value::String(e.to_string())),
+            Err(e) => {
+                fatal = true;
+                ("ERROR", serde_json::Value::String(e.to_string()))
+            }
+        };
+        println!("{:<16} {:<13} {}", name, status, detail);
+        results.insert(name.into(), serde_json::json!({ "status": status, "detail": detail }));
+    };
+    println!("vendor={} asset={} session.open={}", vendor.name(), asset.symbol, session.open);
+    record("status", vendor.status(&asset).await.map(|s| serde_json::to_value(s).unwrap_or_default()));
+    record(
+        "live",
+        vendor.live(&asset, (now - 3600) * 1_000_000_000).await.map(|l| {
+            serde_json::json!({ "trades": l.trades.len(), "newest": l.trades.first(), "nbbo": l.nbbo })
+        }),
+    );
+    record("official_open", vendor.official_open(&asset, &session).await.map(|p| serde_json::to_value(p).unwrap_or_default()));
+    record("official_close", vendor.official_close(&asset, &session).await.map(|p| serde_json::to_value(p).unwrap_or_default()));
+    if let Some(path) = out {
+        let doc = serde_json::json!({ "vendor": vendor.name(), "asset": asset.symbol, "at": now, "results": results });
+        std::fs::write(&path, serde_json::to_string_pretty(&doc)?)?;
+        println!("wrote {}", path.display());
+    }
+    if fatal {
+        bail!("smoke test failed");
+    }
+    Ok(())
+}
+
+#[tokio::main]
+async fn main() -> Result<()> {
+    env::load_dotenv();
+    telemetry::init("credence-relayer");
+    let cli = Cli::parse();
+    let common = Common::from_env()?;
+    let ops = OpsState::new("credence-relayer");
+    let metrics = Metrics::new(&ops.registry)?;
+    let metrics_addr: SocketAddr = env::parse_or("METRICS_ADDR", "0.0.0.0:9101".parse()?)?;
+
+    match cli.cmd {
+        Cmd::Smoke { asset, out } => smoke(&common, asset, out).await,
+        Cmd::Run => {
+            if !is_dev_chain(common.chain_id) {
+                bail!("`run` (all nodes in one process) is for dev chains; use `node` + `aggregator` on {}", common.chain_id);
+            }
+            let (vendor, cal) = build_vendor(&common).await?;
+            let mut nodes: Vec<Arc<dyn NodeClient>> = Vec::new();
+            for i in 1..=3 {
+                let n = node(&common, &format!("node-{i}"), &format!("RELAYER_NODE{i}"), Some(ANVIL_KEYS[i]), vendor.clone(), cal.clone(), metrics.clone()).await?;
+                tokio::spawn(n.clone().run());
+                nodes.push(Arc::new(LocalNode(n)));
+            }
+            let agg = aggregator(&common, nodes, &ops, metrics).await?;
+            serve(metrics_addr, ops.router()).await?;
+            agg.run(ops).await;
+            Ok(())
+        }
+        Cmd::Node { id, listen } => {
+            let (vendor, cal) = build_vendor(&common).await?;
+            let n = node(&common, &id, "RELAYER_NODE", None, vendor, cal, metrics).await?;
+            tokio::spawn(n.clone().run());
+            ops.set_ready(true);
+            serve(metrics_addr, ops.router()).await?;
+            let listener = tokio::net::TcpListener::bind(listen).await?;
+            tracing::info!(%listen, "node API listening");
+            axum::serve(listener, n.router()).await?;
+            Ok(())
+        }
+        Cmd::Aggregator => {
+            let token = env::optional("RELAYER_NODE_TOKEN");
+            let urls = env::list("RELAYER_NODE_URLS");
+            if urls.len() < 3 {
+                bail!("RELAYER_NODE_URLS must list the 3 signer nodes");
+            }
+            let nodes: Vec<Arc<dyn NodeClient>> =
+                urls.into_iter().map(|u| Arc::new(HttpNode::new(u, token.clone())) as Arc<dyn NodeClient>).collect();
+            let agg = aggregator(&common, nodes, &ops, metrics).await?;
+            serve(metrics_addr, ops.router()).await?;
+            agg.run(ops).await;
+            Ok(())
+        }
+    }
+}
