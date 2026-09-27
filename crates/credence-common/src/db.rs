@@ -6,7 +6,10 @@ use sqlx::{postgres::PgPoolOptions, PgPool};
 use std::{path::Path, time::Duration};
 
 pub async fn connect(url: &str, max_connections: u32) -> Result<PgPool> {
-    let backoff = crate::retry::Backoff { attempts: 10, ..Default::default() };
+    let backoff = crate::retry::Backoff {
+        attempts: 10,
+        ..Default::default()
+    };
     backoff
         .retry("postgres connect", || {
             PgPoolOptions::new()
@@ -34,7 +37,13 @@ pub fn dbmate_up_sections(dir: &Path) -> Result<Vec<(String, String)>> {
                 .next()
                 .unwrap_or_default()
                 .replace("-- migrate:up", "");
-            Ok((p.file_name().unwrap_or_default().to_string_lossy().into_owned(), up))
+            Ok((
+                p.file_name()
+                    .unwrap_or_default()
+                    .to_string_lossy()
+                    .into_owned(),
+                up,
+            ))
         })
         .collect()
 }
@@ -43,26 +52,41 @@ pub fn dbmate_up_sections(dir: &Path) -> Result<Vec<(String, String)>> {
 /// migration to it. Returns the new database URL.
 pub async fn scratch_database(admin_url: &str, name: &str) -> Result<String> {
     anyhow::ensure!(
-        !name.is_empty() && name.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_'),
+        !name.is_empty()
+            && name
+                .chars()
+                .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_'),
         "scratch database name must be [a-z0-9_]+"
     );
     let admin = connect(admin_url, 1).await?;
     // `name` is validated above; identifiers cannot be bound as parameters.
-    sqlx::query(sqlx::AssertSqlSafe(format!("drop database if exists \"{name}\" with (force)"))).execute(&admin).await?;
-    sqlx::query(sqlx::AssertSqlSafe(format!("create database \"{name}\""))).execute(&admin).await?;
+    sqlx::query(sqlx::AssertSqlSafe(format!(
+        "drop database if exists \"{name}\" with (force)"
+    )))
+    .execute(&admin)
+    .await?;
+    sqlx::query(sqlx::AssertSqlSafe(format!("create database \"{name}\"")))
+        .execute(&admin)
+        .await?;
     let url = replace_db_name(admin_url, name);
     let pool = connect(&url, 1).await?;
     let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../infra/db/migrations");
     for (file, up) in dbmate_up_sections(&dir)? {
         // trusted: the repo's own migration files
-        sqlx::raw_sql(sqlx::AssertSqlSafe(up)).execute(&pool).await.with_context(|| format!("applying {file}"))?;
+        sqlx::raw_sql(sqlx::AssertSqlSafe(up))
+            .execute(&pool)
+            .await
+            .with_context(|| format!("applying {file}"))?;
     }
     pool.close().await;
     Ok(url)
 }
 
 fn replace_db_name(url: &str, name: &str) -> String {
-    let (base, query) = url.split_once('?').map(|(b, q)| (b, Some(q))).unwrap_or((url, None));
+    let (base, query) = url
+        .split_once('?')
+        .map(|(b, q)| (b, Some(q)))
+        .unwrap_or((url, None));
     let base = base.rsplit_once('/').map(|(b, _)| b).unwrap_or(base);
     match query {
         Some(q) => format!("{base}/{name}?{q}"),
@@ -85,7 +109,10 @@ mod tests {
 
     #[test]
     fn db_name_is_replaced() {
-        assert_eq!(replace_db_name("postgres://u:p@h:5433/credence", "t1"), "postgres://u:p@h:5433/t1");
+        assert_eq!(
+            replace_db_name("postgres://u:p@h:5433/credence", "t1"),
+            "postgres://u:p@h:5433/t1"
+        );
         assert_eq!(
             replace_db_name("postgres://u:p@h/credence?sslmode=disable", "t1"),
             "postgres://u:p@h/t1?sslmode=disable"

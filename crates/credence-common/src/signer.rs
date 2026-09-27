@@ -62,10 +62,14 @@ impl CredenceSigner {
                     .with_context(|| format!("loading KMS key {key_id}"))?;
                 Self::Aws(s)
             }
-            SignerConfig::LocalKeyFile { path } => Self::Local(read_key_file(path)?.with_chain_id(Some(chain_id))),
-            SignerConfig::LocalHex { key } => {
-                Self::Local(key.parse::<PrivateKeySigner>().context("bad hex key")?.with_chain_id(Some(chain_id)))
+            SignerConfig::LocalKeyFile { path } => {
+                Self::Local(read_key_file(path)?.with_chain_id(Some(chain_id)))
             }
+            SignerConfig::LocalHex { key } => Self::Local(
+                key.parse::<PrivateKeySigner>()
+                    .context("bad hex key")?
+                    .with_chain_id(Some(chain_id)),
+            ),
         };
         Ok(signer)
     }
@@ -98,13 +102,22 @@ fn read_key_file(path: &Path) -> Result<PrivateKeySigner> {
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
-        let mode = std::fs::metadata(path).with_context(|| format!("{}", path.display()))?.permissions().mode();
+        let mode = std::fs::metadata(path)
+            .with_context(|| format!("{}", path.display()))?
+            .permissions()
+            .mode();
         if mode & 0o077 != 0 {
-            bail!("{} must not be readable by group/others (chmod 600)", path.display());
+            bail!(
+                "{} must not be readable by group/others (chmod 600)",
+                path.display()
+            );
         }
     }
-    let raw = std::fs::read_to_string(path).with_context(|| format!("reading {}", path.display()))?;
-    raw.trim().parse::<PrivateKeySigner>().with_context(|| format!("{} is not a hex private key", path.display()))
+    let raw =
+        std::fs::read_to_string(path).with_context(|| format!("reading {}", path.display()))?;
+    raw.trim()
+        .parse::<PrivateKeySigner>()
+        .with_context(|| format!("{} is not a hex private key", path.display()))
 }
 
 #[cfg(test)]
@@ -117,7 +130,9 @@ mod tests {
     #[tokio::test]
     async fn local_key_refused_on_testnet() {
         let cfg = SignerConfig::LocalHex { key: ANVIL0.into() };
-        assert!(CredenceSigner::load(&cfg, crate::ARB_SEPOLIA).await.is_err());
+        assert!(CredenceSigner::load(&cfg, crate::ARB_SEPOLIA)
+            .await
+            .is_err());
         assert!(CredenceSigner::load(&cfg, 31_337).await.is_ok());
     }
 
@@ -130,14 +145,28 @@ mod tests {
         {
             use std::os::unix::fs::PermissionsExt;
             std::fs::set_permissions(&p, std::fs::Permissions::from_mode(0o644)).unwrap();
-            assert!(CredenceSigner::load(&SignerConfig::LocalKeyFile { path: p.clone() }, 31_337).await.is_err());
+            assert!(
+                CredenceSigner::load(&SignerConfig::LocalKeyFile { path: p.clone() }, 31_337)
+                    .await
+                    .is_err()
+            );
             std::fs::set_permissions(&p, std::fs::Permissions::from_mode(0o600)).unwrap();
         }
-        let s = CredenceSigner::load(&SignerConfig::LocalKeyFile { path: p }, 31_337).await.unwrap();
-        assert_eq!(s.address(), "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266".parse::<Address>().unwrap());
+        let s = CredenceSigner::load(&SignerConfig::LocalKeyFile { path: p }, 31_337)
+            .await
+            .unwrap();
+        assert_eq!(
+            s.address(),
+            "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
+                .parse::<Address>()
+                .unwrap()
+        );
         let h = keccak256(b"credence");
         let sig = s.sign_hash(&h).await.unwrap();
         assert_eq!(sig.recover_address_from_prehash(&h).unwrap(), s.address());
-        assert!(sig.normalize_s().is_none(), "signature must already be low-s");
+        assert!(
+            sig.normalize_s().is_none(),
+            "signature must already be low-s"
+        );
     }
 }

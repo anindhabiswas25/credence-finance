@@ -11,8 +11,8 @@
 //! Halts come from the Nasdaq Trader halt feed ([`super::halts`]).
 
 use super::{
-    halts::HaltFeed, http_client, http_error, LiveInput, MarketDataVendor, OfficialPrint, PrintSource, Quote,
-    RateLimit, StatusInput, Trade, VendorError, VendorMarket, VendorResult,
+    halts::HaltFeed, http_client, http_error, LiveInput, MarketDataVendor, OfficialPrint,
+    PrintSource, Quote, RateLimit, StatusInput, Trade, VendorError, VendorMarket, VendorResult,
 };
 use crate::{
     asset::{Asset, Plan},
@@ -125,11 +125,18 @@ struct ClockResp {
 }
 
 fn parse_err(endpoint: &str, e: impl std::fmt::Display) -> VendorError {
-    VendorError::Parse { vendor: V, endpoint: endpoint.into(), message: e.to_string() }
+    VendorError::Parse {
+        vendor: V,
+        endpoint: endpoint.into(),
+        message: e.to_string(),
+    }
 }
 
 pub(crate) fn ts_ns(s: &str) -> Option<u64> {
-    chrono::DateTime::parse_from_rfc3339(s).ok()?.timestamp_nanos_opt().map(|n| n as u64)
+    chrono::DateTime::parse_from_rfc3339(s)
+        .ok()?
+        .timestamp_nanos_opt()
+        .map(|n| n as u64)
 }
 
 fn to_trade(t: &RawTrade, listing_plan: Plan) -> Option<Trade> {
@@ -139,26 +146,50 @@ fn to_trade(t: &RawTrade, listing_plan: Plan) -> Option<Trade> {
         ts_ns: ts_ns(&t.t)?,
         exchange: exchange_mic(&t.x).into(),
         conditions: t.c.clone(),
-        plan: t.z.as_deref().and_then(Plan::from_tape).unwrap_or(listing_plan),
+        plan: t
+            .z
+            .as_deref()
+            .and_then(Plan::from_tape)
+            .unwrap_or(listing_plan),
     })
 }
 
-pub(crate) fn parse_trades(body: &str, symbol: &str, listing_plan: Plan) -> Result<Vec<Trade>, VendorError> {
-    let r: TradesResp = serde_json::from_str(body).map_err(|e| parse_err("/v2/stocks/trades", e))?;
-    let mut v: Vec<Trade> =
-        r.trades.get(symbol).map(|ts| ts.iter().filter_map(|t| to_trade(t, listing_plan)).collect()).unwrap_or_default();
-    v.sort_by(|a, b| b.ts_ns.cmp(&a.ts_ns));
+pub(crate) fn parse_trades(
+    body: &str,
+    symbol: &str,
+    listing_plan: Plan,
+) -> Result<Vec<Trade>, VendorError> {
+    let r: TradesResp =
+        serde_json::from_str(body).map_err(|e| parse_err("/v2/stocks/trades", e))?;
+    let mut v: Vec<Trade> = r
+        .trades
+        .get(symbol)
+        .map(|ts| {
+            ts.iter()
+                .filter_map(|t| to_trade(t, listing_plan))
+                .collect()
+        })
+        .unwrap_or_default();
+    v.sort_by_key(|t| std::cmp::Reverse(t.ts_ns));
     Ok(v)
 }
 
-pub(crate) fn parse_latest_trade(body: &str, symbol: &str, listing_plan: Plan) -> Result<Option<Trade>, VendorError> {
-    let r: LatestTradeResp = serde_json::from_str(body).map_err(|e| parse_err("/v2/stocks/trades/latest", e))?;
+pub(crate) fn parse_latest_trade(
+    body: &str,
+    symbol: &str,
+    listing_plan: Plan,
+) -> Result<Option<Trade>, VendorError> {
+    let r: LatestTradeResp =
+        serde_json::from_str(body).map_err(|e| parse_err("/v2/stocks/trades/latest", e))?;
     Ok(r.trades.get(symbol).and_then(|t| to_trade(t, listing_plan)))
 }
 
 pub(crate) fn parse_quote(body: &str, symbol: &str) -> Result<Option<Quote>, VendorError> {
-    let r: QuotesResp = serde_json::from_str(body).map_err(|e| parse_err("/v2/stocks/quotes/latest", e))?;
-    let Some(q) = r.quotes.get(symbol) else { return Ok(None) };
+    let r: QuotesResp =
+        serde_json::from_str(body).map_err(|e| parse_err("/v2/stocks/quotes/latest", e))?;
+    let Some(q) = r.quotes.get(symbol) else {
+        return Ok(None);
+    };
     Ok(Some(Quote {
         bid_wad: wad_from_f64(q.bp).map_err(|e| parse_err("quote", e))?,
         ask_wad: wad_from_f64(q.ap).map_err(|e| parse_err("quote", e))?,
@@ -167,15 +198,25 @@ pub(crate) fn parse_quote(body: &str, symbol: &str) -> Result<Option<Quote>, Ven
 }
 
 /// The daily bar for the session's ET date (Alpaca stamps daily bars at 00:00 ET of that day).
-pub(crate) fn parse_daily_bar(body: &str, symbol: &str, session: &Session, open: bool) -> Result<Option<OfficialPrint>, VendorError> {
+pub(crate) fn parse_daily_bar(
+    body: &str,
+    symbol: &str,
+    session: &Session,
+    open: bool,
+) -> Result<Option<OfficialPrint>, VendorError> {
     let r: BarsResp = serde_json::from_str(body).map_err(|e| parse_err("/v2/stocks/bars", e))?;
     let day = et_date(session.open);
     let Some(bar) = r.bars.get(symbol).and_then(|bars| {
-        bars.iter().find(|b| ts_ns(&b.t).map(|n| et_date(n / 1_000_000_000)) == Some(day.clone()))
+        bars.iter()
+            .find(|b| ts_ns(&b.t).map(|n| et_date(n / 1_000_000_000)) == Some(day.clone()))
     }) else {
         return Ok(None);
     };
-    let (p, at) = if open { (bar.o, session.open) } else { (bar.c, session.close) };
+    let (p, at) = if open {
+        (bar.o, session.open)
+    } else {
+        (bar.c, session.close)
+    };
     Ok(Some(OfficialPrint {
         price_wad: wad_from_f64(p).map_err(|e| parse_err("bar", e))?,
         at,
@@ -186,25 +227,41 @@ pub(crate) fn parse_daily_bar(body: &str, symbol: &str, session: &Session, open:
 pub(crate) fn parse_clock(body: &str) -> Result<VendorMarket, VendorError> {
     let r: ClockResp = serde_json::from_str(body).map_err(|e| parse_err("/v2/clock", e))?;
     // `is_open` covers the regular session only; outside it Alpaca does not distinguish extended hours.
-    Ok(if r.is_open { VendorMarket::Open } else { VendorMarket::Closed })
+    Ok(if r.is_open {
+        VendorMarket::Open
+    } else {
+        VendorMarket::Closed
+    })
 }
 
 fn et_date(unix_s: u64) -> String {
     chrono::DateTime::from_timestamp(unix_s as i64, 0)
-        .map(|d| d.with_timezone(&chrono_tz::America::New_York).format("%Y-%m-%d").to_string())
+        .map(|d| {
+            d.with_timezone(&chrono_tz::America::New_York)
+                .format("%Y-%m-%d")
+                .to_string()
+        })
         .unwrap_or_default()
 }
 
 fn rfc3339(unix_ns: u64) -> String {
-    chrono::DateTime::from_timestamp((unix_ns / 1_000_000_000) as i64, (unix_ns % 1_000_000_000) as u32)
-        .map(|d| d.to_rfc3339_opts(chrono::SecondsFormat::Nanos, true))
-        .unwrap_or_default()
+    chrono::DateTime::from_timestamp(
+        (unix_ns / 1_000_000_000) as i64,
+        (unix_ns % 1_000_000_000) as u32,
+    )
+    .map(|d| d.to_rfc3339_opts(chrono::SecondsFormat::Nanos, true))
+    .unwrap_or_default()
 }
 
 impl Alpaca {
     pub fn new(cfg: AlpacaConfig, halts: Arc<HaltFeed>) -> Self {
         let limit = RateLimit::new(cfg.max_rpm);
-        Self { cfg, http: http_client(), limit, halts }
+        Self {
+            cfg,
+            http: http_client(),
+            limit,
+            halts,
+        }
     }
 
     async fn get(&self, base: &str, path: &str, query: &[(&str, String)]) -> VendorResult<String> {
@@ -217,7 +274,11 @@ impl Alpaca {
             .query(query)
             .send()
             .await
-            .map_err(|e| VendorError::Http { vendor: V, endpoint: path.into(), message: e.to_string() })?;
+            .map_err(|e| VendorError::Http {
+                vendor: V,
+                endpoint: path.into(),
+                message: e.to_string(),
+            })?;
         let status = resp.status();
         let body = resp.text().await.unwrap_or_default();
         if !status.is_success() {
@@ -226,7 +287,13 @@ impl Alpaca {
         Ok(body)
     }
 
-    async fn trades(&self, asset: &Asset, start_ns: u64, end_ns: Option<u64>, desc: bool) -> VendorResult<Vec<Trade>> {
+    async fn trades(
+        &self,
+        asset: &Asset,
+        start_ns: u64,
+        end_ns: Option<u64>,
+        desc: bool,
+    ) -> VendorResult<Vec<Trade>> {
         let mut q = vec![
             ("symbols", asset.symbol.clone()),
             ("start", rfc3339(start_ns)),
@@ -237,17 +304,27 @@ impl Alpaca {
         if let Some(e) = end_ns {
             q.push(("end", rfc3339(e)));
         }
-        let body = self.get(&self.cfg.data_url, "/v2/stocks/trades", &q).await?;
+        let body = self
+            .get(&self.cfg.data_url, "/v2/stocks/trades", &q)
+            .await?;
         parse_trades(&body, &asset.symbol, asset.plan())
     }
 
-    async fn official(&self, asset: &Asset, session: &Session, open: bool) -> VendorResult<Option<OfficialPrint>> {
+    async fn official(
+        &self,
+        asset: &Asset,
+        session: &Session,
+        open: bool,
+    ) -> VendorResult<Option<OfficialPrint>> {
         let (from, to) = if open {
             (session.open, session.open + 15 * 60)
         } else {
             (session.close, session.close + 30 * 60)
         };
-        match self.trades(asset, from * 1_000_000_000, Some(to * 1_000_000_000), false).await {
+        match self
+            .trades(asset, from * 1_000_000_000, Some(to * 1_000_000_000), false)
+            .await
+        {
             Ok(t) => {
                 if let Some(p) = super::polygon::find_official(&t, &asset.listing, open) {
                     return Ok(Some(p));
@@ -289,7 +366,10 @@ impl MarketDataVendor for Alpaca {
                 .get(
                     &self.cfg.data_url,
                     "/v2/stocks/trades/latest",
-                    &[("symbols", asset.symbol.clone()), ("feed", self.cfg.feed.clone())],
+                    &[
+                        ("symbols", asset.symbol.clone()),
+                        ("feed", self.cfg.feed.clone()),
+                    ],
                 )
                 .await?;
             trades.extend(parse_latest_trade(&body, &asset.symbol, asset.plan())?);
@@ -298,23 +378,40 @@ impl MarketDataVendor for Alpaca {
             .get(
                 &self.cfg.data_url,
                 "/v2/stocks/quotes/latest",
-                &[("symbols", asset.symbol.clone()), ("feed", self.cfg.feed.clone())],
+                &[
+                    ("symbols", asset.symbol.clone()),
+                    ("feed", self.cfg.feed.clone()),
+                ],
             )
             .await?;
-        Ok(LiveInput { trades, nbbo: parse_quote(&body, &asset.symbol)? })
+        Ok(LiveInput {
+            trades,
+            nbbo: parse_quote(&body, &asset.symbol)?,
+        })
     }
 
-    async fn official_open(&self, asset: &Asset, session: &Session) -> VendorResult<Option<OfficialPrint>> {
+    async fn official_open(
+        &self,
+        asset: &Asset,
+        session: &Session,
+    ) -> VendorResult<Option<OfficialPrint>> {
         self.official(asset, session, true).await
     }
 
-    async fn official_close(&self, asset: &Asset, session: &Session) -> VendorResult<Option<OfficialPrint>> {
+    async fn official_close(
+        &self,
+        asset: &Asset,
+        session: &Session,
+    ) -> VendorResult<Option<OfficialPrint>> {
         self.official(asset, session, false).await
     }
 
     async fn status(&self, asset: &Asset) -> VendorResult<StatusInput> {
         let body = self.get(&self.cfg.trading_url, "/v2/clock", &[]).await?;
-        Ok(StatusInput { market: parse_clock(&body)?, halt: self.halts.halt(&asset.symbol).await })
+        Ok(StatusInput {
+            market: parse_clock(&body)?,
+            halt: self.halts.halt(&asset.symbol).await,
+        })
     }
 }
 
@@ -324,19 +421,29 @@ mod tests {
     use crate::{conditions::classify, price::WAD};
 
     fn fixture(name: &str) -> String {
-        std::fs::read_to_string(format!("{}/tests/fixtures/alpaca/{name}", env!("CARGO_MANIFEST_DIR"))).unwrap()
+        std::fs::read_to_string(format!(
+            "{}/tests/fixtures/alpaca/{name}",
+            env!("CARGO_MANIFEST_DIR")
+        ))
+        .unwrap()
     }
 
     #[test]
     fn recorded_latest_trade_and_quote() {
-        let t = parse_latest_trade(&fixture("trades_latest_AAPL.json"), "AAPL", Plan::Utp).unwrap().unwrap();
+        let t = parse_latest_trade(&fixture("trades_latest_AAPL.json"), "AAPL", Plan::Utp)
+            .unwrap()
+            .unwrap();
         assert_eq!(t.price_wad, 161_295_800_000_000_000_000);
         assert_eq!(t.ts_ns, 1_647_612_129_722_539_521);
         assert_eq!(t.exchange, "FINR");
         assert!(classify(t.plan, &t.conditions).regular);
-        let q = parse_quote(&fixture("quotes_latest_AAPL.json"), "AAPL").unwrap().unwrap();
+        let q = parse_quote(&fixture("quotes_latest_AAPL.json"), "AAPL")
+            .unwrap()
+            .unwrap();
         assert_eq!((q.bid_wad, q.ask_wad), (1611 * WAD / 10, 16111 * WAD / 100));
-        assert!(parse_quote(&fixture("quotes_latest_AAPL.json"), "MSFT").unwrap().is_none());
+        assert!(parse_quote(&fixture("quotes_latest_AAPL.json"), "MSFT")
+            .unwrap()
+            .is_none());
     }
 
     #[test]
@@ -360,18 +467,41 @@ mod tests {
             ext_close: open + 30_000,
             closure_type_after: credence_common::calendar::ClosureType::Overnight,
         };
-        let o = parse_daily_bar(&fixture("bars_day_TSLA.json"), "TSLA", &s, true).unwrap().unwrap();
-        assert_eq!((o.price_wad, o.at, o.source), (244_262 * WAD / 1000, open, PrintSource::DailyBar));
-        let c = parse_daily_bar(&fixture("bars_day_TSLA.json"), "TSLA", &s, false).unwrap().unwrap();
+        let o = parse_daily_bar(&fixture("bars_day_TSLA.json"), "TSLA", &s, true)
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            (o.price_wad, o.at, o.source),
+            (244_262 * WAD / 1000, open, PrintSource::DailyBar)
+        );
+        let c = parse_daily_bar(&fixture("bars_day_TSLA.json"), "TSLA", &s, false)
+            .unwrap()
+            .unwrap();
         assert_eq!(c.price_wad, 2405 * WAD / 10);
-        let other_day = Session { open: open + 86_400, close: open + 86_400 + 23_400, ext_open: open + 86_000, ext_close: open + 120_000, ..s };
-        assert!(parse_daily_bar(&fixture("bars_day_TSLA.json"), "TSLA", &other_day, true).unwrap().is_none());
+        let other_day = Session {
+            open: open + 86_400,
+            close: open + 86_400 + 23_400,
+            ext_open: open + 86_000,
+            ext_close: open + 120_000,
+            ..s
+        };
+        assert!(
+            parse_daily_bar(&fixture("bars_day_TSLA.json"), "TSLA", &other_day, true)
+                .unwrap()
+                .is_none()
+        );
     }
 
     #[test]
     fn recorded_clock() {
-        assert_eq!(parse_clock(&fixture("clock_open.json")).unwrap(), VendorMarket::Open);
-        assert_eq!(parse_clock(&fixture("clock_closed.json")).unwrap(), VendorMarket::Closed);
+        assert_eq!(
+            parse_clock(&fixture("clock_open.json")).unwrap(),
+            VendorMarket::Open
+        );
+        assert_eq!(
+            parse_clock(&fixture("clock_closed.json")).unwrap(),
+            VendorMarket::Closed
+        );
     }
 
     #[test]

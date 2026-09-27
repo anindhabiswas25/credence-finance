@@ -30,7 +30,11 @@ use credence_relayer::{
 use std::{net::SocketAddr, sync::Arc, time::Duration};
 
 #[derive(Parser)]
-#[command(name = "credence-relayer", version, about = "Credence price relayer (Build Guide §10.1)")]
+#[command(
+    name = "credence-relayer",
+    version,
+    about = "Credence price relayer (Build Guide §10.1)"
+)]
 struct Cli {
     #[command(subcommand)]
     cmd: Cmd,
@@ -74,7 +78,10 @@ fn signer_config(prefix: &str, dev_default: Option<&str>, chain_id: u64) -> Resu
         Ok(c) => Ok(c),
         Err(e) => match dev_default {
             Some(k) if is_dev_chain(chain_id) => {
-                tracing::warn!(prefix, "no signer configured: using a well-known dev key (dev chain only)");
+                tracing::warn!(
+                    prefix,
+                    "no signer configured: using a well-known dev key (dev chain only)"
+                );
                 Ok(SignerConfig::LocalHex { key: k.into() })
             }
             _ => Err(e),
@@ -82,9 +89,17 @@ fn signer_config(prefix: &str, dev_default: Option<&str>, chain_id: u64) -> Resu
     }
 }
 
-fn node_config(id: &str, assets: Vec<credence_relayer::asset::Asset>, vendor: VendorKind) -> Result<NodeConfig> {
+fn node_config(
+    id: &str,
+    assets: Vec<credence_relayer::asset::Asset>,
+    vendor: VendorKind,
+) -> Result<NodeConfig> {
     // free vendor tiers are slow: poll less often unless told otherwise
-    let default_poll = if vendor == VendorKind::Replay { 1000 } else { 2000 };
+    let default_poll = if vendor == VendorKind::Replay {
+        1000
+    } else {
+        2000
+    };
     Ok(NodeConfig {
         id: id.into(),
         assets,
@@ -96,12 +111,18 @@ fn node_config(id: &str, assets: Vec<credence_relayer::asset::Asset>, vendor: Ve
 }
 
 fn feed_address() -> Result<Address> {
-    env::required("FEED_ADDRESS")?.parse().context("FEED_ADDRESS")
+    env::required("FEED_ADDRESS")?
+        .parse()
+        .context("FEED_ADDRESS")
 }
 
 fn rpc_urls() -> Result<Vec<String>> {
-    let mut v = vec![env::optional("RPC_URL").or_else(|| env::optional("ARB_SEPOLIA_RPC_URL")).context("RPC_URL")?];
-    if let Some(f) = env::optional("RPC_URL_FALLBACK").or_else(|| env::optional("ARB_SEPOLIA_RPC_URL_FALLBACK")) {
+    let mut v = vec![env::optional("RPC_URL")
+        .or_else(|| env::optional("ARB_SEPOLIA_RPC_URL"))
+        .context("RPC_URL")?];
+    if let Some(f) =
+        env::optional("RPC_URL_FALLBACK").or_else(|| env::optional("ARB_SEPOLIA_RPC_URL_FALLBACK"))
+    {
         v.push(f);
     }
     Ok(v)
@@ -109,7 +130,9 @@ fn rpc_urls() -> Result<Vec<String>> {
 
 async fn store() -> Result<Arc<dyn ReportStore>> {
     match env::optional("DATABASE_URL") {
-        Some(url) => Ok(Arc::new(PgStore::new(credence_common::db::connect(&url, 4).await?))),
+        Some(url) => Ok(Arc::new(PgStore::new(
+            credence_common::db::connect(&url, 4).await?,
+        ))),
         None => {
             tracing::warn!("DATABASE_URL not set: reports are kept in memory only");
             Ok(Arc::new(MemStore::default()))
@@ -128,8 +151,15 @@ async fn aggregator(
         412_346 => Some(NITRO_DEV_KEY),
         _ => None,
     };
-    let submitter = CredenceSigner::load(&signer_config("RELAYER_SUBMITTER", submitter_default, common.chain_id)?, common.chain_id).await?;
-    let other = env::optional("OTHER_FEED_ADDRESS").map(|a| a.parse()).transpose().context("OTHER_FEED_ADDRESS")?;
+    let submitter = CredenceSigner::load(
+        &signer_config("RELAYER_SUBMITTER", submitter_default, common.chain_id)?,
+        common.chain_id,
+    )
+    .await?;
+    let other = env::optional("OTHER_FEED_ADDRESS")
+        .map(|a| a.parse())
+        .transpose()
+        .context("OTHER_FEED_ADDRESS")?;
     let chain = ChainClient::connect(&rpc_urls()?, submitter.wallet(), feed_address()?, other)?;
     let actual = chain.chain_id().await?;
     if actual != common.chain_id {
@@ -137,7 +167,11 @@ async fn aggregator(
     }
     tracing::info!(submitter = %submitter.address(), feed = %chain.feed, "aggregator connected");
     let committee = env::optional("RELAYER_COMMITTEE")
-        .map(|s| s.split(',').map(|a| a.trim().parse::<Address>()).collect::<Result<Vec<_>, _>>())
+        .map(|s| {
+            s.split(',')
+                .map(|a| a.trim().parse::<Address>())
+                .collect::<Result<Vec<_>, _>>()
+        })
         .transpose()
         .context("RELAYER_COMMITTEE")?;
     let cfg = AggregatorConfig {
@@ -145,7 +179,11 @@ async fn aggregator(
         threshold: env::parse_or("RELAYER_THRESHOLD", 2usize)?,
         tick: Duration::from_millis(env::parse_or("RELAYER_TICK_MS", 1000)?),
         committee,
-        assets: common.assets.iter().map(|a| (a.id, a.symbol.clone())).collect(),
+        assets: common
+            .assets
+            .iter()
+            .map(|a| (a.id, a.symbol.clone()))
+            .collect(),
     };
     let _ = ops;
     let chain: Arc<dyn FeedChain> = Arc::new(chain);
@@ -163,13 +201,28 @@ async fn node(
     calendar: Arc<credence_common::calendar::Calendar>,
     metrics: Metrics,
 ) -> Result<Arc<Node>> {
-    let signer = CredenceSigner::load(&signer_config(key_prefix, dev_key, common.chain_id)?, common.chain_id).await?;
+    let signer = CredenceSigner::load(
+        &signer_config(key_prefix, dev_key, common.chain_id)?,
+        common.chain_id,
+    )
+    .await?;
     let d = domain(common.chain_id, feed_address()?);
     tracing::info!(node = id, signer = %signer.address(), vendor = vendor.name(), "signer node ready");
-    Ok(Arc::new(Node::new(node_config(id, common.assets.clone(), common.vendor_kind.clone())?, vendor, calendar, signer, d, metrics)))
+    Ok(Arc::new(Node::new(
+        node_config(id, common.assets.clone(), common.vendor_kind.clone())?,
+        vendor,
+        calendar,
+        signer,
+        d,
+        metrics,
+    )))
 }
 
-async fn smoke(common: &Common, asset: Option<String>, out: Option<std::path::PathBuf>) -> Result<()> {
+async fn smoke(
+    common: &Common,
+    asset: Option<String>,
+    out: Option<std::path::PathBuf>,
+) -> Result<()> {
     use credence_relayer::{asset::Asset, vendor::VendorError};
     let asset = match asset {
         Some(a) => Asset::parse(&a)?,
@@ -177,31 +230,62 @@ async fn smoke(common: &Common, asset: Option<String>, out: Option<std::path::Pa
     };
     let (vendor, cal) = build_vendor(common).await?;
     let now = credence_relayer::node::now_s();
-    let session = cal.current_or_last_session(now).copied().context("no session in the calendar before now")?;
+    let session = cal
+        .current_or_last_session(now)
+        .copied()
+        .context("no session in the calendar before now")?;
     let mut results = serde_json::Map::new();
     let mut fatal = false;
     let mut record = |name: &str, r: std::result::Result<serde_json::Value, VendorError>| {
         let (status, detail) = match r {
             Ok(v) => ("OK", v),
-            Err(e @ VendorError::NotEntitled { .. }) => ("NOT_ENTITLED", serde_json::Value::String(e.to_string())),
+            Err(e @ VendorError::NotEntitled { .. }) => {
+                ("NOT_ENTITLED", serde_json::Value::String(e.to_string()))
+            }
             Err(e) => {
                 fatal = true;
                 ("ERROR", serde_json::Value::String(e.to_string()))
             }
         };
         println!("{:<16} {:<13} {}", name, status, detail);
-        results.insert(name.into(), serde_json::json!({ "status": status, "detail": detail }));
+        results.insert(
+            name.into(),
+            serde_json::json!({ "status": status, "detail": detail }),
+        );
     };
-    println!("vendor={} asset={} session.open={}", vendor.name(), asset.symbol, session.open);
-    record("status", vendor.status(&asset).await.map(|s| serde_json::to_value(s).unwrap_or_default()));
+    println!(
+        "vendor={} asset={} session.open={}",
+        vendor.name(),
+        asset.symbol,
+        session.open
+    );
+    record(
+        "status",
+        vendor
+            .status(&asset)
+            .await
+            .map(|s| serde_json::to_value(s).unwrap_or_default()),
+    );
     record(
         "live",
         vendor.live(&asset, (now - 3600) * 1_000_000_000).await.map(|l| {
             serde_json::json!({ "trades": l.trades.len(), "newest": l.trades.first(), "nbbo": l.nbbo })
         }),
     );
-    record("official_open", vendor.official_open(&asset, &session).await.map(|p| serde_json::to_value(p).unwrap_or_default()));
-    record("official_close", vendor.official_close(&asset, &session).await.map(|p| serde_json::to_value(p).unwrap_or_default()));
+    record(
+        "official_open",
+        vendor
+            .official_open(&asset, &session)
+            .await
+            .map(|p| serde_json::to_value(p).unwrap_or_default()),
+    );
+    record(
+        "official_close",
+        vendor
+            .official_close(&asset, &session)
+            .await
+            .map(|p| serde_json::to_value(p).unwrap_or_default()),
+    );
     if let Some(path) = out {
         let doc = serde_json::json!({ "vendor": vendor.name(), "asset": asset.symbol, "at": now, "results": results });
         std::fs::write(&path, serde_json::to_string_pretty(&doc)?)?;
@@ -231,8 +315,17 @@ async fn main() -> Result<()> {
             }
             let (vendor, cal) = build_vendor(&common).await?;
             let mut nodes: Vec<Arc<dyn NodeClient>> = Vec::new();
-            for i in 1..=3 {
-                let n = node(&common, &format!("node-{i}"), &format!("RELAYER_NODE{i}"), Some(ANVIL_KEYS[i]), vendor.clone(), cal.clone(), metrics.clone()).await?;
+            for (i, dev_key) in ANVIL_KEYS.iter().enumerate().skip(1) {
+                let n = node(
+                    &common,
+                    &format!("node-{i}"),
+                    &format!("RELAYER_NODE{i}"),
+                    Some(*dev_key),
+                    vendor.clone(),
+                    cal.clone(),
+                    metrics.clone(),
+                )
+                .await?;
                 tokio::spawn(n.clone().run());
                 nodes.push(Arc::new(LocalNode(n)));
             }
@@ -258,8 +351,10 @@ async fn main() -> Result<()> {
             if urls.len() < 3 {
                 bail!("RELAYER_NODE_URLS must list the 3 signer nodes");
             }
-            let nodes: Vec<Arc<dyn NodeClient>> =
-                urls.into_iter().map(|u| Arc::new(HttpNode::new(u, token.clone())) as Arc<dyn NodeClient>).collect();
+            let nodes: Vec<Arc<dyn NodeClient>> = urls
+                .into_iter()
+                .map(|u| Arc::new(HttpNode::new(u, token.clone())) as Arc<dyn NodeClient>)
+                .collect();
             let agg = aggregator(&common, nodes, &ops, metrics).await?;
             serve(metrics_addr, ops.router()).await?;
             agg.run(ops).await;

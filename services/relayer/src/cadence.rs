@@ -16,8 +16,14 @@ pub struct Rule {
     pub move_ppm: u128,
 }
 
-pub const REGULAR: Rule = Rule { heartbeat_s: 10, move_ppm: 1_000 };
-pub const EXTENDED: Rule = Rule { heartbeat_s: 60, move_ppm: 2_500 };
+pub const REGULAR: Rule = Rule {
+    heartbeat_s: 10,
+    move_ppm: 1_000,
+};
+pub const EXTENDED: Rule = Rule {
+    heartbeat_s: 60,
+    move_ppm: 2_500,
+};
 pub const STATUS_HEARTBEAT_S: u64 = 60;
 
 pub fn live_rule(status: MarketStatus) -> Option<Rule> {
@@ -40,13 +46,16 @@ pub struct AssetCadence {
 impl AssetCadence {
     /// Should a LIVE report at `price` be published at `now`?
     pub fn live_due(&self, status: MarketStatus, price: u128, now: u64) -> bool {
-        let Some(rule) = live_rule(status) else { return false };
+        let Some(rule) = live_rule(status) else {
+            return false;
+        };
         match self.live {
             None => true,
             // entering a new session phase always publishes
             Some((_, _, last_status)) if last_status != status => true,
             Some((last_price, at, _)) => {
-                now.saturating_sub(at) >= rule.heartbeat_s || deviation_ppm(price, last_price) >= rule.move_ppm
+                now.saturating_sub(at) >= rule.heartbeat_s
+                    || deviation_ppm(price, last_price) >= rule.move_ppm
             }
         }
     }
@@ -83,15 +92,24 @@ mod tests {
     #[test]
     fn regular_heartbeat_and_move() {
         let mut c = AssetCadence::default();
-        assert!(c.live_due(MarketStatus::Regular, 100 * WAD, 0), "first print publishes");
+        assert!(
+            c.live_due(MarketStatus::Regular, 100 * WAD, 0),
+            "first print publishes"
+        );
         c.mark_live(100 * WAD, 0, MarketStatus::Regular);
         assert!(!c.live_due(MarketStatus::Regular, 100 * WAD, 9));
-        assert!(c.live_due(MarketStatus::Regular, 100 * WAD, 10), "10 s heartbeat");
+        assert!(
+            c.live_due(MarketStatus::Regular, 100 * WAD, 10),
+            "10 s heartbeat"
+        );
         // 0.0999% move: not yet
         assert!(!c.live_due(MarketStatus::Regular, 100_099 * WAD / 1000, 1));
         // 0.10% move: immediately
         assert!(c.live_due(MarketStatus::Regular, 100_100 * WAD / 1000, 1));
-        assert!(c.live_due(MarketStatus::Regular, 99_900 * WAD / 1000, 1), "down moves count too");
+        assert!(
+            c.live_due(MarketStatus::Regular, 99_900 * WAD / 1000, 1),
+            "down moves count too"
+        );
     }
 
     #[test]
@@ -101,7 +119,10 @@ mod tests {
         assert!(!c.live_due(MarketStatus::Post, 100 * WAD, 59));
         assert!(c.live_due(MarketStatus::Post, 100 * WAD, 60));
         assert!(!c.live_due(MarketStatus::Post, 100_240 * WAD / 1000, 5));
-        assert!(c.live_due(MarketStatus::Post, 100_250 * WAD / 1000, 5), "0.25%");
+        assert!(
+            c.live_due(MarketStatus::Post, 100_250 * WAD / 1000, 5),
+            "0.25%"
+        );
     }
 
     #[test]

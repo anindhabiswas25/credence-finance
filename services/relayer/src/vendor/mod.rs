@@ -38,7 +38,8 @@ pub struct Quote {
 impl Quote {
     /// Mid of a valid (non-crossed, two-sided) quote.
     pub fn mid(&self) -> Option<u128> {
-        (self.bid_wad > 0 && self.ask_wad >= self.bid_wad).then(|| self.bid_wad / 2 + self.ask_wad / 2)
+        (self.bid_wad > 0 && self.ask_wad >= self.bid_wad)
+            .then(|| self.bid_wad / 2 + self.ask_wad / 2)
     }
 }
 
@@ -92,15 +93,26 @@ pub struct StatusInput {
 pub enum VendorError {
     /// The key is valid but the plan does not include this endpoint (free tiers).
     #[error("{vendor}: not authorised for {endpoint} (plan does not include it)")]
-    NotEntitled { vendor: &'static str, endpoint: String },
+    NotEntitled {
+        vendor: &'static str,
+        endpoint: String,
+    },
     #[error("{vendor}: bad or missing API key")]
     Unauthorized { vendor: &'static str },
     #[error("{vendor}: rate limited")]
     RateLimited { vendor: &'static str },
     #[error("{vendor}: http error on {endpoint}: {message}")]
-    Http { vendor: &'static str, endpoint: String, message: String },
+    Http {
+        vendor: &'static str,
+        endpoint: String,
+        message: String,
+    },
     #[error("{vendor}: cannot parse {endpoint}: {message}")]
-    Parse { vendor: &'static str, endpoint: String, message: String },
+    Parse {
+        vendor: &'static str,
+        endpoint: String,
+        message: String,
+    },
     #[error("{0}")]
     Other(String),
 }
@@ -117,10 +129,18 @@ pub trait MarketDataVendor: Send + Sync {
     async fn live(&self, asset: &Asset, since_ns: u64) -> VendorResult<LiveInput>;
 
     /// OPEN: the listing exchange's official opening auction print for `session`, if published yet.
-    async fn official_open(&self, asset: &Asset, session: &Session) -> VendorResult<Option<OfficialPrint>>;
+    async fn official_open(
+        &self,
+        asset: &Asset,
+        session: &Session,
+    ) -> VendorResult<Option<OfficialPrint>>;
 
     /// CLOSE: the official closing auction print for `session`, if published yet.
-    async fn official_close(&self, asset: &Asset, session: &Session) -> VendorResult<Option<OfficialPrint>>;
+    async fn official_close(
+        &self,
+        asset: &Asset,
+        session: &Session,
+    ) -> VendorResult<Option<OfficialPrint>>;
 
     /// STATUS: the vendor's market session plus the single-stock halt state (LULD / regulatory).
     async fn status(&self, asset: &Asset) -> VendorResult<StatusInput>;
@@ -129,10 +149,18 @@ pub trait MarketDataVendor: Send + Sync {
 pub type DynVendor = Arc<dyn MarketDataVendor>;
 
 /// Map a vendor HTTP status to an error.
-pub(crate) fn http_error(vendor: &'static str, endpoint: &str, status: reqwest::StatusCode, body: &str) -> VendorError {
+pub(crate) fn http_error(
+    vendor: &'static str,
+    endpoint: &str,
+    status: reqwest::StatusCode,
+    body: &str,
+) -> VendorError {
     match status.as_u16() {
         401 => VendorError::Unauthorized { vendor },
-        403 => VendorError::NotEntitled { vendor, endpoint: endpoint.to_owned() },
+        403 => VendorError::NotEntitled {
+            vendor,
+            endpoint: endpoint.to_owned(),
+        },
         429 => VendorError::RateLimited { vendor },
         _ => VendorError::Http {
             vendor,
@@ -160,7 +188,10 @@ pub(crate) struct RateLimit {
 
 impl RateLimit {
     pub fn new(per_minute: u32) -> Self {
-        Self { per_minute: per_minute.max(1), sent: Default::default() }
+        Self {
+            per_minute: per_minute.max(1),
+            sent: Default::default(),
+        }
     }
 
     pub async fn acquire(&self) {
@@ -168,14 +199,18 @@ impl RateLimit {
             let wait = {
                 let mut q = self.sent.lock().await;
                 let now = std::time::Instant::now();
-                while q.front().is_some_and(|t| now.duration_since(*t) >= std::time::Duration::from_secs(60)) {
+                while q
+                    .front()
+                    .is_some_and(|t| now.duration_since(*t) >= std::time::Duration::from_secs(60))
+                {
                     q.pop_front();
                 }
                 if (q.len() as u32) < self.per_minute {
                     q.push_back(now);
                     return;
                 }
-                std::time::Duration::from_secs(60) - now.duration_since(*q.front().expect("non-empty"))
+                std::time::Duration::from_secs(60)
+                    - now.duration_since(*q.front().expect("non-empty"))
             };
             tokio::time::sleep(wait).await;
         }

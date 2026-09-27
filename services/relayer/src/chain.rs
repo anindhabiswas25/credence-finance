@@ -58,17 +58,30 @@ pub struct ChainClient {
 
 impl ChainClient {
     /// `rpc_urls`: primary first, then fallbacks.
-    pub fn connect(rpc_urls: &[String], wallet: EthereumWallet, feed: Address, other_feed: Option<Address>) -> Result<Self> {
+    pub fn connect(
+        rpc_urls: &[String],
+        wallet: EthereumWallet,
+        feed: Address,
+        other_feed: Option<Address>,
+    ) -> Result<Self> {
         if rpc_urls.is_empty() {
             bail!("no RPC url");
         }
         let providers = rpc_urls
             .iter()
             .map(|u| {
-                Ok(ProviderBuilder::new().wallet(wallet.clone()).connect_http(u.parse().with_context(|| format!("rpc url {u}"))?).erased())
+                Ok(ProviderBuilder::new()
+                    .wallet(wallet.clone())
+                    .connect_http(u.parse().with_context(|| format!("rpc url {u}"))?)
+                    .erased())
             })
             .collect::<Result<Vec<_>>>()?;
-        Ok(Self { providers, feed, other_feed, receipt_timeout: Duration::from_secs(30) })
+        Ok(Self {
+            providers,
+            feed,
+            other_feed,
+            receipt_timeout: Duration::from_secs(30),
+        })
     }
 
     pub fn provider(&self) -> &DynProvider {
@@ -86,22 +99,36 @@ impl ChainClient {
 
     /// The on-chain EIP-712 digest for `reports` (cross-check against the Rust digest).
     pub async fn hash_reports(&self, reports: &[Report]) -> Result<B256> {
-        Ok(ICredencePriceFeed::new(self.feed, self.provider()).hashReports(reports.to_vec()).call().await?)
+        Ok(ICredencePriceFeed::new(self.feed, self.provider())
+            .hashReports(reports.to_vec())
+            .call()
+            .await?)
     }
 
-    async fn submit_via(&self, p: &DynProvider, reports: &[Report], sigs: Vec<Bytes>) -> Result<SubmitOutcome> {
+    async fn submit_via(
+        &self,
+        p: &DynProvider,
+        reports: &[Report],
+        sigs: Vec<Bytes>,
+    ) -> Result<SubmitOutcome> {
         let feed = ICredencePriceFeed::new(self.feed, p);
         let call = feed.submit(reports.to_vec(), sigs);
         let gas = match call.estimate_gas().await {
             Ok(g) => g,
             Err(e) => {
                 if let Some(data) = e.as_revert_data() {
-                    return Ok(SubmitOutcome::Rejected { reason: decode_revert(&data) });
+                    return Ok(SubmitOutcome::Rejected {
+                        reason: decode_revert(&data),
+                    });
                 }
                 return Err(anyhow!(e).context("estimate_gas"));
             }
         };
-        let pending = call.gas(gas.saturating_mul(13) / 10).send().await.context("send submit")?;
+        let pending = call
+            .gas(gas.saturating_mul(13) / 10)
+            .send()
+            .await
+            .context("send submit")?;
         let tx_hash = *pending.tx_hash();
         let receipt = pending
             .with_timeout(Some(self.receipt_timeout))
@@ -122,7 +149,11 @@ impl FeedChain for ChainClient {
     async fn latest_seq(&self, asset: B256) -> Result<u64> {
         let mut last = None;
         for p in &self.providers {
-            match ICredencePriceFeed::new(self.feed, p).latestSeq(asset).call().await {
+            match ICredencePriceFeed::new(self.feed, p)
+                .latestSeq(asset)
+                .call()
+                .await
+            {
                 Ok(s) => return Ok(s),
                 Err(e) => last = Some(e),
             }
@@ -145,8 +176,13 @@ impl FeedChain for ChainClient {
     }
 
     async fn other_feed_latest(&self, asset: B256) -> Result<Option<u128>> {
-        let Some(other) = self.other_feed else { return Ok(None) };
-        let r = ICredencePriceFeed::new(other, self.provider()).latest(asset).call().await?;
+        let Some(other) = self.other_feed else {
+            return Ok(None);
+        };
+        let r = ICredencePriceFeed::new(other, self.provider())
+            .latest(asset)
+            .call()
+            .await?;
         Ok(Some(r.price.to::<u128>()))
     }
 }

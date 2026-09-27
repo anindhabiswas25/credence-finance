@@ -12,8 +12,19 @@ use std::collections::HashMap;
 pub trait ReportStore: Send + Sync {
     /// Highest seq ever signed per asset for this feed.
     async fn max_seqs(&self, feed: &str) -> Result<HashMap<B256, u64>>;
-    async fn record_signed(&self, feed: &str, reports: &[Report], signers: &[Address]) -> Result<()>;
-    async fn record_outcome(&self, feed: &str, reports: &[Report], tx_hash: Option<B256>, status: &str) -> Result<()>;
+    async fn record_signed(
+        &self,
+        feed: &str,
+        reports: &[Report],
+        signers: &[Address],
+    ) -> Result<()>;
+    async fn record_outcome(
+        &self,
+        feed: &str,
+        reports: &[Report],
+        tx_hash: Option<B256>,
+        status: &str,
+    ) -> Result<()>;
 }
 
 pub struct PgStore {
@@ -29,15 +40,25 @@ impl PgStore {
 #[async_trait]
 impl ReportStore for PgStore {
     async fn max_seqs(&self, feed: &str) -> Result<HashMap<B256, u64>> {
-        let rows: Vec<(Vec<u8>, i64)> =
-            sqlx::query_as("select asset_id, max(seq) from ops.relayer_report where feed = $1 group by asset_id")
-                .bind(feed)
-                .fetch_all(&self.pool)
-                .await?;
-        Ok(rows.into_iter().filter(|(a, _)| a.len() == 32).map(|(a, s)| (B256::from_slice(&a), s as u64)).collect())
+        let rows: Vec<(Vec<u8>, i64)> = sqlx::query_as(
+            "select asset_id, max(seq) from ops.relayer_report where feed = $1 group by asset_id",
+        )
+        .bind(feed)
+        .fetch_all(&self.pool)
+        .await?;
+        Ok(rows
+            .into_iter()
+            .filter(|(a, _)| a.len() == 32)
+            .map(|(a, s)| (B256::from_slice(&a), s as u64))
+            .collect())
     }
 
-    async fn record_signed(&self, feed: &str, reports: &[Report], signers: &[Address]) -> Result<()> {
+    async fn record_signed(
+        &self,
+        feed: &str,
+        reports: &[Report],
+        signers: &[Address],
+    ) -> Result<()> {
         let signers: Vec<String> = signers.iter().map(|a| a.to_checksum(None)).collect();
         let mut tx = self.pool.begin().await?;
         for r in reports {
@@ -64,7 +85,13 @@ impl ReportStore for PgStore {
         Ok(())
     }
 
-    async fn record_outcome(&self, feed: &str, reports: &[Report], tx_hash: Option<B256>, status: &str) -> Result<()> {
+    async fn record_outcome(
+        &self,
+        feed: &str,
+        reports: &[Report],
+        tx_hash: Option<B256>,
+        status: &str,
+    ) -> Result<()> {
         let assets: Vec<Vec<u8>> = reports.iter().map(|r| r.assetId.to_vec()).collect();
         let seqs: Vec<i64> = reports.iter().map(|r| r.seq as i64).collect();
         sqlx::query(
@@ -83,10 +110,13 @@ impl ReportStore for PgStore {
     }
 }
 
-/// In-memory store (tests and `--no-db` dev runs).
+/// (feed, report, status, tx hash)
+pub type MemRow = (String, Report, String, Option<B256>);
+
+/// In-memory store (tests and dev runs without `DATABASE_URL`).
 #[derive(Default)]
 pub struct MemStore {
-    pub rows: tokio::sync::Mutex<Vec<(String, Report, String, Option<B256>)>>,
+    pub rows: tokio::sync::Mutex<Vec<MemRow>>,
 }
 
 #[async_trait]
@@ -101,17 +131,32 @@ impl ReportStore for MemStore {
         }
         Ok(m)
     }
-    async fn record_signed(&self, feed: &str, reports: &[Report], _signers: &[Address]) -> Result<()> {
+    async fn record_signed(
+        &self,
+        feed: &str,
+        reports: &[Report],
+        _signers: &[Address],
+    ) -> Result<()> {
         let mut g = self.rows.lock().await;
         for r in reports {
             g.push((feed.into(), r.clone(), "signed".into(), None));
         }
         Ok(())
     }
-    async fn record_outcome(&self, feed: &str, reports: &[Report], tx: Option<B256>, status: &str) -> Result<()> {
+    async fn record_outcome(
+        &self,
+        feed: &str,
+        reports: &[Report],
+        tx: Option<B256>,
+        status: &str,
+    ) -> Result<()> {
         let mut g = self.rows.lock().await;
         for row in g.iter_mut() {
-            if row.0 == feed && reports.iter().any(|r| r.assetId == row.1.assetId && r.seq == row.1.seq) {
+            if row.0 == feed
+                && reports
+                    .iter()
+                    .any(|r| r.assetId == row.1.assetId && r.seq == row.1.seq)
+            {
                 row.2 = status.into();
                 row.3 = tx.or(row.3);
             }

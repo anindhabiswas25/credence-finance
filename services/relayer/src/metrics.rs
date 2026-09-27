@@ -2,7 +2,8 @@
 //! (feed A vs feed B), and the submit success rate.
 
 use prometheus::{
-    exponential_buckets, Histogram, HistogramOpts, HistogramVec, IntCounterVec, IntGaugeVec, Opts, Registry,
+    exponential_buckets, Histogram, HistogramOpts, HistogramVec, IntCounterVec, IntGaugeVec, Opts,
+    Registry,
 };
 
 #[derive(Clone)]
@@ -33,25 +34,43 @@ impl Metrics {
     pub fn new(registry: &Registry) -> anyhow::Result<Self> {
         let m = Self {
             report_latency: HistogramVec::new(
-                HistogramOpts::new("relayer_report_latency_seconds", "exchange time → on-chain acceptance")
-                    .buckets(exponential_buckets(0.25, 2.0, 12)?),
+                HistogramOpts::new(
+                    "relayer_report_latency_seconds",
+                    "exchange time → on-chain acceptance",
+                )
+                .buckets(exponential_buckets(0.25, 2.0, 12)?),
                 &["feed", "kind"],
             )?,
             tick_latency: Histogram::with_opts(
-                HistogramOpts::new("relayer_tick_seconds", "aggregator tick: collect → sign → mined")
-                    .buckets(exponential_buckets(0.05, 2.0, 12)?),
+                HistogramOpts::new(
+                    "relayer_tick_seconds",
+                    "aggregator tick: collect → sign → mined",
+                )
+                .buckets(exponential_buckets(0.05, 2.0, 12)?),
             )?,
-            submits: IntCounterVec::new(Opts::new("relayer_submits_total", "submit transactions by result"), &["feed", "result"])?,
+            submits: IntCounterVec::new(
+                Opts::new("relayer_submits_total", "submit transactions by result"),
+                &["feed", "result"],
+            )?,
             reports_accepted: IntCounterVec::new(
-                Opts::new("relayer_reports_accepted_total", "reports accepted on-chain"),
+                Opts::new(
+                    "relayer_reports_accepted_total",
+                    "reports accepted on-chain",
+                ),
                 &["feed", "kind"],
             )?,
             node_spread_ppm: IntGaugeVec::new(
-                Opts::new("relayer_node_spread_ppm", "spread of node LIVE observations"),
+                Opts::new(
+                    "relayer_node_spread_ppm",
+                    "spread of node LIVE observations",
+                ),
                 &["feed", "asset"],
             )?,
             vendor_disagreement_ppm: IntGaugeVec::new(
-                Opts::new("relayer_vendor_disagreement_ppm", "this feed vs the other feed on-chain"),
+                Opts::new(
+                    "relayer_vendor_disagreement_ppm",
+                    "this feed vs the other feed on-chain",
+                ),
                 &["feed", "asset"],
             )?,
             vendor_errors: IntCounterVec::new(
@@ -59,11 +78,20 @@ impl Metrics {
                 &["vendor", "kind"],
             )?,
             rejections: IntCounterVec::new(
-                Opts::new("relayer_observation_rejections_total", "filtered observations"),
+                Opts::new(
+                    "relayer_observation_rejections_total",
+                    "filtered observations",
+                ),
                 &["node", "reason"],
             )?,
-            refusals: IntCounterVec::new(Opts::new("relayer_sign_refusals_total", "node refusals"), &["node", "reason"])?,
-            last_seq: IntGaugeVec::new(Opts::new("relayer_last_seq", "last submitted seq"), &["feed", "asset"])?,
+            refusals: IntCounterVec::new(
+                Opts::new("relayer_sign_refusals_total", "node refusals"),
+                &["node", "reason"],
+            )?,
+            last_seq: IntGaugeVec::new(
+                Opts::new("relayer_last_seq", "last submitted seq"),
+                &["feed", "asset"],
+            )?,
         };
         registry.register(Box::new(m.report_latency.clone()))?;
         registry.register(Box::new(m.tick_latency.clone()))?;

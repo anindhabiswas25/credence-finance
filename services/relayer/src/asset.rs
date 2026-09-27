@@ -20,14 +20,22 @@ impl Asset {
             bail!("asset {spec:?} must be TICKER:MIC");
         };
         let (symbol, listing) = (symbol.trim().to_uppercase(), listing.trim().to_uppercase());
-        if symbol.is_empty() || !symbol.chars().all(|c| c.is_ascii_alphanumeric() || c == '.') {
+        if symbol.is_empty()
+            || !symbol
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || c == '.')
+        {
             bail!("bad ticker in {spec:?}");
         }
         if !matches!(listing.as_str(), "XNAS" | "XNYS" | "ARCX" | "XASE" | "BATS") {
             bail!("unsupported listing venue {listing} in {spec:?}");
         }
         let id = keccak256(format!("{symbol}:{listing}"));
-        Ok(Self { symbol, listing, id })
+        Ok(Self {
+            symbol,
+            listing,
+            id,
+        })
     }
 
     pub fn parse_list(list: &[String]) -> Result<Vec<Self>> {

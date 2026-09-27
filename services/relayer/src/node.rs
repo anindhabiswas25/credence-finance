@@ -6,7 +6,9 @@ use crate::{
     asset::Asset,
     filter::{live_observation, FilterConfig},
     metrics::{kind_label, Metrics},
-    ocr::{verify, AssetObservation, Draft, NodeSnapshot, Refusal, SessionPrint, StatusObservation},
+    ocr::{
+        verify, AssetObservation, Draft, NodeSnapshot, Refusal, SessionPrint, StatusObservation,
+    },
     report::{digest, Kind, MarketStatus, Report, ReportDto},
     vendor::{DynVendor, StatusInput, VendorMarket},
 };
@@ -53,7 +55,10 @@ pub struct Node {
 }
 
 pub fn now_s() -> u64 {
-    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0)
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0)
 }
 
 /// The node's market status: the calendar window, overridden toward "less open" by the vendor and the
@@ -140,7 +145,10 @@ impl Node {
         let status = match self.vendor.status(asset).await {
             Ok(v) => Some(market_status(window, &v)),
             Err(e) => {
-                self.metrics.vendor_errors.with_label_values(&[self.vendor.name(), kind_label(&e)]).inc();
+                self.metrics
+                    .vendor_errors
+                    .with_label_values(&[self.vendor.name(), kind_label(&e)])
+                    .inc();
                 tracing::warn!(node = %self.cfg.id, asset = %asset.symbol, error = %e, "status failed");
                 None
             }
@@ -161,21 +169,36 @@ impl Node {
                 } else {
                     self.cfg.filter.extended_max_age_s
                 };
-                match self.vendor.live(asset, now.saturating_sub(lookback) * 1_000_000_000).await {
+                match self
+                    .vendor
+                    .live(asset, now.saturating_sub(lookback) * 1_000_000_000)
+                    .await
+                {
                     Ok(input) => match live_observation(s, &input, now, &self.cfg.filter) {
                         Ok(o) => {
-                            live_session_date = session_for(&self.calendar, o.observed_at).map(|x| Calendar::session_date(&x));
+                            live_session_date = session_for(&self.calendar, o.observed_at)
+                                .map(|x| Calendar::session_date(&x));
                             live = Some(o);
                         }
                         Err(r) => {
                             let reason = format!("{r:?}");
-                            let reason = reason.split([' ', '{', '(']).next().unwrap_or("other").to_owned();
-                            self.metrics.rejections.with_label_values(&[&self.cfg.id, &reason]).inc();
+                            let reason = reason
+                                .split([' ', '{', '('])
+                                .next()
+                                .unwrap_or("other")
+                                .to_owned();
+                            self.metrics
+                                .rejections
+                                .with_label_values(&[&self.cfg.id, &reason])
+                                .inc();
                             tracing::debug!(node = %self.cfg.id, asset = %asset.symbol, %r, "no LIVE observation");
                         }
                     },
                     Err(e) => {
-                        self.metrics.vendor_errors.with_label_values(&[self.vendor.name(), kind_label(&e)]).inc();
+                        self.metrics
+                            .vendor_errors
+                            .with_label_values(&[self.vendor.name(), kind_label(&e)])
+                            .inc();
                         tracing::warn!(node = %self.cfg.id, asset = %asset.symbol, error = %e, "live failed");
                     }
                 }
@@ -183,7 +206,14 @@ impl Node {
         }
 
         let (open, close) = self.poll_prints(asset, now, prev.as_ref()).await;
-        AssetObservation { asset_id: asset.id, status: status_obs, live, live_session_date, open, close }
+        AssetObservation {
+            asset_id: asset.id,
+            status: status_obs,
+            live,
+            live_session_date,
+            open,
+            close,
+        }
     }
 
     /// OPEN from the current session's open until found; CLOSE from the close until found.
@@ -194,7 +224,10 @@ impl Node {
         prev: Option<&AssetObservation>,
     ) -> (Option<SessionPrint>, Option<SessionPrint>) {
         let Some(session) = self.calendar.current_or_last_session(now).copied() else {
-            return (prev.and_then(|p| p.open.clone()), prev.and_then(|p| p.close.clone()));
+            return (
+                prev.and_then(|p| p.open.clone()),
+                prev.and_then(|p| p.close.clone()),
+            );
         };
         let sd = Calendar::session_date(&session);
         let mut open = prev.and_then(|p| p.open.clone());
@@ -215,11 +248,19 @@ impl Node {
             };
             match r {
                 Ok(Some(p)) => {
-                    *slot = Some(SessionPrint { session_date: sd, price_wad: p.price_wad, at: p.at, source: p.source });
+                    *slot = Some(SessionPrint {
+                        session_date: sd,
+                        price_wad: p.price_wad,
+                        at: p.at,
+                        source: p.source,
+                    });
                 }
                 Ok(None) => {}
                 Err(e) => {
-                    self.metrics.vendor_errors.with_label_values(&[self.vendor.name(), kind_label(&e)]).inc();
+                    self.metrics
+                        .vendor_errors
+                        .with_label_values(&[self.vendor.name(), kind_label(&e)])
+                        .inc();
                     tracing::warn!(node = %self.cfg.id, asset = %asset.symbol, kind = kind.label(), error = %e, "official print failed");
                 }
             }
@@ -261,7 +302,12 @@ impl Node {
                 a
             })
             .collect();
-        NodeSnapshot { node: self.cfg.id.clone(), signer: self.signer.address(), taken_at: now, assets }
+        NodeSnapshot {
+            node: self.cfg.id.clone(),
+            signer: self.signer.address(),
+            taken_at: now,
+            assets,
+        }
     }
 
     /// Verify every report against this node's own observations; sign the batch digest only if all pass.
@@ -296,7 +342,10 @@ impl Node {
                     Refusal::FromFuture => "from_future",
                     Refusal::UnsupportedKind => "unsupported_kind",
                 };
-                self.metrics.refusals.with_label_values(&[&self.cfg.id, label]).inc();
+                self.metrics
+                    .refusals
+                    .with_label_values(&[&self.cfg.id, label])
+                    .inc();
                 refused.push((i, why.to_string()));
             }
             reports.push(r);
@@ -312,7 +361,12 @@ impl Node {
         } else {
             None
         };
-        SignResponse { node: self.cfg.id.clone(), signer: self.signer.address(), signature, refused }
+        SignResponse {
+            node: self.cfg.id.clone(),
+            signer: self.signer.address(),
+            signature,
+            refused,
+        }
     }
 
     /// Poll forever.
@@ -334,7 +388,9 @@ impl Node {
     }
 
     fn authorised(&self, headers: &HeaderMap) -> bool {
-        let Some(expected) = &self.cfg.auth_token else { return true };
+        let Some(expected) = &self.cfg.auth_token else {
+            return true;
+        };
         let got = headers
             .get("authorization")
             .and_then(|v| v.to_str().ok())
@@ -378,19 +434,49 @@ mod tests {
     use crate::vendor::HaltInfo;
 
     fn st(market: VendorMarket, halted: bool) -> StatusInput {
-        StatusInput { market, halt: Some(HaltInfo { halted, reason: None }) }
+        StatusInput {
+            market,
+            halt: Some(HaltInfo {
+                halted,
+                reason: None,
+            }),
+        }
     }
 
     #[test]
     fn status_fails_closed() {
-        assert_eq!(market_status(Window::Regular, &st(VendorMarket::Open, false)), MarketStatus::Regular);
-        assert_eq!(market_status(Window::Regular, &st(VendorMarket::Closed, false)), MarketStatus::Closed);
-        assert_eq!(market_status(Window::Regular, &st(VendorMarket::Open, true)), MarketStatus::Halted);
-        assert_eq!(market_status(Window::Closed, &st(VendorMarket::Open, false)), MarketStatus::Closed);
-        assert_eq!(market_status(Window::Overnight, &st(VendorMarket::Closed, false)), MarketStatus::Overnight);
-        assert_eq!(market_status(Window::Pre, &st(VendorMarket::Extended, false)), MarketStatus::Pre);
         assert_eq!(
-            market_status(Window::Regular, &StatusInput { market: VendorMarket::Unknown, halt: None }),
+            market_status(Window::Regular, &st(VendorMarket::Open, false)),
+            MarketStatus::Regular
+        );
+        assert_eq!(
+            market_status(Window::Regular, &st(VendorMarket::Closed, false)),
+            MarketStatus::Closed
+        );
+        assert_eq!(
+            market_status(Window::Regular, &st(VendorMarket::Open, true)),
+            MarketStatus::Halted
+        );
+        assert_eq!(
+            market_status(Window::Closed, &st(VendorMarket::Open, false)),
+            MarketStatus::Closed
+        );
+        assert_eq!(
+            market_status(Window::Overnight, &st(VendorMarket::Closed, false)),
+            MarketStatus::Overnight
+        );
+        assert_eq!(
+            market_status(Window::Pre, &st(VendorMarket::Extended, false)),
+            MarketStatus::Pre
+        );
+        assert_eq!(
+            market_status(
+                Window::Regular,
+                &StatusInput {
+                    market: VendorMarket::Unknown,
+                    halt: None
+                }
+            ),
             MarketStatus::Regular
         );
     }

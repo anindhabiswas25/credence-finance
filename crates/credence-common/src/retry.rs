@@ -11,14 +11,20 @@ pub struct Backoff {
 
 impl Default for Backoff {
     fn default() -> Self {
-        Self { initial: Duration::from_millis(200), max: Duration::from_secs(5), attempts: 5 }
+        Self {
+            initial: Duration::from_millis(200),
+            max: Duration::from_secs(5),
+            attempts: 5,
+        }
     }
 }
 
 impl Backoff {
     /// Delay before retry number `n` (1-based), capped at `max`, with full jitter.
     pub fn delay(&self, n: u32) -> Duration {
-        let exp = self.initial.saturating_mul(1u32 << n.saturating_sub(1).min(16));
+        let exp = self
+            .initial
+            .saturating_mul(1u32 << n.saturating_sub(1).min(16));
         let cap = exp.min(self.max);
         let nanos = cap.as_nanos() as u64;
         if nanos == 0 {
@@ -69,7 +75,11 @@ mod tests {
 
     #[test]
     fn delay_is_capped_and_positive() {
-        let b = Backoff { initial: Duration::from_millis(100), max: Duration::from_secs(1), attempts: 3 };
+        let b = Backoff {
+            initial: Duration::from_millis(100),
+            max: Duration::from_secs(1),
+            attempts: 3,
+        };
         for n in 1..20 {
             let d = b.delay(n);
             assert!(d <= Duration::from_secs(1), "{d:?}");
@@ -79,13 +89,23 @@ mod tests {
 
     #[tokio::test]
     async fn retry_returns_first_success() {
-        let b = Backoff { initial: Duration::from_millis(1), max: Duration::from_millis(2), attempts: 5 };
+        let b = Backoff {
+            initial: Duration::from_millis(1),
+            max: Duration::from_millis(2),
+            attempts: 5,
+        };
         let mut calls = 0;
         let r: Result<u32, String> = b
             .retry("t", || {
                 calls += 1;
                 let c = calls;
-                async move { if c < 3 { Err("no".to_string()) } else { Ok(c) } }
+                async move {
+                    if c < 3 {
+                        Err("no".to_string())
+                    } else {
+                        Ok(c)
+                    }
+                }
             })
             .await;
         assert_eq!(r.unwrap(), 3);

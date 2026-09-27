@@ -16,11 +16,18 @@ pub fn wad_from_decimal(s: &str) -> Result<u128> {
         bail!("not a non-negative decimal: {s:?}");
     }
     let (mantissa, exp) = match s.find(['e', 'E']) {
-        Some(i) => (&s[..i], s[i + 1..].parse::<i32>().map_err(|_| anyhow!("bad exponent in {s:?}"))?),
+        Some(i) => (
+            &s[..i],
+            s[i + 1..]
+                .parse::<i32>()
+                .map_err(|_| anyhow!("bad exponent in {s:?}"))?,
+        ),
         None => (s, 0),
     };
     let (int, frac) = mantissa.split_once('.').unwrap_or((mantissa, ""));
-    if !int.chars().chain(frac.chars()).all(|c| c.is_ascii_digit()) || (int.is_empty() && frac.is_empty()) {
+    if !int.chars().chain(frac.chars()).all(|c| c.is_ascii_digit())
+        || (int.is_empty() && frac.is_empty())
+    {
         bail!("not a decimal: {s:?}");
     }
     let digits: String = format!("{int}{frac}");
@@ -31,16 +38,25 @@ pub fn wad_from_decimal(s: &str) -> Result<u128> {
         return Ok(0);
     }
     if shift >= 0 {
-        let base: u128 = digits.parse().map_err(|_| anyhow!("price too large: {s:?}"))?;
-        let mul = 10u128.checked_pow(shift as u32).ok_or_else(|| anyhow!("price too large: {s:?}"))?;
-        base.checked_mul(mul).ok_or_else(|| anyhow!("price too large: {s:?}"))
+        let base: u128 = digits
+            .parse()
+            .map_err(|_| anyhow!("price too large: {s:?}"))?;
+        let mul = 10u128
+            .checked_pow(shift as u32)
+            .ok_or_else(|| anyhow!("price too large: {s:?}"))?;
+        base.checked_mul(mul)
+            .ok_or_else(|| anyhow!("price too large: {s:?}"))
     } else {
         let cut = (-shift) as usize;
         if cut > digits.len() {
             return Ok(0); // below 0.1 wei of WAD
         }
         let (keep, drop) = digits.split_at(digits.len() - cut);
-        let mut v: u128 = if keep.is_empty() { 0 } else { keep.parse().map_err(|_| anyhow!("price too large"))? };
+        let mut v: u128 = if keep.is_empty() {
+            0
+        } else {
+            keep.parse().map_err(|_| anyhow!("price too large"))?
+        };
         if drop.as_bytes()[0] >= b'5' {
             v += 1;
         }
@@ -86,7 +102,10 @@ mod tests {
 
     #[test]
     fn decimal_to_wad_is_exact() {
-        assert_eq!(wad_from_decimal("161.2958").unwrap(), 161_295_800_000_000_000_000);
+        assert_eq!(
+            wad_from_decimal("161.2958").unwrap(),
+            161_295_800_000_000_000_000
+        );
         assert_eq!(wad_from_decimal("180").unwrap(), 180 * WAD);
         assert_eq!(wad_from_decimal("0.0001").unwrap(), 100_000_000_000_000);
         assert_eq!(wad_from_decimal("1.5e2").unwrap(), 150 * WAD);

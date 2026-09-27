@@ -43,16 +43,17 @@ fn code(plan: Plan, c: &str) -> Code {
         // extended hours (Form T)
         (_, "T") => FormT,
         // eligible modifiers common to both plans
-        (_, "E" | "F" | "K" | "L" | "O" | "S" | "X" | "Y" | "1" | "5" | "6" | "A" | "D") => Eligible,
+        (_, "E" | "F" | "K" | "L" | "O" | "S" | "X" | "Y" | "1" | "5" | "6" | "A" | "D") => {
+            Eligible
+        }
         // "B": UTP Bunched Trade (eligible) vs CTA Average Price Trade (ineligible)
         (Plan::Utp, "B") => Eligible,
         (Plan::Cta, "B") => Ineligible,
         // "I": CTA CAP Election / UTP Odd Lot — treated as odd lot on both (odd lots never update last)
         (_, "I") => Ineligible,
-        (
-            _,
-            "C" | "G" | "H" | "N" | "P" | "R" | "U" | "V" | "W" | "Z" | "4" | "7" | "8" | "9",
-        ) => Ineligible,
+        (_, "C" | "G" | "H" | "N" | "P" | "R" | "U" | "V" | "W" | "Z" | "4" | "7" | "8" | "9") => {
+            Ineligible
+        }
         _ => Ineligible,
     }
 }
@@ -62,7 +63,12 @@ pub fn classify(plan: Plan, conditions: &[String]) -> TradeClass {
     let codes: Vec<Code> = conditions.iter().map(|c| code(plan, c.trim())).collect();
     let official_open = codes.contains(&Code::OfficialOpen);
     let official_close = codes.contains(&Code::OfficialClose);
-    let any_bad = codes.iter().any(|c| matches!(c, Code::Ineligible | Code::OfficialOpen | Code::OfficialClose));
+    let any_bad = codes.iter().any(|c| {
+        matches!(
+            c,
+            Code::Ineligible | Code::OfficialOpen | Code::OfficialClose
+        )
+    });
     let form_t = codes.contains(&Code::FormT);
     TradeClass {
         regular: !any_bad && !form_t,
@@ -91,11 +97,25 @@ mod tests {
 
     #[test]
     fn odd_lots_and_derived_prints_are_rejected() {
-        for codes in [&["@", "I"][..], &["W"], &["C"], &["N"], &["P"], &["Z"], &["4"], &["7"], &["V"], &["H"]] {
+        for codes in [
+            &["@", "I"][..],
+            &["W"],
+            &["C"],
+            &["N"],
+            &["P"],
+            &["Z"],
+            &["4"],
+            &["7"],
+            &["V"],
+            &["H"],
+        ] {
             let k = classify(Plan::Utp, &c(codes));
             assert!(!k.regular && !k.extended, "{codes:?}");
         }
-        assert!(!classify(Plan::Cta, &c(&["B"])).regular, "CTA B = average price");
+        assert!(
+            !classify(Plan::Cta, &c(&["B"])).regular,
+            "CTA B = average price"
+        );
         assert!(classify(Plan::Utp, &c(&["B"])).regular, "UTP B = bunched");
     }
 

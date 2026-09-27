@@ -50,7 +50,10 @@ pub struct HttpNode {
 
 impl HttpNode {
     pub fn new(url: String, token: Option<String>) -> Self {
-        let http = reqwest::Client::builder().timeout(Duration::from_millis(1500)).build().expect("reqwest");
+        let http = reqwest::Client::builder()
+            .timeout(Duration::from_millis(1500))
+            .build()
+            .expect("reqwest");
         Self { url, token, http }
     }
     fn req(&self, r: reqwest::RequestBuilder) -> reqwest::RequestBuilder {
@@ -67,12 +70,20 @@ impl NodeClient for HttpNode {
         self.url.clone()
     }
     async fn observations(&self) -> Result<NodeSnapshot> {
-        let r = self.req(self.http.get(format!("{}/v1/observations", self.url))).send().await?.error_for_status()?;
+        let r = self
+            .req(self.http.get(format!("{}/v1/observations", self.url)))
+            .send()
+            .await?
+            .error_for_status()?;
         Ok(r.json().await?)
     }
     async fn sign(&self, reports: &[ReportDto]) -> Result<SignResponse> {
         let body = serde_json::json!({ "reports": reports });
-        let r = self.req(self.http.post(format!("{}/v1/sign", self.url)).json(&body)).send().await?.error_for_status()?;
+        let r = self
+            .req(self.http.post(format!("{}/v1/sign", self.url)).json(&body))
+            .send()
+            .await?
+            .error_for_status()?;
         Ok(r.json().await?)
     }
 }
@@ -91,7 +102,10 @@ pub struct AggregatorConfig {
 pub enum TickOutcome {
     Idle,
     NoQuorum(String),
-    Submitted { reports: usize, outcome: SubmitOutcome },
+    Submitted {
+        reports: usize,
+        outcome: SubmitOutcome,
+    },
 }
 
 pub struct Aggregator {
@@ -131,7 +145,12 @@ impl Aggregator {
     }
 
     fn symbol(&self, id: &B256) -> String {
-        self.cfg.assets.iter().find(|(a, _)| a == id).map(|(_, s)| s.clone()).unwrap_or_else(|| id.to_string())
+        self.cfg
+            .assets
+            .iter()
+            .find(|(a, _)| a == id)
+            .map(|(_, s)| s.clone())
+            .unwrap_or_else(|| id.to_string())
     }
 
     /// Seq high-water mark per asset: max(chain, db) + 1. Called at start and after a stale-seq reject.
@@ -148,7 +167,12 @@ impl Aggregator {
     async fn collect(&self) -> Vec<NodeSnapshot> {
         let futs = self.nodes.iter().map(|n| {
             let n = n.clone();
-            async move { (n.name(), tokio::time::timeout(Duration::from_secs(2), n.observations()).await) }
+            async move {
+                (
+                    n.name(),
+                    tokio::time::timeout(Duration::from_secs(2), n.observations()).await,
+                )
+            }
         });
         futures::future::join_all(futs)
             .await
@@ -200,11 +224,21 @@ impl Aggregator {
         for (id, sym) in &self.cfg.assets {
             let prices: Vec<u128> = snaps
                 .iter()
-                .filter_map(|s| s.assets.iter().find(|a| a.asset_id == *id)?.live.as_ref().map(|l| l.price_wad))
+                .filter_map(|s| {
+                    s.assets
+                        .iter()
+                        .find(|a| a.asset_id == *id)?
+                        .live
+                        .as_ref()
+                        .map(|l| l.price_wad)
+                })
                 .collect();
             if let (Some(lo), Some(hi)) = (prices.iter().min(), prices.iter().max()) {
                 let ppm = rel_diff_ppm(*lo, *hi).min(i64::MAX as u128) as i64;
-                self.metrics.node_spread_ppm.with_label_values(&[&self.cfg.feed, sym]).set(ppm);
+                self.metrics
+                    .node_spread_ppm
+                    .with_label_values(&[&self.cfg.feed, sym])
+                    .set(ppm);
             }
         }
     }
@@ -214,7 +248,15 @@ impl Aggregator {
             .iter()
             .map(|d| {
                 let seq = self.next_seq.entry(d.asset_id).or_insert(1);
-                let r = report(d.asset_id, d.kind, d.price_wad, d.observed_at, d.session_date, d.status, *seq);
+                let r = report(
+                    d.asset_id,
+                    d.kind,
+                    d.price_wad,
+                    d.observed_at,
+                    d.session_date,
+                    d.status,
+                    *seq,
+                );
                 *seq += 1;
                 r
             })
@@ -227,21 +269,30 @@ impl Aggregator {
         only: Option<&[usize]>,
     ) -> Vec<(usize, Result<SignResponse>)> {
         let dtos: Vec<ReportDto> = reports.iter().map(ReportDto::from).collect();
-        let futs = self.nodes.iter().enumerate().filter(|(i, _)| only.is_none_or(|o| o.contains(i))).map(|(i, n)| {
-            let n = n.clone();
-            let dtos = dtos.clone();
-            async move {
-                let r = tokio::time::timeout(Duration::from_secs(3), n.sign(&dtos))
-                    .await
-                    .map_err(|_| anyhow!("sign timed out"))
-                    .and_then(|r| r);
-                (i, r)
-            }
-        });
+        let futs = self
+            .nodes
+            .iter()
+            .enumerate()
+            .filter(|(i, _)| only.is_none_or(|o| o.contains(i)))
+            .map(|(i, n)| {
+                let n = n.clone();
+                let dtos = dtos.clone();
+                async move {
+                    let r = tokio::time::timeout(Duration::from_secs(3), n.sign(&dtos))
+                        .await
+                        .map_err(|_| anyhow!("sign timed out"))
+                        .and_then(|r| r);
+                    (i, r)
+                }
+            });
         futures::future::join_all(futs).await
     }
 
-    fn valid_signatures(&self, reports: &[Report], resps: &[(usize, Result<SignResponse>)]) -> Vec<(Address, Signature)> {
+    fn valid_signatures(
+        &self,
+        reports: &[Report],
+        resps: &[(usize, Result<SignResponse>)],
+    ) -> Vec<(Address, Signature)> {
         let digest_ok = |resp: &SignResponse| -> Option<(Address, Signature)> {
             let sig = Signature::try_from(resp.signature.as_ref()?.as_ref()).ok()?;
             Some((resp.signer, sig))
@@ -261,8 +312,15 @@ impl Aggregator {
         let now = (self.clock)();
         let snaps = self.collect().await;
         if snaps.len() < self.cfg.threshold {
-            self.metrics.submits.with_label_values(&[&self.cfg.feed, "no_quorum"]).inc();
-            return Ok(TickOutcome::NoQuorum(format!("{} of {} nodes answered", snaps.len(), self.nodes.len())));
+            self.metrics
+                .submits
+                .with_label_values(&[&self.cfg.feed, "no_quorum"])
+                .inc();
+            return Ok(TickOutcome::NoQuorum(format!(
+                "{} of {} nodes answered",
+                snaps.len(),
+                self.nodes.len()
+            )));
         }
         self.node_spread(&snaps);
         let drafts = self.due_drafts(&snaps, now);
@@ -280,62 +338,106 @@ impl Aggregator {
 
         if sigs.len() < self.cfg.threshold {
             // Round 2: keep the largest sub-batch a quorum accepts, re-sign it with that quorum.
-            let answered: Vec<(usize, &SignResponse)> =
-                resps.iter().filter_map(|(i, r)| r.as_ref().ok().map(|r| (*i, r))).collect();
+            let answered: Vec<(usize, &SignResponse)> = resps
+                .iter()
+                .filter_map(|(i, r)| r.as_ref().ok().map(|r| (*i, r)))
+                .collect();
             let accepts: Vec<Vec<bool>> = answered
                 .iter()
-                .map(|(_, r)| (0..reports.len()).map(|k| !r.refused.iter().any(|(i, _)| *i == k)).collect())
+                .map(|(_, r)| {
+                    (0..reports.len())
+                        .map(|k| !r.refused.iter().any(|(i, _)| *i == k))
+                        .collect()
+                })
                 .collect();
             let Some((node_idx, keep)) = choose_quorum(&accepts, self.cfg.threshold) else {
-                self.metrics.submits.with_label_values(&[&self.cfg.feed, "no_quorum"]).inc();
+                self.metrics
+                    .submits
+                    .with_label_values(&[&self.cfg.feed, "no_quorum"])
+                    .inc();
                 for (i, r) in &answered {
                     tracing::info!(node = %self.nodes[*i].name(), refused = ?r.refused, "node refused");
                 }
-                return Ok(TickOutcome::NoQuorum("no quorum agrees on any report".into()));
+                return Ok(TickOutcome::NoQuorum(
+                    "no quorum agrees on any report".into(),
+                ));
             };
             reports = keep.iter().map(|&k| reports[k].clone()).collect();
             let chosen: Vec<usize> = node_idx.iter().map(|&j| answered[j].0).collect();
             let resps = self.request_signatures(&reports, Some(&chosen)).await;
             sigs = self.valid_signatures(&reports, &resps);
             if sigs.len() < self.cfg.threshold {
-                self.metrics.submits.with_label_values(&[&self.cfg.feed, "no_quorum"]).inc();
-                return Ok(TickOutcome::NoQuorum("quorum did not sign the reduced batch".into()));
+                self.metrics
+                    .submits
+                    .with_label_values(&[&self.cfg.feed, "no_quorum"])
+                    .inc();
+                return Ok(TickOutcome::NoQuorum(
+                    "quorum did not sign the reduced batch".into(),
+                ));
             }
         }
 
         let sorted = sorted_signatures(sigs);
         let signers: Vec<Address> = sorted.iter().map(|(a, _)| *a).collect();
         let sig_bytes: Vec<Bytes> = sorted.into_iter().map(|(_, s)| s).collect();
-        self.store.record_signed(&self.cfg.feed, &reports, &signers).await?;
+        self.store
+            .record_signed(&self.cfg.feed, &reports, &signers)
+            .await?;
 
         let outcome = match self.chain.submit(&reports, sig_bytes).await {
             Ok(o) => o,
             Err(e) => {
-                self.metrics.submits.with_label_values(&[&self.cfg.feed, "error"]).inc();
-                self.store.record_outcome(&self.cfg.feed, &reports, None, "rejected").await.ok();
+                self.metrics
+                    .submits
+                    .with_label_values(&[&self.cfg.feed, "error"])
+                    .inc();
+                self.store
+                    .record_outcome(&self.cfg.feed, &reports, None, "rejected")
+                    .await
+                    .ok();
                 return Err(e);
             }
         };
         match &outcome {
             SubmitOutcome::Accepted { tx_hash, .. } => {
-                self.metrics.submits.with_label_values(&[&self.cfg.feed, "ok"]).inc();
-                self.store.record_outcome(&self.cfg.feed, &reports, Some(*tx_hash), "accepted").await?;
+                self.metrics
+                    .submits
+                    .with_label_values(&[&self.cfg.feed, "ok"])
+                    .inc();
+                self.store
+                    .record_outcome(&self.cfg.feed, &reports, Some(*tx_hash), "accepted")
+                    .await?;
                 self.on_accepted(&reports, now).await;
             }
             SubmitOutcome::Reverted { tx_hash, .. } => {
-                self.metrics.submits.with_label_values(&[&self.cfg.feed, "reverted"]).inc();
-                self.store.record_outcome(&self.cfg.feed, &reports, Some(*tx_hash), "rejected").await?;
+                self.metrics
+                    .submits
+                    .with_label_values(&[&self.cfg.feed, "reverted"])
+                    .inc();
+                self.store
+                    .record_outcome(&self.cfg.feed, &reports, Some(*tx_hash), "rejected")
+                    .await?;
                 self.sync_seqs().await.ok();
             }
             SubmitOutcome::Rejected { reason } => {
-                self.metrics.submits.with_label_values(&[&self.cfg.feed, "reverted"]).inc();
+                self.metrics
+                    .submits
+                    .with_label_values(&[&self.cfg.feed, "reverted"])
+                    .inc();
                 tracing::warn!(feed = %self.cfg.feed, %reason, "submit rejected at estimation");
-                self.store.record_outcome(&self.cfg.feed, &reports, None, "rejected").await?;
+                self.store
+                    .record_outcome(&self.cfg.feed, &reports, None, "rejected")
+                    .await?;
                 self.sync_seqs().await.ok();
             }
         }
-        self.metrics.tick_latency.observe(started.elapsed().as_secs_f64());
-        Ok(TickOutcome::Submitted { reports: reports.len(), outcome })
+        self.metrics
+            .tick_latency
+            .observe(started.elapsed().as_secs_f64());
+        Ok(TickOutcome::Submitted {
+            reports: reports.len(),
+            outcome,
+        })
     }
 
     async fn on_accepted(&mut self, reports: &[Report], now: u64) {
@@ -356,15 +458,27 @@ impl Aggregator {
                 Kind::Nav => {}
             }
             let latency = wall.saturating_sub(r.observedAt.to::<u64>()) as f64;
-            self.metrics.report_latency.with_label_values(&[&self.cfg.feed, kind.label()]).observe(latency);
-            self.metrics.reports_accepted.with_label_values(&[&self.cfg.feed, kind.label()]).inc();
+            self.metrics
+                .report_latency
+                .with_label_values(&[&self.cfg.feed, kind.label()])
+                .observe(latency);
+            self.metrics
+                .reports_accepted
+                .with_label_values(&[&self.cfg.feed, kind.label()])
+                .inc();
             let sym = self.symbol(&r.assetId);
-            self.metrics.last_seq.with_label_values(&[&self.cfg.feed, &sym]).set(r.seq as i64);
+            self.metrics
+                .last_seq
+                .with_label_values(&[&self.cfg.feed, &sym])
+                .set(r.seq as i64);
             if kind == Kind::Live {
                 if let Ok(Some(other)) = self.chain.other_feed_latest(r.assetId).await {
                     if other > 0 {
                         let ppm = rel_diff_ppm(r.price, other).min(i64::MAX as u128) as i64;
-                        self.metrics.vendor_disagreement_ppm.with_label_values(&[&self.cfg.feed, &sym]).set(ppm);
+                        self.metrics
+                            .vendor_disagreement_ppm
+                            .with_label_values(&[&self.cfg.feed, &sym])
+                            .set(ppm);
                     }
                 }
             }

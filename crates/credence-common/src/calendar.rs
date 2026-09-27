@@ -91,7 +91,8 @@ struct RawSession {
 impl Calendar {
     pub fn load(path: impl AsRef<Path>) -> Result<Self> {
         let path = path.as_ref();
-        let raw = std::fs::read_to_string(path).with_context(|| format!("reading {}", path.display()))?;
+        let raw =
+            std::fs::read_to_string(path).with_context(|| format!("reading {}", path.display()))?;
         Self::from_json(&raw).with_context(|| format!("parsing {}", path.display()))
     }
 
@@ -113,14 +114,22 @@ impl Calendar {
                 })
             })
             .collect::<Result<Vec<_>>>()?;
-        let cal = Self { venue: doc.venue, sessions, content_hash: doc.content_hash };
+        let cal = Self {
+            venue: doc.venue,
+            sessions,
+            content_hash: doc.content_hash,
+        };
         cal.validate()?;
         Ok(cal)
     }
 
     /// Build from sessions directly (tests, time-warped replays).
     pub fn from_sessions(venue: &str, sessions: Vec<Session>) -> Result<Self> {
-        let cal = Self { venue: venue.into(), sessions, content_hash: String::new() };
+        let cal = Self {
+            venue: venue.into(),
+            sessions,
+            content_hash: String::new(),
+        };
         cal.validate()?;
         Ok(cal)
     }
@@ -212,12 +221,45 @@ impl Calendar {
     }
 }
 
+/// The newest `<VENUE>-*.json` under `calibration/out/calendars/`, searching from the working directory
+/// upwards (so services find the repo's calendars when started from any subdirectory).
+pub fn find_latest(venue: &str) -> Result<std::path::PathBuf> {
+    let mut dir = std::env::current_dir()?;
+    loop {
+        let d = dir.join("calibration/out/calendars");
+        if d.is_dir() {
+            let prefix = format!("{venue}-");
+            let mut xs: Vec<std::path::PathBuf> = std::fs::read_dir(&d)?
+                .filter_map(|e| e.ok().map(|e| e.path()))
+                .filter(|p| {
+                    p.file_name()
+                        .and_then(|n| n.to_str())
+                        .is_some_and(|n| n.starts_with(&prefix) && n.ends_with(".json"))
+                })
+                .collect();
+            xs.sort();
+            return xs.pop().ok_or_else(|| {
+                anyhow::anyhow!(
+                    "no {venue} calendar in {} (run `make calendar-gen`)",
+                    d.display()
+                )
+            });
+        }
+        if !dir.pop() {
+            bail!("calibration/out/calendars not found; set CALENDAR_FILES");
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     fn repo_calendar() -> Calendar {
-        let p = concat!(env!("CARGO_MANIFEST_DIR"), "/../../calibration/out/calendars/XNYS-20261001-20271031.json");
+        let p = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../calibration/out/calendars/XNYS-20261001-20271031.json"
+        );
         Calendar::load(p).unwrap()
     }
 
@@ -255,7 +297,10 @@ mod tests {
         assert_eq!(fri.closure_type_after, ClosureType::Weekend);
         let mon = c.next_session(sat).unwrap();
         let b = c.boundaries_between(fri.open - 1, mon.open);
-        assert_eq!(b, vec![fri.open, fri.close, fri.ext_close, mon.ext_open, mon.open]);
+        assert_eq!(
+            b,
+            vec![fri.open, fri.close, fri.ext_close, mon.ext_open, mon.open]
+        );
         assert_eq!(Calendar::session_date(fri), fri.open / 86_400);
     }
 

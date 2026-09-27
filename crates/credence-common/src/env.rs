@@ -20,7 +20,10 @@ pub fn required(name: &str) -> Result<String> {
 
 /// An optional variable. Empty counts as missing.
 pub fn optional(name: &str) -> Option<String> {
-    std::env::var(name).ok().map(|v| v.trim().to_owned()).filter(|v| !v.is_empty())
+    std::env::var(name)
+        .ok()
+        .map(|v| v.trim().to_owned())
+        .filter(|v| !v.is_empty())
 }
 
 /// A variable with a default.
@@ -34,7 +37,8 @@ where
     T::Err: std::fmt::Display,
 {
     let raw = required(name)?;
-    raw.parse::<T>().map_err(|e| anyhow!("env {name}={raw:?}: {e}"))
+    raw.parse::<T>()
+        .map_err(|e| anyhow!("env {name}={raw:?}: {e}"))
 }
 
 /// Parse an optional variable, falling back to `default`.
@@ -44,14 +48,21 @@ where
 {
     match optional(name) {
         None => Ok(default),
-        Some(raw) => raw.parse::<T>().map_err(|e| anyhow!("env {name}={raw:?}: {e}")),
+        Some(raw) => raw
+            .parse::<T>()
+            .map_err(|e| anyhow!("env {name}={raw:?}: {e}")),
     }
 }
 
 /// A comma-separated list (empty items dropped).
 pub fn list(name: &str) -> Vec<String> {
     optional(name)
-        .map(|v| v.split(',').map(|s| s.trim().to_owned()).filter(|s| !s.is_empty()).collect())
+        .map(|v| {
+            v.split(',')
+                .map(|s| s.trim().to_owned())
+                .filter(|s| !s.is_empty())
+                .collect()
+        })
         .unwrap_or_default()
 }
 

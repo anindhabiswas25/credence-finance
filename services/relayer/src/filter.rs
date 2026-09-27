@@ -97,19 +97,28 @@ pub fn live_observation(
     }
 }
 
-fn newest<'a>(trades: &'a [Trade], ok: impl Fn(&Trade) -> bool) -> Option<&'a Trade> {
+fn newest(trades: &[Trade], ok: impl Fn(&Trade) -> bool) -> Option<&Trade> {
     trades.iter().filter(|t| ok(t)).max_by_key(|t| t.ts_ns)
 }
 
-fn regular(input: &LiveInput, now_s: u64, cfg: &FilterConfig) -> Result<LiveObservation, Rejection> {
+fn regular(
+    input: &LiveInput,
+    now_s: u64,
+    cfg: &FilterConfig,
+) -> Result<LiveObservation, Rejection> {
     let t = newest(&input.trades, |t| {
-        t.price_wad > 0 && fresh(t.ts_ns, now_s, cfg.regular_max_age_s) && classify(t.plan, &t.conditions).regular
+        t.price_wad > 0
+            && fresh(t.ts_ns, now_s, cfg.regular_max_age_s)
+            && classify(t.plan, &t.conditions).regular
     })
     .ok_or(Rejection::NoEligibleTrade)?;
     let (mid, _) = valid_quote(&input.nbbo, now_s, cfg).ok_or(Rejection::NoQuote)?;
     let dev = deviation_ppm(t.price_wad, mid);
     if dev > cfg.nbbo_max_dev_ppm {
-        return Err(Rejection::NbboDeviation { deviation_ppm: dev, max_ppm: cfg.nbbo_max_dev_ppm });
+        return Err(Rejection::NbboDeviation {
+            deviation_ppm: dev,
+            max_ppm: cfg.nbbo_max_dev_ppm,
+        });
     }
     Ok(LiveObservation {
         price_wad: t.price_wad,
@@ -126,7 +135,9 @@ fn extended(
     cfg: &FilterConfig,
 ) -> Result<LiveObservation, Rejection> {
     if let Some(t) = newest(&input.trades, |t| {
-        t.price_wad > 0 && fresh(t.ts_ns, now_s, cfg.extended_max_age_s) && classify(t.plan, &t.conditions).extended
+        t.price_wad > 0
+            && fresh(t.ts_ns, now_s, cfg.extended_max_age_s)
+            && classify(t.plan, &t.conditions).extended
     }) {
         return Ok(LiveObservation {
             price_wad: t.price_wad,
@@ -137,11 +148,20 @@ fn extended(
     }
     let q = input.nbbo.as_ref().ok_or(Rejection::NoEligibleTrade)?;
     let (mid, at) = valid_quote(&input.nbbo, now_s, cfg).ok_or(Rejection::NoQuote)?;
-    let spread = q.ask_wad.saturating_sub(q.bid_wad).saturating_mul(crate::price::PPM) / mid.max(1);
+    let spread = q
+        .ask_wad
+        .saturating_sub(q.bid_wad)
+        .saturating_mul(crate::price::PPM)
+        / mid.max(1);
     if spread > cfg.mid_max_spread_ppm {
         return Err(Rejection::WideSpread { spread_ppm: spread });
     }
-    Ok(LiveObservation { price_wad: mid, observed_at: at, source: ObsSource::NbboMid, status })
+    Ok(LiveObservation {
+        price_wad: mid,
+        observed_at: at,
+        source: ObsSource::NbboMid,
+        status,
+    })
 }
 
 #[cfg(test)]
@@ -163,7 +183,11 @@ mod tests {
     }
 
     fn quote(bid: u128, ask: u128, age_s: u64) -> Option<Quote> {
-        Some(Quote { bid_wad: bid, ask_wad: ask, ts_ns: (NOW - age_s) * 1_000_000_000 })
+        Some(Quote {
+            bid_wad: bid,
+            ask_wad: ask,
+            ts_ns: (NOW - age_s) * 1_000_000_000,
+        })
     }
 
     #[test]
@@ -174,9 +198,10 @@ mod tests {
                 trade(100 * WAD, 2, &["@"]),
                 trade(99 * WAD, 3, &["@"]),
             ],
-            nbbo: quote(99_95 * WAD / 100, 100_05 * WAD / 100, 1),
+            nbbo: quote(9_995 * WAD / 100, 10_005 * WAD / 100, 1),
         };
-        let o = live_observation(MarketStatus::Regular, &input, NOW, &FilterConfig::default()).unwrap();
+        let o =
+            live_observation(MarketStatus::Regular, &input, NOW, &FilterConfig::default()).unwrap();
         assert_eq!(o.price_wad, 100 * WAD);
         assert_eq!(o.observed_at, NOW - 2);
         assert_eq!(o.source, ObsSource::Trade);
@@ -185,49 +210,106 @@ mod tests {
     #[test]
     fn regular_rejects_far_from_mid_and_missing_quote() {
         let cfg = FilterConfig::default();
-        let far = LiveInput { trades: vec![trade(10_060 * WAD / 100, 1, &["@"])], nbbo: quote(100 * WAD, 100 * WAD, 1) };
+        let far = LiveInput {
+            trades: vec![trade(10_060 * WAD / 100, 1, &["@"])],
+            nbbo: quote(100 * WAD, 100 * WAD, 1),
+        };
         assert!(matches!(
             live_observation(MarketStatus::Regular, &far, NOW, &cfg),
-            Err(Rejection::NbboDeviation { deviation_ppm: 6_000, .. })
+            Err(Rejection::NbboDeviation {
+                deviation_ppm: 6_000,
+                ..
+            })
         ));
-        let edge = LiveInput { trades: vec![trade(10_050 * WAD / 100, 1, &["@"])], nbbo: quote(100 * WAD, 100 * WAD, 1) };
-        assert!(live_observation(MarketStatus::Regular, &edge, NOW, &cfg).is_ok(), "exactly 0.5% passes");
-        let noq = LiveInput { trades: vec![trade(100 * WAD, 1, &["@"])], nbbo: None };
-        assert_eq!(live_observation(MarketStatus::Regular, &noq, NOW, &cfg), Err(Rejection::NoQuote));
-        let crossed = LiveInput { trades: vec![trade(100 * WAD, 1, &["@"])], nbbo: quote(101 * WAD, 100 * WAD, 1) };
-        assert_eq!(live_observation(MarketStatus::Regular, &crossed, NOW, &cfg), Err(Rejection::NoQuote));
-        let stale_q = LiveInput { trades: vec![trade(100 * WAD, 1, &["@"])], nbbo: quote(100 * WAD, 100 * WAD, 61) };
-        assert_eq!(live_observation(MarketStatus::Regular, &stale_q, NOW, &cfg), Err(Rejection::NoQuote));
+        let edge = LiveInput {
+            trades: vec![trade(10_050 * WAD / 100, 1, &["@"])],
+            nbbo: quote(100 * WAD, 100 * WAD, 1),
+        };
+        assert!(
+            live_observation(MarketStatus::Regular, &edge, NOW, &cfg).is_ok(),
+            "exactly 0.5% passes"
+        );
+        let noq = LiveInput {
+            trades: vec![trade(100 * WAD, 1, &["@"])],
+            nbbo: None,
+        };
+        assert_eq!(
+            live_observation(MarketStatus::Regular, &noq, NOW, &cfg),
+            Err(Rejection::NoQuote)
+        );
+        let crossed = LiveInput {
+            trades: vec![trade(100 * WAD, 1, &["@"])],
+            nbbo: quote(101 * WAD, 100 * WAD, 1),
+        };
+        assert_eq!(
+            live_observation(MarketStatus::Regular, &crossed, NOW, &cfg),
+            Err(Rejection::NoQuote)
+        );
+        let stale_q = LiveInput {
+            trades: vec![trade(100 * WAD, 1, &["@"])],
+            nbbo: quote(100 * WAD, 100 * WAD, 61),
+        };
+        assert_eq!(
+            live_observation(MarketStatus::Regular, &stale_q, NOW, &cfg),
+            Err(Rejection::NoQuote)
+        );
     }
 
     #[test]
     fn regular_rejects_form_t_and_stale_trades() {
         let cfg = FilterConfig::default();
         let input = LiveInput {
-            trades: vec![trade(100 * WAD, 1, &["@", "T"]), trade(100 * WAD, 61, &["@"])],
+            trades: vec![
+                trade(100 * WAD, 1, &["@", "T"]),
+                trade(100 * WAD, 61, &["@"]),
+            ],
             nbbo: quote(100 * WAD, 100 * WAD, 1),
         };
-        assert_eq!(live_observation(MarketStatus::Regular, &input, NOW, &cfg), Err(Rejection::NoEligibleTrade));
+        assert_eq!(
+            live_observation(MarketStatus::Regular, &input, NOW, &cfg),
+            Err(Rejection::NoEligibleTrade)
+        );
     }
 
     #[test]
     fn extended_uses_form_t_then_mid() {
         let cfg = FilterConfig::default();
-        let with_trade = LiveInput { trades: vec![trade(100 * WAD, 30, &["@", "T"])], nbbo: None };
+        let with_trade = LiveInput {
+            trades: vec![trade(100 * WAD, 30, &["@", "T"])],
+            nbbo: None,
+        };
         let o = live_observation(MarketStatus::Post, &with_trade, NOW, &cfg).unwrap();
-        assert_eq!((o.price_wad, o.source, o.status), (100 * WAD, ObsSource::Trade, MarketStatus::Post));
+        assert_eq!(
+            (o.price_wad, o.source, o.status),
+            (100 * WAD, ObsSource::Trade, MarketStatus::Post)
+        );
 
-        let mid_only = LiveInput { trades: vec![trade(100 * WAD, 301, &["@", "T"])], nbbo: quote(99 * WAD, 101 * WAD, 5) };
+        let mid_only = LiveInput {
+            trades: vec![trade(100 * WAD, 301, &["@", "T"])],
+            nbbo: quote(99 * WAD, 101 * WAD, 5),
+        };
         let o = live_observation(MarketStatus::Overnight, &mid_only, NOW, &cfg).unwrap();
-        assert_eq!((o.price_wad, o.source, o.observed_at), (100 * WAD, ObsSource::NbboMid, NOW - 5));
+        assert_eq!(
+            (o.price_wad, o.source, o.observed_at),
+            (100 * WAD, ObsSource::NbboMid, NOW - 5)
+        );
 
-        let wide = LiveInput { trades: vec![], nbbo: quote(95 * WAD, 105 * WAD, 5) };
-        assert!(matches!(live_observation(MarketStatus::Pre, &wide, NOW, &cfg), Err(Rejection::WideSpread { .. })));
+        let wide = LiveInput {
+            trades: vec![],
+            nbbo: quote(95 * WAD, 105 * WAD, 5),
+        };
+        assert!(matches!(
+            live_observation(MarketStatus::Pre, &wide, NOW, &cfg),
+            Err(Rejection::WideSpread { .. })
+        ));
     }
 
     #[test]
     fn closed_and_halted_have_no_live_price() {
-        let input = LiveInput { trades: vec![trade(100 * WAD, 1, &["@"])], nbbo: quote(100 * WAD, 100 * WAD, 1) };
+        let input = LiveInput {
+            trades: vec![trade(100 * WAD, 1, &["@"])],
+            nbbo: quote(100 * WAD, 100 * WAD, 1),
+        };
         for s in [MarketStatus::Closed, MarketStatus::Halted] {
             assert_eq!(
                 live_observation(s, &input, NOW, &FilterConfig::default()),
@@ -240,7 +322,10 @@ mod tests {
     fn future_prints_are_ignored() {
         let mut t = trade(100 * WAD, 0, &["@"]);
         t.ts_ns = (NOW + 10) * 1_000_000_000;
-        let input = LiveInput { trades: vec![t], nbbo: quote(100 * WAD, 100 * WAD, 1) };
+        let input = LiveInput {
+            trades: vec![t],
+            nbbo: quote(100 * WAD, 100 * WAD, 1),
+        };
         assert_eq!(
             live_observation(MarketStatus::Regular, &input, NOW, &FilterConfig::default()),
             Err(Rejection::NoEligibleTrade)

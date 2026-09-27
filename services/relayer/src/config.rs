@@ -48,7 +48,12 @@ impl Common {
         if !matches!(feed_id.as_str(), "A" | "B") {
             bail!("FEED_ID must be A or B");
         }
-        Ok(Self { chain_id, feed_id, assets, vendor_kind: VendorKind::from_env()? })
+        Ok(Self {
+            chain_id,
+            feed_id,
+            assets,
+            vendor_kind: VendorKind::from_env()?,
+        })
     }
 }
 
@@ -56,7 +61,10 @@ impl Common {
 /// `calibration/out/calendars/` found from the working directory upwards.
 pub fn load_calendar() -> Result<Calendar> {
     let files: Vec<PathBuf> = match env::optional("CALENDAR_FILES") {
-        Some(_) => env::list("CALENDAR_FILES").into_iter().map(PathBuf::from).collect(),
+        Some(_) => env::list("CALENDAR_FILES")
+            .into_iter()
+            .map(PathBuf::from)
+            .collect(),
         None => vec![find_default_calendar()?],
     };
     let mut cal: Option<Calendar> = None;
@@ -77,10 +85,16 @@ fn find_default_calendar() -> Result<PathBuf> {
         if d.is_dir() {
             let mut xs: Vec<PathBuf> = std::fs::read_dir(&d)?
                 .filter_map(|e| e.ok().map(|e| e.path()))
-                .filter(|p| p.file_name().and_then(|n| n.to_str()).is_some_and(|n| n.starts_with("XNYS-") && n.ends_with(".json")))
+                .filter(|p| {
+                    p.file_name()
+                        .and_then(|n| n.to_str())
+                        .is_some_and(|n| n.starts_with("XNYS-") && n.ends_with(".json"))
+                })
                 .collect();
             xs.sort();
-            return xs.pop().context("no XNYS calendar in calibration/out/calendars (run `make calendar-gen`)");
+            return xs.pop().context(
+                "no XNYS calendar in calibration/out/calendars (run `make calendar-gen`)",
+            );
         }
         if !dir.pop() {
             bail!("calibration/out/calendars not found; set CALENDAR_FILES");
@@ -137,14 +151,19 @@ pub async fn build_vendor(common: &Common) -> Result<(DynVendor, Arc<Calendar>)>
             let p = Polygon::new(polygon_config()?, halts);
             match p.load_conditions().await {
                 Ok(n) => tracing::info!(n, "polygon condition table loaded"),
-                Err(e) => tracing::warn!(error = %e, "polygon conditions: using the built-in table"),
+                Err(e) => {
+                    tracing::warn!(error = %e, "polygon conditions: using the built-in table")
+                }
             }
             Ok((Arc::new(p), Arc::new(load_calendar()?)))
         }
         VendorKind::Alpaca => {
             let halts = halt_feed();
             tokio::spawn(halts.clone().run(Duration::from_secs(10)));
-            Ok((Arc::new(Alpaca::new(alpaca_config()?, halts)), Arc::new(load_calendar()?)))
+            Ok((
+                Arc::new(Alpaca::new(alpaca_config()?, halts)),
+                Arc::new(load_calendar()?),
+            ))
         }
     }
 }

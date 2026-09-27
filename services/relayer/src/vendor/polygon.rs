@@ -13,8 +13,8 @@
 //! Halts come from the Nasdaq Trader halt feed ([`super::halts`]).
 
 use super::{
-    halts::HaltFeed, http_client, http_error, LiveInput, MarketDataVendor, OfficialPrint, PrintSource, Quote,
-    RateLimit, StatusInput, Trade, VendorError, VendorMarket, VendorResult,
+    halts::HaltFeed, http_client, http_error, LiveInput, MarketDataVendor, OfficialPrint,
+    PrintSource, Quote, RateLimit, StatusInput, Trade, VendorError, VendorMarket, VendorResult,
 };
 use crate::{
     asset::{Asset, Plan},
@@ -84,45 +84,60 @@ pub fn exchange_mic(id: u32) -> &'static str {
 /// start-up when the key allows; this table is the fallback. Ids whose meaning is uncertain map to "?"
 /// so they classify as ineligible (fail closed).
 pub fn builtin_conditions() -> HashMap<u32, SipCodes> {
-    let both = |c: &str| SipCodes { cta: Some(c.into()), utp: Some(c.into()) };
-    let cta = |c: &str| SipCodes { cta: Some(c.into()), utp: None };
-    let utp = |c: &str| SipCodes { cta: None, utp: Some(c.into()) };
+    let both = |c: &str| SipCodes {
+        cta: Some(c.into()),
+        utp: Some(c.into()),
+    };
+    let cta = |c: &str| SipCodes {
+        cta: Some(c.into()),
+        utp: None,
+    };
+    let utp = |c: &str| SipCodes {
+        cta: None,
+        utp: Some(c.into()),
+    };
     HashMap::from([
-        (0, both("@")),  // Regular Sale
-        (1, utp("A")),   // Acquisition
-        (2, SipCodes { cta: Some("B".into()), utp: Some("W".into()) }), // Average Price Trade
-        (3, cta("E")),   // Automatic Execution
-        (4, utp("B")),   // Bunched Trade
-        (5, utp("G")),   // Bunched Sold Trade
-        (6, cta("I")),   // CAP Election
-        (7, both("C")),  // Cash Sale
-        (8, utp("6")),   // Closing Prints
-        (9, both("X")),  // Cross Trade
+        (0, both("@")), // Regular Sale
+        (1, utp("A")),  // Acquisition
+        (
+            2,
+            SipCodes {
+                cta: Some("B".into()),
+                utp: Some("W".into()),
+            },
+        ), // Average Price Trade
+        (3, cta("E")),  // Automatic Execution
+        (4, utp("B")),  // Bunched Trade
+        (5, utp("G")),  // Bunched Sold Trade
+        (6, cta("I")),  // CAP Election
+        (7, both("C")), // Cash Sale
+        (8, utp("6")),  // Closing Prints
+        (9, both("X")), // Cross Trade
         (10, both("4")), // Derivatively Priced
-        (11, utp("D")),  // Distribution
+        (11, utp("D")), // Distribution
         (12, both("T")), // Form T (extended hours)
         (13, both("U")), // Extended Trading Hours (Sold Out of Sequence)
         (14, both("F")), // Intermarket Sweep
         (15, both("M")), // Market Center Official Close
         (16, both("Q")), // Market Center Official Open
-        (17, cta("O")),  // Market Center Opening Trade
-        (18, cta("5")),  // Market Center Reopening Trade
-        (19, cta("6")),  // Market Center Closing Trade
+        (17, cta("O")), // Market Center Opening Trade
+        (18, cta("5")), // Market Center Reopening Trade
+        (19, cta("6")), // Market Center Closing Trade
         (20, both("N")), // Next Day
         (21, both("H")), // Price Variation Trade
         (22, both("P")), // Prior Reference Price
         (23, both("K")), // Rule 155 Trade (AMEX)
         (24, both("?")), // Rule 127 NYSE
-        (25, utp("O")),  // Opening Prints
-        (27, utp("1")),  // Stopped Stock (Regular Trade)
-        (28, utp("5")),  // Re-Opening Prints
+        (25, utp("O")), // Opening Prints
+        (27, utp("1")), // Stopped Stock (Regular Trade)
+        (28, utp("5")), // Re-Opening Prints
         (29, both("R")), // Seller
         (30, both("L")), // Sold Last
         (32, both("Z")), // Sold (Out of Sequence)
         (33, both("?")), // Sold + Stopped
-        (34, utp("S")),  // Split Trade
+        (34, utp("S")), // Split Trade
         (35, both("?")), // Stock Option
-        (36, utp("Y")),  // Yellow Flag Regular Trade
+        (36, utp("Y")), // Yellow Flag Regular Trade
         (37, both("I")), // Odd Lot Trade
         (38, both("9")), // Corrected Consolidated Close
         (41, both("?")), // Trade Thru Exempt
@@ -197,7 +212,8 @@ struct RawCondition {
 // ── parsing (pure, used by the recorded-response tests) ──────────────────────────────────────────
 
 pub(crate) fn parse_conditions(body: &str) -> Result<HashMap<u32, SipCodes>, VendorError> {
-    let r: ConditionsResp = serde_json::from_str(body).map_err(|e| parse_err("/v3/reference/conditions", e))?;
+    let r: ConditionsResp =
+        serde_json::from_str(body).map_err(|e| parse_err("/v3/reference/conditions", e))?;
     Ok(r.results
         .into_iter()
         .filter(|c| c.data_types.is_empty() || c.data_types.iter().any(|d| d == "trade"))
@@ -205,8 +221,15 @@ pub(crate) fn parse_conditions(body: &str) -> Result<HashMap<u32, SipCodes>, Ven
         .collect())
 }
 
-pub(crate) fn to_trade(t: &RawTrade, conditions: &HashMap<u32, SipCodes>, listing_plan: Plan) -> Option<Trade> {
-    let plan = t.tape.and_then(|x| Plan::from_tape(&x.to_string())).unwrap_or(listing_plan);
+pub(crate) fn to_trade(
+    t: &RawTrade,
+    conditions: &HashMap<u32, SipCodes>,
+    listing_plan: Plan,
+) -> Option<Trade> {
+    let plan = t
+        .tape
+        .and_then(|x| Plan::from_tape(&x.to_string()))
+        .unwrap_or(listing_plan);
     let codes = t
         .conditions
         .iter()
@@ -235,8 +258,12 @@ pub(crate) fn parse_trades(
     listing_plan: Plan,
 ) -> Result<Vec<Trade>, VendorError> {
     let r: TradesResp = serde_json::from_str(body).map_err(|e| parse_err("/v3/trades", e))?;
-    let mut v: Vec<Trade> = r.results.iter().filter_map(|t| to_trade(t, conditions, listing_plan)).collect();
-    v.sort_by(|a, b| b.ts_ns.cmp(&a.ts_ns));
+    let mut v: Vec<Trade> = r
+        .results
+        .iter()
+        .filter_map(|t| to_trade(t, conditions, listing_plan))
+        .collect();
+    v.sort_by_key(|t| std::cmp::Reverse(t.ts_ns));
     Ok(v)
 }
 
@@ -251,7 +278,8 @@ pub(crate) fn parse_nbbo(body: &str) -> Result<Option<Quote>, VendorError> {
 }
 
 pub(crate) fn parse_market_status(body: &str) -> Result<VendorMarket, VendorError> {
-    let r: StatusResp = serde_json::from_str(body).map_err(|e| parse_err("/v1/marketstatus/now", e))?;
+    let r: StatusResp =
+        serde_json::from_str(body).map_err(|e| parse_err("/v1/marketstatus/now", e))?;
     Ok(match r.market.as_str() {
         "open" => VendorMarket::Open,
         "extended-hours" => VendorMarket::Extended,
@@ -274,15 +302,28 @@ pub(crate) fn find_official(trades: &[Trade], listing: &str, open: bool) -> Opti
             }
         })
         .min_by_key(|t| t.ts_ns)
-        .map(|t| OfficialPrint { price_wad: t.price_wad, at: t.ts_ns / 1_000_000_000, source: PrintSource::AuctionTrade })
+        .map(|t| OfficialPrint {
+            price_wad: t.price_wad,
+            at: t.ts_ns / 1_000_000_000,
+            source: PrintSource::AuctionTrade,
+        })
 }
 
-pub(crate) fn parse_open_close(body: &str, session: &Session, open: bool) -> Result<Option<OfficialPrint>, VendorError> {
-    let r: OpenCloseResp = serde_json::from_str(body).map_err(|e| parse_err("/v1/open-close", e))?;
+pub(crate) fn parse_open_close(
+    body: &str,
+    session: &Session,
+    open: bool,
+) -> Result<Option<OfficialPrint>, VendorError> {
+    let r: OpenCloseResp =
+        serde_json::from_str(body).map_err(|e| parse_err("/v1/open-close", e))?;
     if r.status != "OK" {
         return Ok(None);
     }
-    let (p, at) = if open { (r.open, session.open) } else { (r.close, session.close) };
+    let (p, at) = if open {
+        (r.open, session.open)
+    } else {
+        (r.close, session.close)
+    };
     let Some(p) = p else { return Ok(None) };
     Ok(Some(OfficialPrint {
         price_wad: wad_from_f64(p).map_err(|e| parse_err("/v1/open-close", e))?,
@@ -292,7 +333,11 @@ pub(crate) fn parse_open_close(body: &str, session: &Session, open: bool) -> Res
 }
 
 fn parse_err(endpoint: &str, e: impl std::fmt::Display) -> VendorError {
-    VendorError::Parse { vendor: V, endpoint: endpoint.into(), message: e.to_string() }
+    VendorError::Parse {
+        vendor: V,
+        endpoint: endpoint.into(),
+        message: e.to_string(),
+    }
 }
 
 // ── client ───────────────────────────────────────────────────────────────────────────────────────
@@ -300,7 +345,13 @@ fn parse_err(endpoint: &str, e: impl std::fmt::Display) -> VendorError {
 impl Polygon {
     pub fn new(cfg: PolygonConfig, halts: Arc<HaltFeed>) -> Self {
         let limit = RateLimit::new(cfg.max_rpm);
-        Self { cfg, http: http_client(), limit, conditions: RwLock::new(builtin_conditions()), halts }
+        Self {
+            cfg,
+            http: http_client(),
+            limit,
+            conditions: RwLock::new(builtin_conditions()),
+            halts,
+        }
     }
 
     async fn get(&self, path: &str, query: &[(&str, String)]) -> VendorResult<String> {
@@ -313,7 +364,11 @@ impl Polygon {
             .query(query)
             .send()
             .await
-            .map_err(|e| VendorError::Http { vendor: V, endpoint: path.into(), message: e.to_string() })?;
+            .map_err(|e| VendorError::Http {
+                vendor: V,
+                endpoint: path.into(),
+                message: e.to_string(),
+            })?;
         let status = resp.status();
         let body = resp.text().await.unwrap_or_default();
         if !status.is_success() {
@@ -327,7 +382,11 @@ impl Polygon {
         let body = self
             .get(
                 "/v3/reference/conditions",
-                &[("asset_class", "stocks".into()), ("data_type", "trade".into()), ("limit", "1000".into())],
+                &[
+                    ("asset_class", "stocks".into()),
+                    ("data_type", "trade".into()),
+                    ("limit", "1000".into()),
+                ],
             )
             .await?;
         let fresh = parse_conditions(&body)?;
@@ -338,7 +397,13 @@ impl Polygon {
         Ok(n)
     }
 
-    async fn trades(&self, asset: &Asset, from_ns: u64, to_ns: Option<u64>, desc: bool) -> VendorResult<Vec<Trade>> {
+    async fn trades(
+        &self,
+        asset: &Asset,
+        from_ns: u64,
+        to_ns: Option<u64>,
+        desc: bool,
+    ) -> VendorResult<Vec<Trade>> {
         let mut q = vec![
             ("timestamp.gte", from_ns.to_string()),
             ("order", if desc { "desc" } else { "asc" }.to_string()),
@@ -348,17 +413,27 @@ impl Polygon {
         if let Some(to) = to_ns {
             q.push(("timestamp.lt", to.to_string()));
         }
-        let body = self.get(&format!("/v3/trades/{}", asset.symbol), &q).await?;
+        let body = self
+            .get(&format!("/v3/trades/{}", asset.symbol), &q)
+            .await?;
         parse_trades(&body, &*self.conditions.read().await, asset.plan())
     }
 
-    async fn official(&self, asset: &Asset, session: &Session, open: bool) -> VendorResult<Option<OfficialPrint>> {
+    async fn official(
+        &self,
+        asset: &Asset,
+        session: &Session,
+        open: bool,
+    ) -> VendorResult<Option<OfficialPrint>> {
         let (from, to) = if open {
             (session.open, session.open + 15 * 60)
         } else {
             (session.close, session.close + 30 * 60)
         };
-        match self.trades(asset, from * 1_000_000_000, Some(to * 1_000_000_000), false).await {
+        match self
+            .trades(asset, from * 1_000_000_000, Some(to * 1_000_000_000), false)
+            .await
+        {
             Ok(t) => {
                 if let Some(p) = find_official(&t, &asset.listing, open) {
                     return Ok(Some(p));
@@ -368,7 +443,11 @@ impl Polygon {
             Err(e) => return Err(e),
         }
         let date = chrono::DateTime::from_timestamp(session.open as i64, 0)
-            .map(|d| d.with_timezone(&chrono_tz::America::New_York).format("%Y-%m-%d").to_string())
+            .map(|d| {
+                d.with_timezone(&chrono_tz::America::New_York)
+                    .format("%Y-%m-%d")
+                    .to_string()
+            })
             .ok_or_else(|| VendorError::Other("bad session time".into()))?;
         let path = format!("/v1/open-close/{}/{}", asset.symbol, date);
         match self.get(&path, &[("adjusted", "false".into())]).await {
@@ -387,21 +466,37 @@ impl MarketDataVendor for Polygon {
 
     async fn live(&self, asset: &Asset, since_ns: u64) -> VendorResult<LiveInput> {
         let trades = self.trades(asset, since_ns, None, true).await?;
-        let body = self.get(&format!("/v2/last/nbbo/{}", asset.symbol), &[]).await?;
-        Ok(LiveInput { trades, nbbo: parse_nbbo(&body)? })
+        let body = self
+            .get(&format!("/v2/last/nbbo/{}", asset.symbol), &[])
+            .await?;
+        Ok(LiveInput {
+            trades,
+            nbbo: parse_nbbo(&body)?,
+        })
     }
 
-    async fn official_open(&self, asset: &Asset, session: &Session) -> VendorResult<Option<OfficialPrint>> {
+    async fn official_open(
+        &self,
+        asset: &Asset,
+        session: &Session,
+    ) -> VendorResult<Option<OfficialPrint>> {
         self.official(asset, session, true).await
     }
 
-    async fn official_close(&self, asset: &Asset, session: &Session) -> VendorResult<Option<OfficialPrint>> {
+    async fn official_close(
+        &self,
+        asset: &Asset,
+        session: &Session,
+    ) -> VendorResult<Option<OfficialPrint>> {
         self.official(asset, session, false).await
     }
 
     async fn status(&self, asset: &Asset) -> VendorResult<StatusInput> {
         let body = self.get("/v1/marketstatus/now", &[]).await?;
-        Ok(StatusInput { market: parse_market_status(&body)?, halt: self.halts.halt(&asset.symbol).await })
+        Ok(StatusInput {
+            market: parse_market_status(&body)?,
+            halt: self.halts.halt(&asset.symbol).await,
+        })
     }
 }
 
@@ -410,7 +505,11 @@ mod tests {
     use super::*;
 
     fn fixture(name: &str) -> String {
-        std::fs::read_to_string(format!("{}/tests/fixtures/polygon/{name}", env!("CARGO_MANIFEST_DIR"))).unwrap()
+        std::fs::read_to_string(format!(
+            "{}/tests/fixtures/polygon/{name}",
+            env!("CARGO_MANIFEST_DIR")
+        ))
+        .unwrap()
     }
 
     #[test]
@@ -425,31 +524,60 @@ mod tests {
 
     #[test]
     fn recorded_trades_map_to_form_t_odd_lots() {
-        let t = parse_trades(&fixture("trades_AAPL.json"), &builtin_conditions(), Plan::Utp).unwrap();
+        let t = parse_trades(
+            &fixture("trades_AAPL.json"),
+            &builtin_conditions(),
+            Plan::Utp,
+        )
+        .unwrap();
         assert_eq!(t.len(), 2);
         assert_eq!(t[0].conditions, vec!["T", "I"]);
         assert_eq!(t[0].plan, Plan::Utp);
         assert_eq!(t[0].ts_ns, 1_651_181_822_461_636_600);
         assert!(t.iter().any(|x| x.exchange == "XNAS"));
         let k = classify(t[0].plan, &t[0].conditions);
-        assert!(!k.regular && !k.extended, "Form T odd lot is never a LIVE print");
+        assert!(
+            !k.regular && !k.extended,
+            "Form T odd lot is never a LIVE print"
+        );
     }
 
     #[test]
     fn recorded_nbbo_and_status() {
-        let q = parse_nbbo(&fixture("last_nbbo_AAPL.json")).unwrap().unwrap();
+        let q = parse_nbbo(&fixture("last_nbbo_AAPL.json"))
+            .unwrap()
+            .unwrap();
         assert_eq!(q.bid_wad, wad_from_f64(155.65).unwrap());
         assert_eq!(q.ask_wad, wad_from_f64(155.66).unwrap());
-        assert_eq!(q.ts_ns, 1_652_192_754_171_619_000, "participant time preferred");
-        assert_eq!(parse_market_status(&fixture("marketstatus_now.json")).unwrap(), VendorMarket::Extended);
+        assert_eq!(
+            q.ts_ns, 1_652_192_754_171_619_000,
+            "participant time preferred"
+        );
+        assert_eq!(
+            parse_market_status(&fixture("marketstatus_now.json")).unwrap(),
+            VendorMarket::Extended
+        );
     }
 
     #[test]
     fn recorded_open_close_fallback() {
-        let s = Session { ext_open: 1, open: 100, close: 200, ext_close: 300, closure_type_after: credence_common::calendar::ClosureType::Overnight };
-        let o = parse_open_close(&fixture("open_close_AAPL.json"), &s, true).unwrap().unwrap();
-        assert_eq!((o.price_wad, o.at, o.source), (wad_from_f64(123.66).unwrap(), 100, PrintSource::DailyBar));
-        let c = parse_open_close(&fixture("open_close_AAPL.json"), &s, false).unwrap().unwrap();
+        let s = Session {
+            ext_open: 1,
+            open: 100,
+            close: 200,
+            ext_close: 300,
+            closure_type_after: credence_common::calendar::ClosureType::Overnight,
+        };
+        let o = parse_open_close(&fixture("open_close_AAPL.json"), &s, true)
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            (o.price_wad, o.at, o.source),
+            (wad_from_f64(123.66).unwrap(), 100, PrintSource::DailyBar)
+        );
+        let c = parse_open_close(&fixture("open_close_AAPL.json"), &s, false)
+            .unwrap()
+            .unwrap();
         assert_eq!((c.price_wad, c.at), (123 * crate::price::WAD, 200));
     }
 
@@ -466,7 +594,11 @@ mod tests {
             asset_class: String,
         }
         let r: R = serde_json::from_str(&fixture("exchanges.json")).unwrap();
-        for e in r.results.iter().filter(|e| e.asset_class == "stocks" && e.id != 4) {
+        for e in r
+            .results
+            .iter()
+            .filter(|e| e.asset_class == "stocks" && e.id != 4)
+        {
             if let Some(m) = &e.mic {
                 assert_eq!(exchange_mic(e.id), m.as_str(), "exchange {}", e.id);
             }
@@ -483,7 +615,12 @@ mod tests {
             conditions: vec![cond.into()],
             plan: Plan::Utp,
         };
-        let t = vec![mk("ARCX", "Q", 1, 5), mk("XNAS", "@", 2, 6), mk("XNAS", "Q", 3_000_000_000, 7), mk("XNAS", "Q", 4_000_000_000, 8)];
+        let t = vec![
+            mk("ARCX", "Q", 1, 5),
+            mk("XNAS", "@", 2, 6),
+            mk("XNAS", "Q", 3_000_000_000, 7),
+            mk("XNAS", "Q", 4_000_000_000, 8),
+        ];
         let p = find_official(&t, "XNAS", true).unwrap();
         assert_eq!((p.price_wad, p.at), (7, 3));
         assert!(find_official(&t, "XNAS", false).is_none());

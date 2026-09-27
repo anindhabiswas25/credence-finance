@@ -16,8 +16,8 @@
 //! On replay every timestamp is re-stamped to wall time: `wall = wallStart + (t − recStart) / speed`.
 
 use super::{
-    polygon::find_official, HaltInfo, LiveInput, MarketDataVendor, OfficialPrint, Quote, StatusInput, Trade,
-    VendorError, VendorMarket, VendorResult,
+    polygon::find_official, HaltInfo, LiveInput, MarketDataVendor, OfficialPrint, Quote,
+    StatusInput, Trade, VendorError, VendorMarket, VendorResult,
 };
 use crate::{
     asset::{Asset, Plan},
@@ -35,18 +35,45 @@ use std::path::Path;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "ev", rename_all = "lowercase")]
 pub enum Event {
-    Header { venue: String, sessions: Vec<RawSession> },
-    Market { t: u64, m: String },
-    Trade { t: u64, sym: String, p: f64, s: u64, x: String, c: Vec<String>, z: Option<String> },
-    Quote { t: u64, sym: String, bp: f64, ap: f64 },
-    Halt { t: u64, sym: String, halted: bool, reason: Option<String> },
+    Header {
+        venue: String,
+        sessions: Vec<RawSession>,
+    },
+    Market {
+        t: u64,
+        m: String,
+    },
+    Trade {
+        t: u64,
+        sym: String,
+        p: f64,
+        s: u64,
+        x: String,
+        c: Vec<String>,
+        z: Option<String>,
+    },
+    Quote {
+        t: u64,
+        sym: String,
+        bp: f64,
+        ap: f64,
+    },
+    Halt {
+        t: u64,
+        sym: String,
+        halted: bool,
+        reason: Option<String>,
+    },
 }
 
 impl Event {
     fn t(&self) -> Option<u64> {
         match self {
             Self::Header { .. } => None,
-            Self::Market { t, .. } | Self::Trade { t, .. } | Self::Quote { t, .. } | Self::Halt { t, .. } => Some(*t),
+            Self::Market { t, .. }
+            | Self::Trade { t, .. }
+            | Self::Quote { t, .. }
+            | Self::Halt { t, .. } => Some(*t),
         }
     }
 }
@@ -88,37 +115,57 @@ pub struct Replay {
 }
 
 fn wall_now_ns() -> u64 {
-    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_nanos() as u64).unwrap_or(0)
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_nanos() as u64)
+        .unwrap_or(0)
 }
 
 impl Replay {
     /// Load a recording. Fails on any non-dev chain.
     pub fn load(path: &Path, speed: f64, chain_id: u64) -> Result<Self> {
-        let raw = std::fs::read_to_string(path).with_context(|| format!("reading {}", path.display()))?;
+        let raw =
+            std::fs::read_to_string(path).with_context(|| format!("reading {}", path.display()))?;
         let events = raw
             .lines()
             .filter(|l| !l.trim().is_empty())
             .enumerate()
-            .map(|(i, l)| serde_json::from_str::<Event>(l).with_context(|| format!("line {}", i + 1)))
+            .map(|(i, l)| {
+                serde_json::from_str::<Event>(l).with_context(|| format!("line {}", i + 1))
+            })
             .collect::<Result<Vec<_>>>()?;
         Self::from_events(events, speed, chain_id, wall_now_ns())
     }
 
     /// Build from events, starting the replay at `wall_start_ns`.
-    pub fn from_events(mut events: Vec<Event>, speed: f64, chain_id: u64, wall_start_ns: u64) -> Result<Self> {
+    pub fn from_events(
+        mut events: Vec<Event>,
+        speed: f64,
+        chain_id: u64,
+        wall_start_ns: u64,
+    ) -> Result<Self> {
         if !is_dev_chain(chain_id) {
             bail!("the replay vendor is a dev tool and refuses to run on chain {chain_id} (only 31337 / 412346)");
         }
         if !(speed.is_finite() && speed > 0.0) {
             bail!("replay speed must be > 0");
         }
-        let header = events.iter().position(|e| matches!(e, Event::Header { .. }));
+        let header = events
+            .iter()
+            .position(|e| matches!(e, Event::Header { .. }));
         let Some(Event::Header { venue, sessions }) = header.map(|i| events.remove(i)) else {
             bail!("recording has no header line");
         };
         events.sort_by_key(|e| e.t().unwrap_or(0));
-        let rec_start_ns = events.first().and_then(|e| e.t()).context("recording has no events")?;
-        let warp = Warp { rec_start_ns, wall_start_ns, speed };
+        let rec_start_ns = events
+            .first()
+            .and_then(|e| e.t())
+            .context("recording has no events")?;
+        let warp = Warp {
+            rec_start_ns,
+            wall_start_ns,
+            speed,
+        };
         let s = |t: u64| warp.to_wall(t * 1_000_000_000) / 1_000_000_000;
         let sessions = sessions
             .iter()
@@ -133,7 +180,12 @@ impl Replay {
             })
             .collect::<Result<Vec<_>>>()?;
         let calendar = Calendar::from_sessions(&venue, sessions)?;
-        Ok(Self { events, calendar, warp, clock: wall_now_ns })
+        Ok(Self {
+            events,
+            calendar,
+            warp,
+            clock: wall_now_ns,
+        })
     }
 
     /// Replace the wall clock (tests).
@@ -153,19 +205,29 @@ impl Replay {
 
     fn visible(&self) -> &[Event] {
         let now_rec = self.warp.to_rec((self.clock)());
-        let n = self.events.partition_point(|e| e.t().unwrap_or(0) <= now_rec);
+        let n = self
+            .events
+            .partition_point(|e| e.t().unwrap_or(0) <= now_rec);
         &self.events[..n]
     }
 
     fn trade(&self, e: &Event, listing_plan: Plan) -> Option<Trade> {
-        let Event::Trade { t, p, s, x, c, z, .. } = e else { return None };
+        let Event::Trade {
+            t, p, s, x, c, z, ..
+        } = e
+        else {
+            return None;
+        };
         Some(Trade {
             price_wad: wad_from_f64(*p).ok()?,
             size: *s,
             ts_ns: self.warp.to_wall(*t),
             exchange: x.clone(),
             conditions: c.clone(),
-            plan: z.as_deref().and_then(Plan::from_tape).unwrap_or(listing_plan),
+            plan: z
+                .as_deref()
+                .and_then(Plan::from_tape)
+                .unwrap_or(listing_plan),
         })
     }
 
@@ -188,7 +250,12 @@ impl MarketDataVendor for Replay {
     }
 
     async fn live(&self, asset: &Asset, since_ns: u64) -> VendorResult<LiveInput> {
-        let trades: Vec<Trade> = self.trades_for(asset).into_iter().filter(|t| t.ts_ns >= since_ns).take(1000).collect();
+        let trades: Vec<Trade> = self
+            .trades_for(asset)
+            .into_iter()
+            .filter(|t| t.ts_ns >= since_ns)
+            .take(1000)
+            .collect();
         let nbbo = self.visible().iter().rev().find_map(|e| match e {
             Event::Quote { t, sym, bp, ap } if *sym == asset.symbol => Some(Quote {
                 bid_wad: wad_from_f64(*bp).ok()?,
@@ -200,17 +267,33 @@ impl MarketDataVendor for Replay {
         Ok(LiveInput { trades, nbbo })
     }
 
-    async fn official_open(&self, asset: &Asset, session: &Session) -> VendorResult<Option<OfficialPrint>> {
+    async fn official_open(
+        &self,
+        asset: &Asset,
+        session: &Session,
+    ) -> VendorResult<Option<OfficialPrint>> {
         let lo = session.open * 1_000_000_000;
         let hi = (session.open + 15 * 60) * 1_000_000_000;
-        let t: Vec<Trade> = self.trades_for(asset).into_iter().filter(|t| t.ts_ns >= lo && t.ts_ns < hi).collect();
+        let t: Vec<Trade> = self
+            .trades_for(asset)
+            .into_iter()
+            .filter(|t| t.ts_ns >= lo && t.ts_ns < hi)
+            .collect();
         Ok(find_official(&t, &asset.listing, true))
     }
 
-    async fn official_close(&self, asset: &Asset, session: &Session) -> VendorResult<Option<OfficialPrint>> {
+    async fn official_close(
+        &self,
+        asset: &Asset,
+        session: &Session,
+    ) -> VendorResult<Option<OfficialPrint>> {
         let lo = session.close * 1_000_000_000;
         let hi = (session.close + 30 * 60) * 1_000_000_000;
-        let t: Vec<Trade> = self.trades_for(asset).into_iter().filter(|t| t.ts_ns >= lo && t.ts_ns < hi).collect();
+        let t: Vec<Trade> = self
+            .trades_for(asset)
+            .into_iter()
+            .filter(|t| t.ts_ns >= lo && t.ts_ns < hi)
+            .collect();
         Ok(find_official(&t, &asset.listing, false))
     }
 
@@ -228,17 +311,28 @@ impl MarketDataVendor for Replay {
                 }),
                 _ => None,
             })
-            .ok_or_else(|| VendorError::Other("replay has not reached a market event yet".into()))?;
+            .ok_or_else(|| {
+                VendorError::Other("replay has not reached a market event yet".into())
+            })?;
         let halt = vis
             .iter()
             .rev()
             .find_map(|e| match e {
-                Event::Halt { sym, halted, reason, .. } if *sym == asset.symbol => {
-                    Some(HaltInfo { halted: *halted, reason: reason.clone() })
-                }
+                Event::Halt {
+                    sym,
+                    halted,
+                    reason,
+                    ..
+                } if *sym == asset.symbol => Some(HaltInfo {
+                    halted: *halted,
+                    reason: reason.clone(),
+                }),
                 _ => None,
             })
-            .or(Some(HaltInfo { halted: false, reason: None }));
+            .or(Some(HaltInfo {
+                halted: false,
+                reason: None,
+            }));
         Ok(StatusInput { market, halt })
     }
 }
@@ -259,9 +353,18 @@ pub fn synthetic_session(symbols: &[(&str, &str, f64)], open_s: u64) -> Vec<Even
             closure_type_after: 1,
         }],
     }];
-    ev.push(Event::Market { t: ns(open_s - 3600), m: "extended".into() });
-    ev.push(Event::Market { t: ns(open_s), m: "open".into() });
-    ev.push(Event::Market { t: ns(close_s), m: "extended".into() });
+    ev.push(Event::Market {
+        t: ns(open_s - 3600),
+        m: "extended".into(),
+    });
+    ev.push(Event::Market {
+        t: ns(open_s),
+        m: "open".into(),
+    });
+    ev.push(Event::Market {
+        t: ns(close_s),
+        m: "extended".into(),
+    });
     for (sym, listing, base) in symbols {
         let x = listing.to_string();
         let tape = if *listing == "XNAS" { "C" } else { "A" };
@@ -274,7 +377,12 @@ pub fn synthetic_session(symbols: &[(&str, &str, f64)], open_s: u64) -> Vec<Even
             c: c.iter().map(|s| s.to_string()).collect(),
             z: Some(tape.into()),
         };
-        let quote = |t: u64, mid: f64| Event::Quote { t, sym: sym.to_string(), bp: mid - 0.01, ap: mid + 0.01 };
+        let quote = |t: u64, mid: f64| Event::Quote {
+            t,
+            sym: sym.to_string(),
+            bp: mid - 0.01,
+            ap: mid + 0.01,
+        };
         // pre-market Form T prints every 30 s for the last 10 minutes
         for i in 0..20u64 {
             let t = ns(open_s - 600 + i * 30);
@@ -291,14 +399,24 @@ pub fn synthetic_session(symbols: &[(&str, &str, f64)], open_s: u64) -> Vec<Even
             p = (p * 100.0).round() / 100.0;
             ev.push(quote(ns(t), p));
             ev.push(trade(ns(t) + 1_000, p, &["@"], "XNAS"));
-            if t % 60 == 0 {
+            if t.is_multiple_of(60) {
                 ev.push(trade(ns(t) + 2_000, p * 1.02, &["@", "I"], "FINR")); // odd lot outlier: filtered
             }
             t += 2;
         }
         // a LULD pause mid-session (5 minutes)
-        ev.push(Event::Halt { t: ns(open_s + 3 * 3600), sym: sym.to_string(), halted: true, reason: Some("LUDP".into()) });
-        ev.push(Event::Halt { t: ns(open_s + 3 * 3600 + 300), sym: sym.to_string(), halted: false, reason: None });
+        ev.push(Event::Halt {
+            t: ns(open_s + 3 * 3600),
+            sym: sym.to_string(),
+            halted: true,
+            reason: Some("LUDP".into()),
+        });
+        ev.push(Event::Halt {
+            t: ns(open_s + 3 * 3600 + 300),
+            sym: sym.to_string(),
+            halted: false,
+            reason: None,
+        });
         ev.push(trade(ns(close_s) + 10_000_000, p, &["M"], &x));
         for i in 1..10u64 {
             ev.push(quote(ns(close_s + i * 60), p));
@@ -324,14 +442,18 @@ mod tests {
         let ev = synthetic_session(&[("NVDA", "XNAS", 180.0)], OPEN);
         // wall == recording time (start the replay at the recording's first event)
         let first = ev.iter().filter_map(|e| e.t()).min().unwrap();
-        Replay::from_events(ev, 1.0, 31_337, first).unwrap().with_clock(clock_at_open_plus_60)
+        Replay::from_events(ev, 1.0, 31_337, first)
+            .unwrap()
+            .with_clock(clock_at_open_plus_60)
     }
 
     #[test]
     fn refuses_arbitrum_sepolia_and_mainnet() {
         let ev = synthetic_session(&[("NVDA", "XNAS", 180.0)], OPEN);
         for chain in [421_614u64, 42_161, 1] {
-            let err = Replay::from_events(ev.clone(), 1.0, chain, 0).err().unwrap();
+            let err = Replay::from_events(ev.clone(), 1.0, chain, 0)
+                .err()
+                .unwrap();
             assert!(err.to_string().contains("refuses"), "{chain}");
         }
         assert!(Replay::from_events(ev, 1.0, 412_346, 0).is_ok());
@@ -343,14 +465,25 @@ mod tests {
         let a = Asset::parse("NVDA:XNAS").unwrap();
         let live = r.live(&a, (OPEN - 10) * 1_000_000_000).await.unwrap();
         assert!(!live.trades.is_empty());
-        assert!(live.trades.iter().all(|t| t.ts_ns <= clock_at_open_plus_60()), "no future events");
-        assert!(live.trades.windows(2).all(|w| w[0].ts_ns >= w[1].ts_ns), "newest first");
+        assert!(
+            live.trades
+                .iter()
+                .all(|t| t.ts_ns <= clock_at_open_plus_60()),
+            "no future events"
+        );
+        assert!(
+            live.trades.windows(2).all(|w| w[0].ts_ns >= w[1].ts_ns),
+            "newest first"
+        );
         assert!(live.nbbo.is_some());
         let s = r.calendar().sessions[0];
         assert_eq!(s.open, OPEN);
         let o = r.official_open(&a, &s).await.unwrap().unwrap();
         assert_eq!((o.price_wad, o.at), (180 * WAD, OPEN));
-        assert!(r.official_close(&a, &s).await.unwrap().is_none(), "close not reached yet");
+        assert!(
+            r.official_close(&a, &s).await.unwrap().is_none(),
+            "close not reached yet"
+        );
         let st = r.status(&a).await.unwrap();
         assert_eq!(st.market, VendorMarket::Open);
         assert!(!st.halt.unwrap().halted);
@@ -358,7 +491,11 @@ mod tests {
 
     #[test]
     fn warp_speeds_up_time() {
-        let w = Warp { rec_start_ns: 1_000, wall_start_ns: 10_000, speed: 60.0 };
+        let w = Warp {
+            rec_start_ns: 1_000,
+            wall_start_ns: 10_000,
+            speed: 60.0,
+        };
         assert_eq!(w.to_wall(1_000 + 60_000), 11_000);
         assert_eq!(w.to_rec(11_000), 61_000);
     }
@@ -368,6 +505,9 @@ mod tests {
         let ev = synthetic_session(&[("NVDA", "XNAS", 180.0)], OPEN);
         let r = Replay::from_events(ev, 60.0, 31_337, 5_000_000_000_000_000_000).unwrap();
         let s = r.calendar().sessions[0];
-        assert!((389..=391).contains(&(s.close - s.open)), "6.5 h at 60× is 6.5 min");
+        assert!(
+            (389..=391).contains(&(s.close - s.open)),
+            "6.5 h at 60× is 6.5 min"
+        );
     }
 }

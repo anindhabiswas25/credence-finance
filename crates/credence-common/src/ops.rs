@@ -21,8 +21,13 @@ pub struct OpsState {
 
 impl OpsState {
     pub fn new(service: &'static str) -> Self {
-        let registry = Registry::new_custom(Some("credence".into()), None).expect("registry prefix is valid");
-        Self { registry, ready: Arc::new(AtomicBool::new(false)), service }
+        let registry =
+            Registry::new_custom(Some("credence".into()), None).expect("registry prefix is valid");
+        Self {
+            registry,
+            ready: Arc::new(AtomicBool::new(false)),
+            service,
+        }
     }
 
     pub fn set_ready(&self, ready: bool) {
@@ -62,7 +67,12 @@ async fn metrics(State(s): State<OpsState>) -> impl IntoResponse {
     let mut families = s.registry.gather();
     families.extend(prometheus::gather());
     match TextEncoder::new().encode(&families, &mut buf) {
-        Ok(()) => (StatusCode::OK, [("content-type", "text/plain; version=0.0.4")], buf).into_response(),
+        Ok(()) => (
+            StatusCode::OK,
+            [("content-type", "text/plain; version=0.0.4")],
+            buf,
+        )
+            .into_response(),
         Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response(),
     }
 }
@@ -90,12 +100,16 @@ mod tests {
         let c = prometheus::IntCounter::new("things_total", "things").unwrap();
         s.registry.register(Box::new(c.clone())).unwrap();
         c.inc();
-        let addr = serve("127.0.0.1:0".parse().unwrap(), s.router()).await.unwrap();
+        let addr = serve("127.0.0.1:0".parse().unwrap(), s.router())
+            .await
+            .unwrap();
         let get = |p: &'static str| async move {
             let mut stream = tokio::net::TcpStream::connect(addr).await.unwrap();
             use tokio::io::{AsyncReadExt, AsyncWriteExt};
             stream
-                .write_all(format!("GET {p} HTTP/1.1\r\nhost: x\r\nconnection: close\r\n\r\n").as_bytes())
+                .write_all(
+                    format!("GET {p} HTTP/1.1\r\nhost: x\r\nconnection: close\r\n\r\n").as_bytes(),
+                )
                 .await
                 .unwrap();
             let mut out = String::new();

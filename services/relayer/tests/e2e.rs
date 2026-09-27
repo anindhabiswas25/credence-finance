@@ -26,7 +26,9 @@ use credence_relayer::{
     filter::FilterConfig,
     metrics::Metrics,
     node::{Node, NodeConfig},
-    report::{digest, domain, report, sorted_signatures, ICredencePriceFeed, Kind, MarketStatus, Report},
+    report::{
+        digest, domain, report, sorted_signatures, ICredencePriceFeed, Kind, MarketStatus, Report,
+    },
     store::{MemStore, PgStore, ReportStore},
     vendor::replay::{synthetic_session, Replay},
 };
@@ -59,9 +61,18 @@ async fn start_chain() -> Chain {
         let key = std::env::var("E2E_PRIVATE_KEY").expect("E2E_PRIVATE_KEY with E2E_RPC_URL");
         let p = ProviderBuilder::new().connect_http(rpc.parse().unwrap());
         let chain_id = p.get_chain_id().await.unwrap();
-        return Chain { rpc, deployer: key.parse().unwrap(), chain_id, _anvil: None };
+        return Chain {
+            rpc,
+            deployer: key.parse().unwrap(),
+            chain_id,
+            _anvil: None,
+        };
     }
-    let port = std::net::TcpListener::bind("127.0.0.1:0").unwrap().local_addr().unwrap().port();
+    let port = std::net::TcpListener::bind("127.0.0.1:0")
+        .unwrap()
+        .local_addr()
+        .unwrap()
+        .port();
     let child = std::process::Command::new("anvil")
         .args(["--port", &port.to_string(), "--silent"])
         .stdout(Stdio::null())
@@ -76,14 +87,27 @@ async fn start_chain() -> Chain {
         }
         tokio::time::sleep(Duration::from_millis(100)).await;
     }
-    Chain { rpc, deployer: ANVIL[0].parse().unwrap(), chain_id: 31_337, _anvil: Some(child) }
+    Chain {
+        rpc,
+        deployer: ANVIL[0].parse().unwrap(),
+        chain_id: 31_337,
+        _anvil: Some(child),
+    }
 }
 
 fn artifact_bytecode() -> Bytes {
-    let path = concat!(env!("CARGO_MANIFEST_DIR"), "/../../contracts/out/CredencePriceFeed.sol/CredencePriceFeed.json");
-    let raw = std::fs::read_to_string(path).unwrap_or_else(|_| panic!("{path} missing: run `make contracts-build` first"));
+    let path = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../contracts/out/CredencePriceFeed.sol/CredencePriceFeed.json"
+    );
+    let raw = std::fs::read_to_string(path)
+        .unwrap_or_else(|_| panic!("{path} missing: run `make contracts-build` first"));
     let v: serde_json::Value = serde_json::from_str(&raw).unwrap();
-    v["bytecode"]["object"].as_str().expect("bytecode.object").parse().unwrap()
+    v["bytecode"]["object"]
+        .as_str()
+        .expect("bytecode.object")
+        .parse()
+        .unwrap()
 }
 
 fn committee() -> Vec<PrivateKeySigner> {
@@ -94,23 +118,41 @@ fn committee() -> Vec<PrivateKeySigner> {
 
 async fn deploy_feed(chain: &Chain) -> Address {
     let wallet = EthereumWallet::from(chain.deployer.clone());
-    let p = ProviderBuilder::new().wallet(wallet).connect_http(chain.rpc.parse().unwrap());
+    let p = ProviderBuilder::new()
+        .wallet(wallet)
+        .connect_http(chain.rpc.parse().unwrap());
     let signers: Vec<Address> = committee().iter().map(|s| s.address()).collect();
     let args = (chain.deployer.address(), signers, U256::from(2u8)).abi_encode_params(); // uint8 threshold (same ABI word)
     let mut code = artifact_bytecode().to_vec();
     code.extend_from_slice(&args);
     let tx = TransactionRequest::default().with_deploy_code(Bytes::from(code));
-    let receipt = p.send_transaction(tx).await.unwrap().get_receipt().await.unwrap();
+    let receipt = p
+        .send_transaction(tx)
+        .await
+        .unwrap()
+        .get_receipt()
+        .await
+        .unwrap();
     assert!(receipt.status(), "deploy reverted");
     receipt.contract_address.expect("contract address")
 }
 
-fn sign_with(signers: &[&PrivateKeySigner], chain_id: u64, feed: Address, reports: &[Report]) -> Vec<Bytes> {
+fn sign_with(
+    signers: &[&PrivateKeySigner],
+    chain_id: u64,
+    feed: Address,
+    reports: &[Report],
+) -> Vec<Bytes> {
     let h = digest(&domain(chain_id, feed), reports);
-    sorted_signatures(signers.iter().map(|s| (s.address(), s.sign_hash_sync(&h).unwrap())).collect())
-        .into_iter()
-        .map(|(_, b)| b)
-        .collect()
+    sorted_signatures(
+        signers
+            .iter()
+            .map(|s| (s.address(), s.sign_hash_sync(&h).unwrap()))
+            .collect(),
+    )
+    .into_iter()
+    .map(|(_, b)| b)
+    .collect()
 }
 
 fn now() -> u64 {
@@ -122,27 +164,53 @@ fn now() -> u64 {
 async fn relayer_end_to_end_on_local_chain() {
     let chain = start_chain().await;
     let feed = deploy_feed(&chain).await;
-    let client = ChainClient::connect(&[chain.rpc.clone()], EthereumWallet::from(chain.deployer.clone()), feed, None).unwrap();
+    let client = ChainClient::connect(
+        std::slice::from_ref(&chain.rpc),
+        EthereumWallet::from(chain.deployer.clone()),
+        feed,
+        None,
+    )
+    .unwrap();
     let chain_id = chain.chain_id;
     let d = domain(chain_id, feed);
 
     // ── 1. on-chain digest == Rust digest ───────────────────────────────────────────────────────
     let nvda = Asset::parse("NVDA:XNAS").unwrap();
-    let probe = vec![report(nvda.id, Kind::Live, 180_120_000_000_000_000_000, now(), now() / 86_400, MarketStatus::Regular, 1)];
-    assert_eq!(client.hash_reports(&probe).await.unwrap(), digest(&d, &probe), "on-chain hashReports != Rust digest");
-    let ds = ICredencePriceFeed::new(feed, client.provider()).domainSeparator().call().await.unwrap();
+    let probe = vec![report(
+        nvda.id,
+        Kind::Live,
+        180_120_000_000_000_000_000,
+        now(),
+        now() / 86_400,
+        MarketStatus::Regular,
+        1,
+    )];
+    assert_eq!(
+        client.hash_reports(&probe).await.unwrap(),
+        digest(&d, &probe),
+        "on-chain hashReports != Rust digest"
+    );
+    let ds = ICredencePriceFeed::new(feed, client.provider())
+        .domainSeparator()
+        .call()
+        .await
+        .unwrap();
     assert_eq!(ds, d.separator(), "domain separator");
 
     // ── 2. full pipeline: replay vendor → 3 nodes → aggregator → accepted with 2-of-3 ───────────
     let open = now() - 600; // ten minutes into a regular session
     let events = synthetic_session(&[("NVDA", "XNAS", 180.0), ("AAPL", "XNAS", 230.0)], open);
-    let first = events.iter().filter_map(|e| match e {
-        credence_relayer::vendor::replay::Event::Header { .. } => None,
-        credence_relayer::vendor::replay::Event::Market { t, .. }
-        | credence_relayer::vendor::replay::Event::Trade { t, .. }
-        | credence_relayer::vendor::replay::Event::Quote { t, .. }
-        | credence_relayer::vendor::replay::Event::Halt { t, .. } => Some(*t),
-    }).min().unwrap();
+    let first = events
+        .iter()
+        .filter_map(|e| match e {
+            credence_relayer::vendor::replay::Event::Header { .. } => None,
+            credence_relayer::vendor::replay::Event::Market { t, .. }
+            | credence_relayer::vendor::replay::Event::Trade { t, .. }
+            | credence_relayer::vendor::replay::Event::Quote { t, .. }
+            | credence_relayer::vendor::replay::Event::Halt { t, .. } => Some(*t),
+        })
+        .min()
+        .unwrap();
     // identity warp: recording time == wall time, so the session is "live" now
     let replay = Replay::from_events(events, 1.0, chain_id, first).unwrap();
     let calendar: Arc<Calendar> = Arc::new(replay.calendar().clone());
@@ -160,18 +228,37 @@ async fn relayer_end_to_end_on_local_chain() {
             filter: FilterConfig::default(),
             auth_token: None,
         };
-        let n = Arc::new(Node::new(cfg, vendor.clone(), calendar.clone(), signer, d.clone(), metrics.clone()));
+        let n = Arc::new(Node::new(
+            cfg,
+            vendor.clone(),
+            calendar.clone(),
+            signer,
+            d.clone(),
+            metrics.clone(),
+        ));
         n.poll_once().await;
         nodes.push(Arc::new(LocalNode(n)));
     }
     let store: Arc<dyn ReportStore> = match std::env::var("TEST_DATABASE_URL") {
         Ok(url) => {
-            let db = credence_common::db::scratch_database(&url, "credence_relayer_e2e").await.unwrap();
-            Arc::new(PgStore::new(credence_common::db::connect(&db, 2).await.unwrap()))
+            let db = credence_common::db::scratch_database(&url, "credence_relayer_e2e")
+                .await
+                .unwrap();
+            Arc::new(PgStore::new(
+                credence_common::db::connect(&db, 2).await.unwrap(),
+            ))
         }
         Err(_) => Arc::new(MemStore::default()),
     };
-    let chain_arc: Arc<dyn FeedChain> = Arc::new(ChainClient::connect(&[chain.rpc.clone()], EthereumWallet::from(chain.deployer.clone()), feed, None).unwrap());
+    let chain_arc: Arc<dyn FeedChain> = Arc::new(
+        ChainClient::connect(
+            std::slice::from_ref(&chain.rpc),
+            EthereumWallet::from(chain.deployer.clone()),
+            feed,
+            None,
+        )
+        .unwrap(),
+    );
     let cfg = AggregatorConfig {
         feed: "A".into(),
         threshold: 2,
@@ -182,7 +269,11 @@ async fn relayer_end_to_end_on_local_chain() {
     let mut agg = Aggregator::new(cfg, nodes, chain_arc, store.clone(), metrics.clone());
     agg.sync_seqs().await.unwrap();
     let out = agg.tick().await.unwrap();
-    let TickOutcome::Submitted { reports: n, outcome: SubmitOutcome::Accepted { .. } } = out else {
+    let TickOutcome::Submitted {
+        reports: n,
+        outcome: SubmitOutcome::Accepted { .. },
+    } = out
+    else {
         panic!("expected an accepted batch, got {out:?}");
     };
     // STATUS + OPEN + LIVE for each of the two assets, in ONE transaction
@@ -194,44 +285,114 @@ async fn relayer_end_to_end_on_local_chain() {
     let seq_after_pipeline = f.latestSeq(nvda.id).call().await.unwrap();
     assert!(seq_after_pipeline >= 3);
     let max = store.max_seqs("A").await.unwrap();
-    assert_eq!(max.get(&nvda.id).copied(), Some(seq_after_pipeline), "persisted high-water mark");
+    assert_eq!(
+        max.get(&nvda.id).copied(),
+        Some(seq_after_pipeline),
+        "persisted high-water mark"
+    );
 
     // an immediate second tick publishes nothing new (cadence: 10 s heartbeat, no 0.10% move)
     let second = agg.tick().await.unwrap();
-    assert!(matches!(second, TickOutcome::Idle), "second tick: {second:?}");
+    assert!(
+        matches!(second, TickOutcome::Idle),
+        "second tick: {second:?}"
+    );
 
     // ── 3. rejections ───────────────────────────────────────────────────────────────────────────
     let c = committee();
     let next = seq_after_pipeline + 1;
-    let fresh = vec![report(nvda.id, Kind::Live, 181_000_000_000_000_000_000, now(), now() / 86_400, MarketStatus::Regular, next)];
+    let fresh = vec![report(
+        nvda.id,
+        Kind::Live,
+        181_000_000_000_000_000_000,
+        now(),
+        now() / 86_400,
+        MarketStatus::Regular,
+        next,
+    )];
 
     // 1 of 3
-    let r = client.submit(&fresh, sign_with(&[&c[0]], chain_id, feed, &fresh)).await.unwrap();
-    assert!(matches!(&r, SubmitOutcome::Rejected { reason } if reason.contains("NotEnoughSigners")), "1-of-3: {r:?}");
+    let r = client
+        .submit(&fresh, sign_with(&[&c[0]], chain_id, feed, &fresh))
+        .await
+        .unwrap();
+    assert!(
+        matches!(&r, SubmitOutcome::Rejected { reason } if reason.contains("NotEnoughSigners")),
+        "1-of-3: {r:?}"
+    );
 
     // wrong domain (another chain id; same for another verifying contract)
-    let r = client.submit(&fresh, sign_with(&[&c[0], &c[1]], chain_id + 1, feed, &fresh)).await.unwrap();
-    assert!(matches!(&r, SubmitOutcome::Rejected { reason } if reason.contains("UnknownSigner")), "wrong chain id: {r:?}");
-    let r = client.submit(&fresh, sign_with(&[&c[0], &c[1]], chain_id, Address::repeat_byte(0x42), &fresh)).await.unwrap();
-    assert!(matches!(&r, SubmitOutcome::Rejected { reason } if reason.contains("UnknownSigner")), "wrong contract: {r:?}");
+    let r = client
+        .submit(
+            &fresh,
+            sign_with(&[&c[0], &c[1]], chain_id + 1, feed, &fresh),
+        )
+        .await
+        .unwrap();
+    assert!(
+        matches!(&r, SubmitOutcome::Rejected { reason } if reason.contains("UnknownSigner")),
+        "wrong chain id: {r:?}"
+    );
+    let r = client
+        .submit(
+            &fresh,
+            sign_with(
+                &[&c[0], &c[1]],
+                chain_id,
+                Address::repeat_byte(0x42),
+                &fresh,
+            ),
+        )
+        .await
+        .unwrap();
+    assert!(
+        matches!(&r, SubmitOutcome::Rejected { reason } if reason.contains("UnknownSigner")),
+        "wrong contract: {r:?}"
+    );
 
     // unsorted signatures
     let mut unsorted = sign_with(&[&c[0], &c[1]], chain_id, feed, &fresh);
     unsorted.reverse();
     let r = client.submit(&fresh, unsorted).await.unwrap();
-    assert!(matches!(&r, SubmitOutcome::Rejected { reason } if reason.contains("SignersNotSorted")), "unsorted: {r:?}");
+    assert!(
+        matches!(&r, SubmitOutcome::Rejected { reason } if reason.contains("SignersNotSorted")),
+        "unsorted: {r:?}"
+    );
 
     // the same batch with 2 of 3 is accepted …
-    let r = client.submit(&fresh, sign_with(&[&c[0], &c[2]], chain_id, feed, &fresh)).await.unwrap();
+    let r = client
+        .submit(&fresh, sign_with(&[&c[0], &c[2]], chain_id, feed, &fresh))
+        .await
+        .unwrap();
     assert!(matches!(r, SubmitOutcome::Accepted { .. }), "2-of-3: {r:?}");
     assert_eq!(f.latestSeq(nvda.id).call().await.unwrap(), next);
 
     // … and replaying it (same seq) or an older seq is rejected
-    let r = client.submit(&fresh, sign_with(&[&c[0], &c[2]], chain_id, feed, &fresh)).await.unwrap();
-    assert!(matches!(&r, SubmitOutcome::Rejected { reason } if reason.contains("StaleReport")), "replayed seq: {r:?}");
-    let old = vec![report(nvda.id, Kind::Live, 181_000_000_000_000_000_000, now(), now() / 86_400, MarketStatus::Regular, next - 1)];
-    let r = client.submit(&old, sign_with(&[&c[1], &c[2]], chain_id, feed, &old)).await.unwrap();
-    assert!(matches!(&r, SubmitOutcome::Rejected { reason } if reason.contains("StaleReport")), "old seq: {r:?}");
+    let r = client
+        .submit(&fresh, sign_with(&[&c[0], &c[2]], chain_id, feed, &fresh))
+        .await
+        .unwrap();
+    assert!(
+        matches!(&r, SubmitOutcome::Rejected { reason } if reason.contains("StaleReport")),
+        "replayed seq: {r:?}"
+    );
+    let old = vec![report(
+        nvda.id,
+        Kind::Live,
+        181_000_000_000_000_000_000,
+        now(),
+        now() / 86_400,
+        MarketStatus::Regular,
+        next - 1,
+    )];
+    let r = client
+        .submit(&old, sign_with(&[&c[1], &c[2]], chain_id, feed, &old))
+        .await
+        .unwrap();
+    assert!(
+        matches!(&r, SubmitOutcome::Rejected { reason } if reason.contains("StaleReport")),
+        "old seq: {r:?}"
+    );
 
     // ── 4. the aggregator recovers its seq from the chain after someone else advanced it ────────
     let r = agg.sync_seqs().await;

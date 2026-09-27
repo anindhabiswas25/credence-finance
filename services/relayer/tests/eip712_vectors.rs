@@ -7,7 +7,9 @@ use alloy::{
     primitives::{address, keccak256, Address, B256},
     signers::{local::PrivateKeySigner, SignerSync},
 };
-use credence_relayer::report::{digest, domain, report, reports_hash, sorted_signatures, Kind, MarketStatus, ReportDto};
+use credence_relayer::report::{
+    digest, domain, report, reports_hash, sorted_signatures, Kind, MarketStatus, ReportDto,
+};
 use serde_json::json;
 
 const KEYS: [&str; 3] = [
@@ -20,25 +22,90 @@ fn vectors() -> serde_json::Value {
     let nvda = keccak256("NVDA:XNAS");
     let spy = keccak256("SPY:ARCX");
     let batches = vec![
-        ("single live", vec![report(nvda, Kind::Live, 181_250_000_000_000_000_000, 1_791_470_000, 20_733, MarketStatus::Regular, 1)]),
+        (
+            "single live",
+            vec![report(
+                nvda,
+                Kind::Live,
+                181_250_000_000_000_000_000,
+                1_791_470_000,
+                20_733,
+                MarketStatus::Regular,
+                1,
+            )],
+        ),
         (
             "mixed batch, all kinds",
             vec![
-                report(nvda, Kind::Status, 0, 1_791_470_001, 20_733, MarketStatus::Regular, 2),
-                report(nvda, Kind::Open, 180_000_000_000_000_000_000, 1_791_451_800, 20_733, MarketStatus::Regular, 3),
-                report(spy, Kind::Close, 671_230_000_000_000_000_000, 1_791_475_200, 20_733, MarketStatus::Regular, 9),
-                report(spy, Kind::Live, 671_300_000_000_000_000_000, 1_791_476_000, 20_733, MarketStatus::Post, 10),
-                report(nvda, Kind::Status, 0, 1_791_476_100, 20_733, MarketStatus::Halted, 4),
+                report(
+                    nvda,
+                    Kind::Status,
+                    0,
+                    1_791_470_001,
+                    20_733,
+                    MarketStatus::Regular,
+                    2,
+                ),
+                report(
+                    nvda,
+                    Kind::Open,
+                    180_000_000_000_000_000_000,
+                    1_791_451_800,
+                    20_733,
+                    MarketStatus::Regular,
+                    3,
+                ),
+                report(
+                    spy,
+                    Kind::Close,
+                    671_230_000_000_000_000_000,
+                    1_791_475_200,
+                    20_733,
+                    MarketStatus::Regular,
+                    9,
+                ),
+                report(
+                    spy,
+                    Kind::Live,
+                    671_300_000_000_000_000_000,
+                    1_791_476_000,
+                    20_733,
+                    MarketStatus::Post,
+                    10,
+                ),
+                report(
+                    nvda,
+                    Kind::Status,
+                    0,
+                    1_791_476_100,
+                    20_733,
+                    MarketStatus::Halted,
+                    4,
+                ),
             ],
         ),
         (
             "extreme values",
-            vec![report(B256::repeat_byte(0xff), Kind::Live, u128::MAX, (1 << 40) - 1, (1 << 40) - 1, MarketStatus::Overnight, u64::MAX)],
+            vec![report(
+                B256::repeat_byte(0xff),
+                Kind::Live,
+                u128::MAX,
+                (1 << 40) - 1,
+                (1 << 40) - 1,
+                MarketStatus::Overnight,
+                u64::MAX,
+            )],
         ),
     ];
     let domains: Vec<(u64, Address)> = vec![
-        (31_337, address!("0x5FbDB2315678afecb367f032d93F642f64180aa3")),
-        (412_346, address!("0xA6E41fFD769491a42A6e5Ce453259b93983a22EF")),
+        (
+            31_337,
+            address!("0x5FbDB2315678afecb367f032d93F642f64180aa3"),
+        ),
+        (
+            412_346,
+            address!("0xA6E41fFD769491a42A6e5Ce453259b93983a22EF"),
+        ),
     ];
     let signers: Vec<PrivateKeySigner> = KEYS.iter().map(|k| k.parse().unwrap()).collect();
     let mut out = Vec::new();
@@ -46,7 +113,12 @@ fn vectors() -> serde_json::Value {
         for (chain_id, feed) in &domains {
             let d = domain(*chain_id, *feed);
             let h = digest(&d, reports);
-            let sigs = sorted_signatures(signers.iter().map(|s| (s.address(), s.sign_hash_sync(&h).unwrap())).collect());
+            let sigs = sorted_signatures(
+                signers
+                    .iter()
+                    .map(|s| (s.address(), s.sign_hash_sync(&h).unwrap()))
+                    .collect(),
+            );
             out.push(json!({
                 "name": name,
                 "chainId": chain_id,
@@ -68,12 +140,19 @@ fn vectors() -> serde_json::Value {
 
 #[test]
 fn eip712_vectors_match_committed_file() {
-    let path = concat!(env!("CARGO_MANIFEST_DIR"), "/../../packages/sdk/test/vectors/eip712-reports.json");
+    let path = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../packages/sdk/test/vectors/eip712-reports.json"
+    );
     let fresh = serde_json::to_string_pretty(&vectors()).unwrap() + "\n";
     if std::env::var("UPDATE_VECTORS").is_ok() {
         std::fs::write(path, &fresh).unwrap();
         return;
     }
-    let committed = std::fs::read_to_string(path).expect("vectors file missing: run with UPDATE_VECTORS=1");
-    assert_eq!(committed, fresh, "Rust EIP-712 output changed; regenerate with UPDATE_VECTORS=1 and re-run the SDK tests");
+    let committed =
+        std::fs::read_to_string(path).expect("vectors file missing: run with UPDATE_VECTORS=1");
+    assert_eq!(
+        committed, fresh,
+        "Rust EIP-712 output changed; regenerate with UPDATE_VECTORS=1 and re-run the SDK tests"
+    );
 }

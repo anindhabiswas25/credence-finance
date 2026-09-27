@@ -82,11 +82,17 @@ pub fn median_by<T>(items: &[T], key: impl Fn(&T) -> u128) -> Option<&T> {
 }
 
 /// The status at least `threshold` nodes agree on (with its session date), if any.
-fn majority_status(obs: &[&AssetObservation], threshold: usize) -> Option<(MarketStatus, u64, u64)> {
+fn majority_status(
+    obs: &[&AssetObservation],
+    threshold: usize,
+) -> Option<(MarketStatus, u64, u64)> {
     let mut counts: HashMap<(MarketStatus, u64), Vec<u64>> = HashMap::new();
     for o in obs {
         if let Some(s) = &o.status {
-            counts.entry((s.status, s.session_date)).or_default().push(s.at);
+            counts
+                .entry((s.status, s.session_date))
+                .or_default()
+                .push(s.at);
         }
     }
     counts
@@ -101,8 +107,10 @@ fn majority_status(obs: &[&AssetObservation], threshold: usize) -> Option<(Marke
 
 /// Candidate reports for one asset from all node snapshots. Cadence is applied by the caller.
 pub fn propose_asset(asset_id: B256, snaps: &[NodeSnapshot], threshold: usize) -> Vec<Draft> {
-    let obs: Vec<&AssetObservation> =
-        snaps.iter().filter_map(|s| s.assets.iter().find(|a| a.asset_id == asset_id)).collect();
+    let obs: Vec<&AssetObservation> = snaps
+        .iter()
+        .filter_map(|s| s.assets.iter().find(|a| a.asset_id == asset_id))
+        .collect();
     let mut out = Vec::new();
     let Some((status, status_session, status_at)) = majority_status(&obs, threshold) else {
         return out; // no quorum on the market status: publish nothing for this asset
@@ -136,7 +144,11 @@ pub fn propose_asset(asset_id: B256, snaps: &[NodeSnapshot], threshold: usize) -
     }
 
     for (kind, pick) in [
-        (Kind::Open, (|o: &AssetObservation| o.open.clone()) as fn(&AssetObservation) -> Option<SessionPrint>),
+        (
+            Kind::Open,
+            (|o: &AssetObservation| o.open.clone())
+                as fn(&AssetObservation) -> Option<SessionPrint>,
+        ),
         (Kind::Close, |o: &AssetObservation| o.close.clone()),
     ] {
         let mut by_session: HashMap<u64, Vec<SessionPrint>> = HashMap::new();
@@ -144,8 +156,10 @@ pub fn propose_asset(asset_id: B256, snaps: &[NodeSnapshot], threshold: usize) -
             by_session.entry(p.session_date).or_default().push(p);
         }
         // the most recent session with a quorum of prints
-        if let Some((sd, prints)) =
-            by_session.into_iter().filter(|(_, v)| v.len() >= threshold).max_by_key(|(sd, _)| *sd)
+        if let Some((sd, prints)) = by_session
+            .into_iter()
+            .filter(|(_, v)| v.len() >= threshold)
+            .max_by_key(|(sd, _)| *sd)
         {
             if let Some(m) = median_by(&prints, |p| p.price_wad) {
                 out.push(Draft {
@@ -200,7 +214,9 @@ pub fn verify(draft: &Draft, own: Option<&AssetObservation>, now: u64) -> Result
                 return Err(Refusal::StatusMismatch { own: status.status });
             }
             if status.session_date != draft.session_date {
-                return Err(Refusal::SessionMismatch { own: status.session_date });
+                return Err(Refusal::SessionMismatch {
+                    own: status.session_date,
+                });
             }
             Ok(())
         }
@@ -216,10 +232,16 @@ pub fn verify(draft: &Draft, own: Option<&AssetObservation>, now: u64) -> Result
             within(live.price_wad)
         }
         Kind::Open | Kind::Close => {
-            let p = if draft.kind == Kind::Open { own.open.as_ref() } else { own.close.as_ref() };
+            let p = if draft.kind == Kind::Open {
+                own.open.as_ref()
+            } else {
+                own.close.as_ref()
+            };
             let p = p.ok_or(Refusal::NoObservation)?;
             if p.session_date != draft.session_date {
-                return Err(Refusal::SessionMismatch { own: p.session_date });
+                return Err(Refusal::SessionMismatch {
+                    own: p.session_date,
+                });
             }
             within(p.price_wad)
         }
@@ -242,7 +264,9 @@ pub fn choose_quorum(accepts: &[Vec<bool>], threshold: usize) -> Option<(Vec<usi
         if nodes.len() < threshold {
             continue;
         }
-        let common: Vec<usize> = (0..drafts).filter(|&d| nodes.iter().all(|&i| accepts[i][d])).collect();
+        let common: Vec<usize> = (0..drafts)
+            .filter(|&d| nodes.iter().all(|&i| accepts[i][d]))
+            .collect();
         if common.is_empty() {
             continue;
         }
@@ -267,8 +291,17 @@ mod tests {
     fn obs(price: u128, status: MarketStatus) -> AssetObservation {
         AssetObservation {
             asset_id: B256::repeat_byte(1),
-            status: Some(StatusObservation { status, at: 100, session_date: SD }),
-            live: Some(LiveObservation { price_wad: price, observed_at: 99, source: ObsSource::Trade, status }),
+            status: Some(StatusObservation {
+                status,
+                at: 100,
+                session_date: SD,
+            }),
+            live: Some(LiveObservation {
+                price_wad: price,
+                observed_at: 99,
+                source: ObsSource::Trade,
+                status,
+            }),
             live_session_date: Some(SD),
             open: None,
             close: None,
@@ -276,7 +309,12 @@ mod tests {
     }
 
     fn snap(node: &str, a: AssetObservation) -> NodeSnapshot {
-        NodeSnapshot { node: node.into(), signer: Address::ZERO, taken_at: 100, assets: vec![a] }
+        NodeSnapshot {
+            node: node.into(),
+            signer: Address::ZERO,
+            taken_at: 100,
+            assets: vec![a],
+        }
     }
 
     #[test]
@@ -315,7 +353,10 @@ mod tests {
         // status quorum but only one LIVE under that status → STATUS only
         let mut a = obs(100 * WAD, MarketStatus::Halted);
         a.live = None;
-        let snaps = vec![snap("n1", obs(100 * WAD, MarketStatus::Halted)), snap("n2", a)];
+        let snaps = vec![
+            snap("n1", obs(100 * WAD, MarketStatus::Halted)),
+            snap("n2", a),
+        ];
         let d = propose_asset(B256::repeat_byte(1), &snaps, 2);
         assert_eq!(d.len(), 1);
         assert_eq!(d[0].status, MarketStatus::Halted);
@@ -323,16 +364,28 @@ mod tests {
 
     #[test]
     fn official_prints_need_a_quorum_on_the_same_session() {
-        let print = |sd, p| SessionPrint { session_date: sd, price_wad: p, at: 1000, source: PrintSource::AuctionTrade };
+        let print = |sd, p| SessionPrint {
+            session_date: sd,
+            price_wad: p,
+            at: 1000,
+            source: PrintSource::AuctionTrade,
+        };
         let mut a = obs(100 * WAD, MarketStatus::Regular);
         let mut b = a.clone();
         let mut c = a.clone();
         a.open = Some(print(SD, 100 * WAD));
         b.open = Some(print(SD, 100 * WAD));
         c.open = Some(print(SD - 1, 90 * WAD));
-        let d = propose_asset(B256::repeat_byte(1), &[snap("a", a), snap("b", b), snap("c", c)], 2);
+        let d = propose_asset(
+            B256::repeat_byte(1),
+            &[snap("a", a), snap("b", b), snap("c", c)],
+            2,
+        );
         let open = d.iter().find(|d| d.kind == Kind::Open).unwrap();
-        assert_eq!((open.session_date, open.price_wad, open.observed_at), (SD, 100 * WAD, 1000));
+        assert_eq!(
+            (open.session_date, open.price_wad, open.observed_at),
+            (SD, 100 * WAD, 1000)
+        );
         assert!(!d.iter().any(|d| d.kind == Kind::Close));
     }
 
@@ -347,33 +400,52 @@ mod tests {
             session_date: SD,
             status: MarketStatus::Regular,
         };
-        assert_eq!(verify(&draft(100_100 * WAD / 1000), Some(&own), 100), Ok(()));
+        assert_eq!(
+            verify(&draft(100_100 * WAD / 1000), Some(&own), 100),
+            Ok(())
+        );
         assert_eq!(verify(&draft(99_900 * WAD / 1000), Some(&own), 100), Ok(()));
         assert_eq!(
             verify(&draft(100_101 * WAD / 1000), Some(&own), 100),
-            Err(Refusal::OutOfTolerance { deviation_ppm: 1_010 })
+            Err(Refusal::OutOfTolerance {
+                deviation_ppm: 1_010
+            })
         );
         let mut d = draft(100 * WAD);
         d.status = MarketStatus::Post;
-        assert!(matches!(verify(&d, Some(&own), 100), Err(Refusal::StatusMismatch { .. })));
+        assert!(matches!(
+            verify(&d, Some(&own), 100),
+            Err(Refusal::StatusMismatch { .. })
+        ));
         let mut d = draft(100 * WAD);
         d.session_date = SD + 1;
-        assert!(matches!(verify(&d, Some(&own), 100), Err(Refusal::SessionMismatch { .. })));
+        assert!(matches!(
+            verify(&d, Some(&own), 100),
+            Err(Refusal::SessionMismatch { .. })
+        ));
         let mut d = draft(100 * WAD);
         d.observed_at = 106;
         assert_eq!(verify(&d, Some(&own), 100), Err(Refusal::FromFuture));
-        assert_eq!(verify(&draft(100 * WAD), None, 100), Err(Refusal::NoObservation));
+        assert_eq!(
+            verify(&draft(100 * WAD), None, 100),
+            Err(Refusal::NoObservation)
+        );
     }
 
     #[test]
     fn quorum_picks_largest_common_batch() {
         // drafts: 0 accepted by all; 1 only by nodes 0,1; 2 only by nodes 0,2
-        let accepts = vec![vec![true, true, true], vec![true, true, false], vec![true, false, true]];
+        let accepts = vec![
+            vec![true, true, true],
+            vec![true, true, false],
+            vec![true, false, true],
+        ];
         let (nodes, drafts) = choose_quorum(&accepts, 2).unwrap();
         assert_eq!(drafts.len(), 2);
         assert_eq!(nodes.len(), 2);
         // all agree → all three nodes sign everything
-        let (nodes, drafts) = choose_quorum(&[vec![true; 2], vec![true; 2], vec![true; 2]], 2).unwrap();
+        let (nodes, drafts) =
+            choose_quorum(&[vec![true; 2], vec![true; 2], vec![true; 2]], 2).unwrap();
         assert_eq!((nodes.len(), drafts.len()), (3, 2));
         // only one node accepts anything → no quorum
         assert!(choose_quorum(&[vec![true], vec![false], vec![false]], 2).is_none());

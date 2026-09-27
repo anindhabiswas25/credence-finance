@@ -2,6 +2,11 @@
 # Every target has a `## help` comment; `make help` lists them.
 
 BACKEND_RUST_PKGS := -p credence-common -p credence-relayer -p credence-keeper
+# alloy 2.5 needs rustc >= 1.94.1 while rust-toolchain.toml pins 1.91.0 (BOARD REQUEST, ADR-0005).
+# Until the pin moves, backend crates build with the installed stable toolchain. Set empty to follow the pin.
+BACKEND_RUST_TOOLCHAIN ?= stable
+CARGO := $(if $(BACKEND_RUST_TOOLCHAIN),RUSTUP_TOOLCHAIN=$(BACKEND_RUST_TOOLCHAIN) )cargo
+TEST_DATABASE_URL ?= postgres://credence:credence@127.0.0.1:$${POSTGRES_PORT:-5433}/credence
 COMPOSE           := docker compose -f infra/docker-compose.yml
 UV                := $(shell command -v uv 2>/dev/null || echo $$HOME/.local/bin/uv)
 
@@ -14,29 +19,29 @@ PNPM := pnpm
 
 .PHONY: backend-install backend-build backend-test backend-lint backend-fmt \
         infra-up infra-down infra-reset infra-ps db-migrate db-rollback calendar-gen calendar-test \
-        relayer-dev keeper-dev indexer-dev api-dev relayer-e2e services-up
+        relayer-dev relayer-smoke keeper-dev indexer-dev api-dev relayer-e2e keeper-e2e services-up
 
 backend-install: ## Install backend deps: pnpm workspace, uv calibration env, Rust crates fetched
 	$(PNPM) install --frozen-lockfile
 	cd calibration && $(UV) sync --frozen
-	cargo fetch --locked
+	$(CARGO) fetch --locked
 
 backend-build: ## Build backend: Rust services (release-less check build) and TS packages
-	cargo build --locked $(BACKEND_RUST_PKGS)
+	$(CARGO) build --locked $(BACKEND_RUST_PKGS)
 	$(PNPM) turbo run build
 
 backend-test: ## Run backend tests: Rust services, TS packages (sdk, api, indexer), calendar
-	cargo test --locked $(BACKEND_RUST_PKGS)
+	$(CARGO) test --locked $(BACKEND_RUST_PKGS)
 	$(PNPM) turbo run test
 	cd calibration && $(UV) run --frozen pytest -q
 
 backend-lint: ## Lint backend: rustfmt check, clippy -D warnings, eslint, tsc
-	cargo fmt $(BACKEND_RUST_PKGS) -- --check
-	cargo clippy --locked $(BACKEND_RUST_PKGS) --all-targets -- -D warnings
+	$(CARGO) fmt $(BACKEND_RUST_PKGS) -- --check
+	$(CARGO) clippy --locked $(BACKEND_RUST_PKGS) --all-targets -- -D warnings
 	$(PNPM) turbo run lint typecheck
 
 backend-fmt: ## Format backend code (rustfmt + prettier)
-	cargo fmt $(BACKEND_RUST_PKGS)
+	$(CARGO) fmt $(BACKEND_RUST_PKGS)
 	$(PNPM) -r exec prettier --write . --ignore-unknown
 
 infra-up: ## Start postgres 17 + nitro-devnode (Stylus, :8547, chain 412346) and wait until healthy
@@ -63,14 +68,20 @@ calendar-gen: ## Generate XNYS + USBANK Session[] JSON for 13 months into calibr
 calendar-test: ## Calendar edge-case tests (holidays, early closes, DST, 24/5)
 	cd calibration && $(UV) run --frozen pytest -q
 
-relayer-dev: ## Run the price relayer locally (VENDOR=replay by default; reads .env)
-	VENDOR=$${VENDOR:-replay} cargo run -p credence-relayer -- run
+relayer-dev: ## Run the price relayer locally: 3 nodes + aggregator (VENDOR=replay by default; reads .env)
+	VENDOR=$${VENDOR:-replay} $(CARGO) run -p credence-relayer -- run
 
-relayer-e2e: ## Relayer on-chain e2e: deploy CredencePriceFeed on anvil, 2-of-3 accepted, 1-of-3/stale seq/wrong domain rejected
-	cargo test -p credence-relayer --test e2e -- --ignored --nocapture --test-threads=1
+relayer-smoke: ## Live vendor smoke test (VENDOR=polygon|alpaca, keys in .env)
+	$(CARGO) run -p credence-relayer -- smoke --out target/relayer-smoke-$${VENDOR:-polygon}.json
+
+relayer-e2e: contracts-build ## Relayer e2e on anvil: 2-of-3 accepted; 1-of-3, stale/old seq, wrong domain rejected (+ops.relayer_report with Postgres up)
+	TEST_DATABASE_URL=$(TEST_DATABASE_URL) $(CARGO) test -p credence-relayer --test e2e -- --ignored --nocapture --test-threads=1
 
 keeper-dev: ## Run one keeper instance locally (reads .env)
-	cargo run -p credence-keeper -- run
+	$(CARGO) run -p credence-keeper -- run
+
+keeper-e2e: contracts-build ## Keeper e2e on anvil + Postgres: J1 pokes on schedule; leader failover with no duplicate txs (needs infra-up)
+	TEST_DATABASE_URL=$(TEST_DATABASE_URL) $(CARGO) test -p credence-keeper --test keeper_e2e -- --ignored --nocapture
 
 indexer-dev: ## Run the Ponder indexer against the local devnode
 	$(PNPM) --filter @credence/indexer dev

@@ -127,14 +127,19 @@ pub fn reports_hash(reports: &[Report]) -> B256 {
 
 /// The digest each committee member signs for `reports`.
 pub fn digest(domain: &Eip712Domain, reports: &[Report]) -> B256 {
-    Reports { reportsHash: reports_hash(reports) }.eip712_signing_hash(domain)
+    Reports {
+        reportsHash: reports_hash(reports),
+    }
+    .eip712_signing_hash(domain)
 }
 
 /// Order `(signer, signature)` pairs by strictly ascending signer and drop duplicate signers.
 pub fn sorted_signatures(mut sigs: Vec<(Address, Signature)>) -> Vec<(Address, Bytes)> {
     sigs.sort_by_key(|(a, _)| *a);
     sigs.dedup_by_key(|(a, _)| *a);
-    sigs.into_iter().map(|(a, s)| (a, Bytes::from(s.as_bytes().to_vec()))).collect()
+    sigs.into_iter()
+        .map(|(a, s)| (a, Bytes::from(s.as_bytes().to_vec())))
+        .collect()
 }
 
 /// JSON transport form of a report (node ↔ aggregator, persistence, cross-language vectors).
@@ -169,8 +174,15 @@ impl TryFrom<&ReportDto> for Report {
     type Error = anyhow::Error;
     fn try_from(d: &ReportDto) -> anyhow::Result<Self> {
         anyhow::ensure!(Kind::from_u8(d.kind).is_some(), "bad kind {}", d.kind);
-        anyhow::ensure!(MarketStatus::from_u8(d.market_status).is_some(), "bad marketStatus {}", d.market_status);
-        anyhow::ensure!(d.observed_at < (1 << 40) && d.session_date < (1 << 40), "uint40 overflow");
+        anyhow::ensure!(
+            MarketStatus::from_u8(d.market_status).is_some(),
+            "bad marketStatus {}",
+            d.market_status
+        );
+        anyhow::ensure!(
+            d.observed_at < (1 << 40) && d.session_date < (1 << 40),
+            "uint40 overflow"
+        );
         Ok(Report {
             assetId: d.asset_id,
             kind: d.kind,
@@ -214,8 +226,24 @@ mod tests {
 
     fn sample() -> Vec<Report> {
         vec![
-            report(keccak256("NVDA:XNAS"), Kind::Live, 181_250_000_000_000_000_000, 1_790_000_000, 20_717, MarketStatus::Regular, 7),
-            report(keccak256("AAPL:XNAS"), Kind::Status, 0, 1_790_000_001, 20_717, MarketStatus::Halted, 3),
+            report(
+                keccak256("NVDA:XNAS"),
+                Kind::Live,
+                181_250_000_000_000_000_000,
+                1_790_000_000,
+                20_717,
+                MarketStatus::Regular,
+                7,
+            ),
+            report(
+                keccak256("AAPL:XNAS"),
+                Kind::Status,
+                0,
+                1_790_000_001,
+                20_717,
+                MarketStatus::Halted,
+                3,
+            ),
         ]
     }
 
@@ -227,10 +255,19 @@ mod tests {
         assert_eq!(U256::from_be_slice(&enc[0..32]), U256::from(0x20));
         assert_eq!(U256::from_be_slice(&enc[32..64]), U256::from(2));
         assert_eq!(B256::from_slice(&enc[64..96]), r[0].assetId);
-        assert_eq!(U256::from_be_slice(&enc[96..128]), U256::from(Kind::Live as u8));
+        assert_eq!(
+            U256::from_be_slice(&enc[96..128]),
+            U256::from(Kind::Live as u8)
+        );
         assert_eq!(U256::from_be_slice(&enc[128..160]), U256::from(r[0].price));
-        assert_eq!(U256::from_be_slice(&enc[64 + 6 * 32..64 + 7 * 32]), U256::from(7));
-        assert_eq!(U256::from_be_slice(&enc[64 + 13 * 32..64 + 14 * 32]), U256::from(3));
+        assert_eq!(
+            U256::from_be_slice(&enc[64 + 6 * 32..64 + 7 * 32]),
+            U256::from(7)
+        );
+        assert_eq!(
+            U256::from_be_slice(&enc[64 + 13 * 32..64 + 14 * 32]),
+            U256::from(3)
+        );
     }
 
     #[test]
@@ -238,10 +275,17 @@ mod tests {
         let r = sample();
         let feed = address!("0x5FbDB2315678afecb367f032d93F642f64180aa3");
         let d = domain(31_337, feed);
-        let domain_typehash =
-            keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)");
+        let domain_typehash = keccak256(
+            "EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)",
+        );
         let ds = keccak256(
-            (domain_typehash, keccak256("CredencePriceFeed"), keccak256("1"), U256::from(31_337u64), feed)
+            (
+                domain_typehash,
+                keccak256("CredencePriceFeed"),
+                keccak256("1"),
+                U256::from(31_337u64),
+                feed,
+            )
                 .abi_encode(),
         );
         assert_eq!(ds, d.separator());
@@ -268,7 +312,10 @@ mod tests {
     #[test]
     fn signatures_sorted_ascending_and_recoverable() {
         let r = sample();
-        let d = domain(31_337, address!("0x5FbDB2315678afecb367f032d93F642f64180aa3"));
+        let d = domain(
+            31_337,
+            address!("0x5FbDB2315678afecb367f032d93F642f64180aa3"),
+        );
         let h = digest(&d, &r);
         let keys: Vec<PrivateKeySigner> = [
             b256!("0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d"),
@@ -278,7 +325,11 @@ mod tests {
         .iter()
         .map(|k| PrivateKeySigner::from_bytes(k).unwrap())
         .collect();
-        let sigs: Vec<_> = keys.iter().rev().map(|k| (k.address(), k.sign_hash_sync(&h).unwrap())).collect();
+        let sigs: Vec<_> = keys
+            .iter()
+            .rev()
+            .map(|k| (k.address(), k.sign_hash_sync(&h).unwrap()))
+            .collect();
         let sorted = sorted_signatures(sigs);
         assert!(sorted.windows(2).all(|w| w[0].0 < w[1].0));
         for (a, s) in &sorted {

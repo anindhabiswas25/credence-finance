@@ -72,7 +72,10 @@ fn et_to_unix(date: &str, time: &str) -> Option<u64> {
     let t = NaiveTime::parse_from_str(time.trim(), "%H:%M:%S%.f")
         .or_else(|_| NaiveTime::parse_from_str(time.trim(), "%H:%M:%S"))
         .ok()?;
-    New_York.from_local_datetime(&d.and_time(t)).earliest().map(|x| x.timestamp() as u64)
+    New_York
+        .from_local_datetime(&d.and_time(t))
+        .earliest()
+        .map(|x| x.timestamp() as u64)
 }
 
 fn to_item(m: &HashMap<String, String>) -> Option<HaltItem> {
@@ -89,9 +92,22 @@ fn to_item(m: &HashMap<String, String>) -> Option<HaltItem> {
     let resumes_at = if resume_time.is_empty() {
         None
     } else {
-        et_to_unix(if resume_date.is_empty() { &halt_date } else { &resume_date }, &resume_time)
+        et_to_unix(
+            if resume_date.is_empty() {
+                &halt_date
+            } else {
+                &resume_date
+            },
+            &resume_time,
+        )
     };
-    Some(HaltItem { symbol, market: g("ndaq:Market"), reason: g("ndaq:ReasonCode"), halted_at, resumes_at })
+    Some(HaltItem {
+        symbol,
+        market: g("ndaq:Market"),
+        reason: g("ndaq:ReasonCode"),
+        halted_at,
+        resumes_at,
+    })
 }
 
 /// Halt state per symbol at `now` from a list of items (latest halt per symbol wins).
@@ -110,7 +126,13 @@ pub fn halts_at(items: &[HaltItem], now: u64) -> HashMap<String, HaltInfo> {
         .into_iter()
         .map(|(s, i)| {
             let halted = i.resumes_at.is_none_or(|r| r > now);
-            (s.to_owned(), HaltInfo { halted, reason: Some(i.reason.clone()) })
+            (
+                s.to_owned(),
+                HaltInfo {
+                    halted,
+                    reason: Some(i.reason.clone()),
+                },
+            )
         })
         .collect()
 }
@@ -126,7 +148,12 @@ pub struct HaltFeed {
 
 impl HaltFeed {
     pub fn new(url: impl Into<String>) -> Arc<Self> {
-        Arc::new(Self { url: url.into(), items: RwLock::new(None), http: super::http_client(), max_age_s: 120 })
+        Arc::new(Self {
+            url: url.into(),
+            items: RwLock::new(None),
+            http: super::http_client(),
+            max_age_s: 120,
+        })
     }
 
     /// A feed with fixed items (tests, replay).
@@ -140,7 +167,15 @@ impl HaltFeed {
     }
 
     pub async fn refresh(&self) -> anyhow::Result<usize> {
-        let body = self.http.get(&self.url).header("user-agent", "Mozilla/5.0 credence-relayer").send().await?.error_for_status()?.text().await?;
+        let body = self
+            .http
+            .get(&self.url)
+            .header("user-agent", "Mozilla/5.0 credence-relayer")
+            .send()
+            .await?
+            .error_for_status()?
+            .text()
+            .await?;
         let items = parse_rss(&body);
         let n = items.len();
         *self.items.write().await = Some((items, now()));
@@ -165,12 +200,18 @@ impl HaltFeed {
         if self.max_age_s != u64::MAX && t.saturating_sub(*fetched) > self.max_age_s {
             return None;
         }
-        Some(halts_at(items, t).remove(symbol).unwrap_or(HaltInfo { halted: false, reason: None }))
+        Some(halts_at(items, t).remove(symbol).unwrap_or(HaltInfo {
+            halted: false,
+            reason: None,
+        }))
     }
 }
 
 fn now() -> u64 {
-    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0)
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0)
 }
 
 #[cfg(test)]
@@ -178,7 +219,11 @@ mod tests {
     use super::*;
 
     fn fixture() -> String {
-        std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/nasdaq/tradehalts.xml")).unwrap()
+        std::fs::read_to_string(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/fixtures/nasdaq/tradehalts.xml"
+        ))
+        .unwrap()
     }
 
     #[test]
@@ -195,8 +240,18 @@ mod tests {
 
     #[test]
     fn halted_until_resumption() {
-        let item = |sym: &str, at, res| HaltItem { symbol: sym.into(), market: "NASDAQ".into(), reason: "LUDP".into(), halted_at: at, resumes_at: res };
-        let items = vec![item("NVDA", 100, Some(400)), item("AAPL", 100, None), item("TSLA", 500, None)];
+        let item = |sym: &str, at, res| HaltItem {
+            symbol: sym.into(),
+            market: "NASDAQ".into(),
+            reason: "LUDP".into(),
+            halted_at: at,
+            resumes_at: res,
+        };
+        let items = vec![
+            item("NVDA", 100, Some(400)),
+            item("AAPL", 100, None),
+            item("TSLA", 500, None),
+        ];
         let h = halts_at(&items, 200);
         assert!(h["NVDA"].halted);
         assert!(h["AAPL"].halted);
@@ -210,7 +265,13 @@ mod tests {
 
     #[tokio::test]
     async fn fixed_feed_reports_absent_symbols_as_trading() {
-        let feed = HaltFeed::fixed(vec![HaltItem { symbol: "COIN".into(), market: "NASDAQ".into(), reason: "T12".into(), halted_at: 1, resumes_at: None }]);
+        let feed = HaltFeed::fixed(vec![HaltItem {
+            symbol: "COIN".into(),
+            market: "NASDAQ".into(),
+            reason: "T12".into(),
+            halted_at: 1,
+            resumes_at: None,
+        }]);
         assert!(feed.halt("COIN").await.unwrap().halted);
         assert!(!feed.halt("NVDA").await.unwrap().halted);
     }
