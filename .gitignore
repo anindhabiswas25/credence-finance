@@ -1,0 +1,24 @@
+# secrets
+.env
+.env.*
+!.env.example
+*.key
+keys/
+# build output
+target/
+contracts/out/
+contracts/cache/
+contracts/broadcast/*/31337/
+node_modules/
+.next/
+.turbo/
+dist/
+.ponder/
+__pycache__/
+.venv/
+*.pyc
+calibration/data/
+# os / editor
+.DS_Store
+.idea/
+.vscode/
