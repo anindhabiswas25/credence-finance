@@ -2,9 +2,9 @@
 # Every target has a `## help` comment; `make help` lists them.
 
 BACKEND_RUST_PKGS := -p credence-common -p credence-relayer -p credence-keeper
-# alloy 2.5 needs rustc >= 1.94.1 while rust-toolchain.toml pins 1.91.0 (BOARD REQUEST, ADR-0005).
-# Until the pin moves, backend crates build with the installed stable toolchain. Set empty to follow the pin.
-BACKEND_RUST_TOOLCHAIN ?= stable
+# Backend crates follow rust-toolchain.toml (1.95.0; alloy 2.5 needs >= 1.94.1, ADR-0005 / ADR-0102).
+# Set BACKEND_RUST_TOOLCHAIN=<name> only to override locally.
+BACKEND_RUST_TOOLCHAIN ?=
 CARGO := $(if $(BACKEND_RUST_TOOLCHAIN),RUSTUP_TOOLCHAIN=$(BACKEND_RUST_TOOLCHAIN) )cargo
 TEST_DATABASE_URL ?= postgres://credence:credence@127.0.0.1:$${POSTGRES_PORT:-5433}/credence
 COMPOSE           := docker compose -f infra/docker-compose.yml
