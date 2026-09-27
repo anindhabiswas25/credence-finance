@@ -1,0 +1,32 @@
+{
+  "name": "@credence/sdk",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Credence TS SDK: ABIs (deployments/abis/v0), typed address book, shared types, EIP-712 report builder.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": { "types": "./dist/index.d.ts", "default": "./dist/index.js" },
+    "./node": { "types": "./dist/node.d.ts", "default": "./dist/node.js" }
+  },
+  "files": ["dist"],
+  "scripts": {
+    "gen": "node scripts/gen-abis.mjs",
+    "build": "node scripts/gen-abis.mjs && tsc -p tsconfig.build.json",
+    "typecheck": "node scripts/gen-abis.mjs && tsc -p tsconfig.json --noEmit",
+    "lint": "eslint .",
+    "test": "node scripts/gen-abis.mjs && vitest run"
+  },
+  "dependencies": {
+    "viem": "2.56.9",
+    "zod": "4.6.5"
+  },
+  "devDependencies": {
+    "@credence/config": "workspace:*",
+    "@types/node": "24.19.0",
+    "eslint": "9.39.5",
+    "typescript": "~6.0.0",
+    "vitest": "3.2.7"
+  }
+}
