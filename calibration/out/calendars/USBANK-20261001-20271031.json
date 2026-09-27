@@ -1,0 +1,2191 @@
+{
+ "formatVersion": 1,
+ "venue": "USBANK",
+ "from": "2026-10-01",
+ "to": "2027-10-31",
+ "timezone": "UTC unix seconds",
+ "closureTypeEnum": {
+  "NONE": 0,
+  "OVERNIGHT": 1,
+  "WEEKEND": 2,
+  "HOLIDAY_WEEKEND": 3,
+  "HALT": 4,
+  "CORP_ACTION": 5
+ },
+ "count": 271,
+ "coverageEnd": 1824843600,
+ "contentHash": "0x2e5d3c9cdfb5e64169071059f5cdc0ac2d9696e82302fd52c8c5f5744970723a",
+ "sessions": [
+  {
+   "extOpen": 1790856000,
+   "open": 1790859600,
+   "close": 1790888400,
+   "extClose": 1790892000,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1790942400,
+   "open": 1790946000,
+   "close": 1790974800,
+   "extClose": 1790978400,
+   "closureTypeAfter": 2
+  },
+  {
+   "extOpen": 1791201600,
+   "open": 1791205200,
+   "close": 1791234000,
+   "extClose": 1791237600,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1791288000,
+   "open": 1791291600,
+   "close": 1791320400,
+   "extClose": 1791324000,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1791374400,
+   "open": 1791378000,
+   "close": 1791406800,
+   "extClose": 1791410400,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1791460800,
+   "open": 1791464400,
+   "close": 1791493200,
+   "extClose": 1791496800,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1791547200,
+   "open": 1791550800,
+   "close": 1791579600,
+   "extClose": 1791583200,
+   "closureTypeAfter": 3
+  },
+  {
+   "extOpen": 1791892800,
+   "open": 1791896400,
+   "close": 1791925200,
+   "extClose": 1791928800,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1791979200,
+   "open": 1791982800,
+   "close": 1792011600,
+   "extClose": 1792015200,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1792065600,
+   "open": 1792069200,
+   "close": 1792098000,
+   "extClose": 1792101600,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1792152000,
+   "open": 1792155600,
+   "close": 1792184400,
+   "extClose": 1792188000,
+   "closureTypeAfter": 2
+  },
+  {
+   "extOpen": 1792411200,
+   "open": 1792414800,
+   "close": 1792443600,
+   "extClose": 1792447200,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1792497600,
+   "open": 1792501200,
+   "close": 1792530000,
+   "extClose": 1792533600,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1792584000,
+   "open": 1792587600,
+   "close": 1792616400,
+   "extClose": 1792620000,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1792670400,
+   "open": 1792674000,
+   "close": 1792702800,
+   "extClose": 1792706400,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1792756800,
+   "open": 1792760400,
+   "close": 1792789200,
+   "extClose": 1792792800,
+   "closureTypeAfter": 2
+  },
+  {
+   "extOpen": 1793016000,
+   "open": 1793019600,
+   "close": 1793048400,
+   "extClose": 1793052000,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1793102400,
+   "open": 1793106000,
+   "close": 1793134800,
+   "extClose": 1793138400,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1793188800,
+   "open": 1793192400,
+   "close": 1793221200,
+   "extClose": 1793224800,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1793275200,
+   "open": 1793278800,
+   "close": 1793307600,
+   "extClose": 1793311200,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1793361600,
+   "open": 1793365200,
+   "close": 1793394000,
+   "extClose": 1793397600,
+   "closureTypeAfter": 2
+  },
+  {
+   "extOpen": 1793624400,
+   "open": 1793628000,
+   "close": 1793656800,
+   "extClose": 1793660400,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1793710800,
+   "open": 1793714400,
+   "close": 1793743200,
+   "extClose": 1793746800,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1793797200,
+   "open": 1793800800,
+   "close": 1793829600,
+   "extClose": 1793833200,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1793883600,
+   "open": 1793887200,
+   "close": 1793916000,
+   "extClose": 1793919600,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1793970000,
+   "open": 1793973600,
+   "close": 1794002400,
+   "extClose": 1794006000,
+   "closureTypeAfter": 2
+  },
+  {
+   "extOpen": 1794229200,
+   "open": 1794232800,
+   "close": 1794261600,
+   "extClose": 1794265200,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1794315600,
+   "open": 1794319200,
+   "close": 1794348000,
+   "extClose": 1794351600,
+   "closureTypeAfter": 3
+  },
+  {
+   "extOpen": 1794488400,
+   "open": 1794492000,
+   "close": 1794520800,
+   "extClose": 1794524400,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1794574800,
+   "open": 1794578400,
+   "close": 1794607200,
+   "extClose": 1794610800,
+   "closureTypeAfter": 2
+  },
+  {
+   "extOpen": 1794834000,
+   "open": 1794837600,
+   "close": 1794866400,
+   "extClose": 1794870000,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1794920400,
+   "open": 1794924000,
+   "close": 1794952800,
+   "extClose": 1794956400,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1795006800,
+   "open": 1795010400,
+   "close": 1795039200,
+   "extClose": 1795042800,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1795093200,
+   "open": 1795096800,
+   "close": 1795125600,
+   "extClose": 1795129200,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1795179600,
+   "open": 1795183200,
+   "close": 1795212000,
+   "extClose": 1795215600,
+   "closureTypeAfter": 2
+  },
+  {
+   "extOpen": 1795438800,
+   "open": 1795442400,
+   "close": 1795471200,
+   "extClose": 1795474800,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1795525200,
+   "open": 1795528800,
+   "close": 1795557600,
+   "extClose": 1795561200,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1795611600,
+   "open": 1795615200,
+   "close": 1795644000,
+   "extClose": 1795647600,
+   "closureTypeAfter": 3
+  },
+  {
+   "extOpen": 1795784400,
+   "open": 1795788000,
+   "close": 1795816800,
+   "extClose": 1795820400,
+   "closureTypeAfter": 2
+  },
+  {
+   "extOpen": 1796043600,
+   "open": 1796047200,
+   "close": 1796076000,
+   "extClose": 1796079600,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1796130000,
+   "open": 1796133600,
+   "close": 1796162400,
+   "extClose": 1796166000,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1796216400,
+   "open": 1796220000,
+   "close": 1796248800,
+   "extClose": 1796252400,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1796302800,
+   "open": 1796306400,
+   "close": 1796335200,
+   "extClose": 1796338800,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1796389200,
+   "open": 1796392800,
+   "close": 1796421600,
+   "extClose": 1796425200,
+   "closureTypeAfter": 2
+  },
+  {
+   "extOpen": 1796648400,
+   "open": 1796652000,
+   "close": 1796680800,
+   "extClose": 1796684400,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1796734800,
+   "open": 1796738400,
+   "close": 1796767200,
+   "extClose": 1796770800,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1796821200,
+   "open": 1796824800,
+   "close": 1796853600,
+   "extClose": 1796857200,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1796907600,
+   "open": 1796911200,
+   "close": 1796940000,
+   "extClose": 1796943600,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1796994000,
+   "open": 1796997600,
+   "close": 1797026400,
+   "extClose": 1797030000,
+   "closureTypeAfter": 2
+  },
+  {
+   "extOpen": 1797253200,
+   "open": 1797256800,
+   "close": 1797285600,
+   "extClose": 1797289200,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1797339600,
+   "open": 1797343200,
+   "close": 1797372000,
+   "extClose": 1797375600,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1797426000,
+   "open": 1797429600,
+   "close": 1797458400,
+   "extClose": 1797462000,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1797512400,
+   "open": 1797516000,
+   "close": 1797544800,
+   "extClose": 1797548400,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1797598800,
+   "open": 1797602400,
+   "close": 1797631200,
+   "extClose": 1797634800,
+   "closureTypeAfter": 2
+  },
+  {
+   "extOpen": 1797858000,
+   "open": 1797861600,
+   "close": 1797890400,
+   "extClose": 1797894000,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1797944400,
+   "open": 1797948000,
+   "close": 1797976800,
+   "extClose": 1797980400,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1798030800,
+   "open": 1798034400,
+   "close": 1798063200,
+   "extClose": 1798066800,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1798117200,
+   "open": 1798120800,
+   "close": 1798149600,
+   "extClose": 1798153200,
+   "closureTypeAfter": 3
+  },
+  {
+   "extOpen": 1798462800,
+   "open": 1798466400,
+   "close": 1798495200,
+   "extClose": 1798498800,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1798549200,
+   "open": 1798552800,
+   "close": 1798581600,
+   "extClose": 1798585200,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1798635600,
+   "open": 1798639200,
+   "close": 1798668000,
+   "extClose": 1798671600,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1798722000,
+   "open": 1798725600,
+   "close": 1798754400,
+   "extClose": 1798758000,
+   "closureTypeAfter": 3
+  },
+  {
+   "extOpen": 1799067600,
+   "open": 1799071200,
+   "close": 1799100000,
+   "extClose": 1799103600,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1799154000,
+   "open": 1799157600,
+   "close": 1799186400,
+   "extClose": 1799190000,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1799240400,
+   "open": 1799244000,
+   "close": 1799272800,
+   "extClose": 1799276400,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1799326800,
+   "open": 1799330400,
+   "close": 1799359200,
+   "extClose": 1799362800,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1799413200,
+   "open": 1799416800,
+   "close": 1799445600,
+   "extClose": 1799449200,
+   "closureTypeAfter": 2
+  },
+  {
+   "extOpen": 1799672400,
+   "open": 1799676000,
+   "close": 1799704800,
+   "extClose": 1799708400,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1799758800,
+   "open": 1799762400,
+   "close": 1799791200,
+   "extClose": 1799794800,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1799845200,
+   "open": 1799848800,
+   "close": 1799877600,
+   "extClose": 1799881200,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1799931600,
+   "open": 1799935200,
+   "close": 1799964000,
+   "extClose": 1799967600,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1800018000,
+   "open": 1800021600,
+   "close": 1800050400,
+   "extClose": 1800054000,
+   "closureTypeAfter": 3
+  },
+  {
+   "extOpen": 1800363600,
+   "open": 1800367200,
+   "close": 1800396000,
+   "extClose": 1800399600,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1800450000,
+   "open": 1800453600,
+   "close": 1800482400,
+   "extClose": 1800486000,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1800536400,
+   "open": 1800540000,
+   "close": 1800568800,
+   "extClose": 1800572400,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1800622800,
+   "open": 1800626400,
+   "close": 1800655200,
+   "extClose": 1800658800,
+   "closureTypeAfter": 2
+  },
+  {
+   "extOpen": 1800882000,
+   "open": 1800885600,
+   "close": 1800914400,
+   "extClose": 1800918000,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1800968400,
+   "open": 1800972000,
+   "close": 1801000800,
+   "extClose": 1801004400,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1801054800,
+   "open": 1801058400,
+   "close": 1801087200,
+   "extClose": 1801090800,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1801141200,
+   "open": 1801144800,
+   "close": 1801173600,
+   "extClose": 1801177200,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1801227600,
+   "open": 1801231200,
+   "close": 1801260000,
+   "extClose": 1801263600,
+   "closureTypeAfter": 2
+  },
+  {
+   "extOpen": 1801486800,
+   "open": 1801490400,
+   "close": 1801519200,
+   "extClose": 1801522800,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1801573200,
+   "open": 1801576800,
+   "close": 1801605600,
+   "extClose": 1801609200,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1801659600,
+   "open": 1801663200,
+   "close": 1801692000,
+   "extClose": 1801695600,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1801746000,
+   "open": 1801749600,
+   "close": 1801778400,
+   "extClose": 1801782000,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1801832400,
+   "open": 1801836000,
+   "close": 1801864800,
+   "extClose": 1801868400,
+   "closureTypeAfter": 2
+  },
+  {
+   "extOpen": 1802091600,
+   "open": 1802095200,
+   "close": 1802124000,
+   "extClose": 1802127600,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1802178000,
+   "open": 1802181600,
+   "close": 1802210400,
+   "extClose": 1802214000,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1802264400,
+   "open": 1802268000,
+   "close": 1802296800,
+   "extClose": 1802300400,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1802350800,
+   "open": 1802354400,
+   "close": 1802383200,
+   "extClose": 1802386800,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1802437200,
+   "open": 1802440800,
+   "close": 1802469600,
+   "extClose": 1802473200,
+   "closureTypeAfter": 3
+  },
+  {
+   "extOpen": 1802782800,
+   "open": 1802786400,
+   "close": 1802815200,
+   "extClose": 1802818800,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1802869200,
+   "open": 1802872800,
+   "close": 1802901600,
+   "extClose": 1802905200,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1802955600,
+   "open": 1802959200,
+   "close": 1802988000,
+   "extClose": 1802991600,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1803042000,
+   "open": 1803045600,
+   "close": 1803074400,
+   "extClose": 1803078000,
+   "closureTypeAfter": 2
+  },
+  {
+   "extOpen": 1803301200,
+   "open": 1803304800,
+   "close": 1803333600,
+   "extClose": 1803337200,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1803387600,
+   "open": 1803391200,
+   "close": 1803420000,
+   "extClose": 1803423600,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1803474000,
+   "open": 1803477600,
+   "close": 1803506400,
+   "extClose": 1803510000,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1803560400,
+   "open": 1803564000,
+   "close": 1803592800,
+   "extClose": 1803596400,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1803646800,
+   "open": 1803650400,
+   "close": 1803679200,
+   "extClose": 1803682800,
+   "closureTypeAfter": 2
+  },
+  {
+   "extOpen": 1803906000,
+   "open": 1803909600,
+   "close": 1803938400,
+   "extClose": 1803942000,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1803992400,
+   "open": 1803996000,
+   "close": 1804024800,
+   "extClose": 1804028400,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1804078800,
+   "open": 1804082400,
+   "close": 1804111200,
+   "extClose": 1804114800,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1804165200,
+   "open": 1804168800,
+   "close": 1804197600,
+   "extClose": 1804201200,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1804251600,
+   "open": 1804255200,
+   "close": 1804284000,
+   "extClose": 1804287600,
+   "closureTypeAfter": 2
+  },
+  {
+   "extOpen": 1804510800,
+   "open": 1804514400,
+   "close": 1804543200,
+   "extClose": 1804546800,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1804597200,
+   "open": 1804600800,
+   "close": 1804629600,
+   "extClose": 1804633200,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1804683600,
+   "open": 1804687200,
+   "close": 1804716000,
+   "extClose": 1804719600,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1804770000,
+   "open": 1804773600,
+   "close": 1804802400,
+   "extClose": 1804806000,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1804856400,
+   "open": 1804860000,
+   "close": 1804888800,
+   "extClose": 1804892400,
+   "closureTypeAfter": 2
+  },
+  {
+   "extOpen": 1805112000,
+   "open": 1805115600,
+   "close": 1805144400,
+   "extClose": 1805148000,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1805198400,
+   "open": 1805202000,
+   "close": 1805230800,
+   "extClose": 1805234400,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1805284800,
+   "open": 1805288400,
+   "close": 1805317200,
+   "extClose": 1805320800,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1805371200,
+   "open": 1805374800,
+   "close": 1805403600,
+   "extClose": 1805407200,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1805457600,
+   "open": 1805461200,
+   "close": 1805490000,
+   "extClose": 1805493600,
+   "closureTypeAfter": 2
+  },
+  {
+   "extOpen": 1805716800,
+   "open": 1805720400,
+   "close": 1805749200,
+   "extClose": 1805752800,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1805803200,
+   "open": 1805806800,
+   "close": 1805835600,
+   "extClose": 1805839200,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1805889600,
+   "open": 1805893200,
+   "close": 1805922000,
+   "extClose": 1805925600,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1805976000,
+   "open": 1805979600,
+   "close": 1806008400,
+   "extClose": 1806012000,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1806062400,
+   "open": 1806066000,
+   "close": 1806094800,
+   "extClose": 1806098400,
+   "closureTypeAfter": 2
+  },
+  {
+   "extOpen": 1806321600,
+   "open": 1806325200,
+   "close": 1806354000,
+   "extClose": 1806357600,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1806408000,
+   "open": 1806411600,
+   "close": 1806440400,
+   "extClose": 1806444000,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1806494400,
+   "open": 1806498000,
+   "close": 1806526800,
+   "extClose": 1806530400,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1806580800,
+   "open": 1806584400,
+   "close": 1806613200,
+   "extClose": 1806616800,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1806667200,
+   "open": 1806670800,
+   "close": 1806699600,
+   "extClose": 1806703200,
+   "closureTypeAfter": 2
+  },
+  {
+   "extOpen": 1806926400,
+   "open": 1806930000,
+   "close": 1806958800,
+   "extClose": 1806962400,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1807012800,
+   "open": 1807016400,
+   "close": 1807045200,
+   "extClose": 1807048800,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1807099200,
+   "open": 1807102800,
+   "close": 1807131600,
+   "extClose": 1807135200,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1807185600,
+   "open": 1807189200,
+   "close": 1807218000,
+   "extClose": 1807221600,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1807272000,
+   "open": 1807275600,
+   "close": 1807304400,
+   "extClose": 1807308000,
+   "closureTypeAfter": 2
+  },
+  {
+   "extOpen": 1807531200,
+   "open": 1807534800,
+   "close": 1807563600,
+   "extClose": 1807567200,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1807617600,
+   "open": 1807621200,
+   "close": 1807650000,
+   "extClose": 1807653600,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1807704000,
+   "open": 1807707600,
+   "close": 1807736400,
+   "extClose": 1807740000,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1807790400,
+   "open": 1807794000,
+   "close": 1807822800,
+   "extClose": 1807826400,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1807876800,
+   "open": 1807880400,
+   "close": 1807909200,
+   "extClose": 1807912800,
+   "closureTypeAfter": 2
+  },
+  {
+   "extOpen": 1808136000,
+   "open": 1808139600,
+   "close": 1808168400,
+   "extClose": 1808172000,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1808222400,
+   "open": 1808226000,
+   "close": 1808254800,
+   "extClose": 1808258400,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1808308800,
+   "open": 1808312400,
+   "close": 1808341200,
+   "extClose": 1808344800,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1808395200,
+   "open": 1808398800,
+   "close": 1808427600,
+   "extClose": 1808431200,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1808481600,
+   "open": 1808485200,
+   "close": 1808514000,
+   "extClose": 1808517600,
+   "closureTypeAfter": 2
+  },
+  {
+   "extOpen": 1808740800,
+   "open": 1808744400,
+   "close": 1808773200,
+   "extClose": 1808776800,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1808827200,
+   "open": 1808830800,
+   "close": 1808859600,
+   "extClose": 1808863200,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1808913600,
+   "open": 1808917200,
+   "close": 1808946000,
+   "extClose": 1808949600,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1809000000,
+   "open": 1809003600,
+   "close": 1809032400,
+   "extClose": 1809036000,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1809086400,
+   "open": 1809090000,
+   "close": 1809118800,
+   "extClose": 1809122400,
+   "closureTypeAfter": 2
+  },
+  {
+   "extOpen": 1809345600,
+   "open": 1809349200,
+   "close": 1809378000,
+   "extClose": 1809381600,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1809432000,
+   "open": 1809435600,
+   "close": 1809464400,
+   "extClose": 1809468000,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1809518400,
+   "open": 1809522000,
+   "close": 1809550800,
+   "extClose": 1809554400,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1809604800,
+   "open": 1809608400,
+   "close": 1809637200,
+   "extClose": 1809640800,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1809691200,
+   "open": 1809694800,
+   "close": 1809723600,
+   "extClose": 1809727200,
+   "closureTypeAfter": 2
+  },
+  {
+   "extOpen": 1809950400,
+   "open": 1809954000,
+   "close": 1809982800,
+   "extClose": 1809986400,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1810036800,
+   "open": 1810040400,
+   "close": 1810069200,
+   "extClose": 1810072800,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1810123200,
+   "open": 1810126800,
+   "close": 1810155600,
+   "extClose": 1810159200,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1810209600,
+   "open": 1810213200,
+   "close": 1810242000,
+   "extClose": 1810245600,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1810296000,
+   "open": 1810299600,
+   "close": 1810328400,
+   "extClose": 1810332000,
+   "closureTypeAfter": 2
+  },
+  {
+   "extOpen": 1810555200,
+   "open": 1810558800,
+   "close": 1810587600,
+   "extClose": 1810591200,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1810641600,
+   "open": 1810645200,
+   "close": 1810674000,
+   "extClose": 1810677600,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1810728000,
+   "open": 1810731600,
+   "close": 1810760400,
+   "extClose": 1810764000,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1810814400,
+   "open": 1810818000,
+   "close": 1810846800,
+   "extClose": 1810850400,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1810900800,
+   "open": 1810904400,
+   "close": 1810933200,
+   "extClose": 1810936800,
+   "closureTypeAfter": 2
+  },
+  {
+   "extOpen": 1811160000,
+   "open": 1811163600,
+   "close": 1811192400,
+   "extClose": 1811196000,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1811246400,
+   "open": 1811250000,
+   "close": 1811278800,
+   "extClose": 1811282400,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1811332800,
+   "open": 1811336400,
+   "close": 1811365200,
+   "extClose": 1811368800,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1811419200,
+   "open": 1811422800,
+   "close": 1811451600,
+   "extClose": 1811455200,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1811505600,
+   "open": 1811509200,
+   "close": 1811538000,
+   "extClose": 1811541600,
+   "closureTypeAfter": 3
+  },
+  {
+   "extOpen": 1811851200,
+   "open": 1811854800,
+   "close": 1811883600,
+   "extClose": 1811887200,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1811937600,
+   "open": 1811941200,
+   "close": 1811970000,
+   "extClose": 1811973600,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1812024000,
+   "open": 1812027600,
+   "close": 1812056400,
+   "extClose": 1812060000,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1812110400,
+   "open": 1812114000,
+   "close": 1812142800,
+   "extClose": 1812146400,
+   "closureTypeAfter": 2
+  },
+  {
+   "extOpen": 1812369600,
+   "open": 1812373200,
+   "close": 1812402000,
+   "extClose": 1812405600,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1812456000,
+   "open": 1812459600,
+   "close": 1812488400,
+   "extClose": 1812492000,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1812542400,
+   "open": 1812546000,
+   "close": 1812574800,
+   "extClose": 1812578400,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1812628800,
+   "open": 1812632400,
+   "close": 1812661200,
+   "extClose": 1812664800,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1812715200,
+   "open": 1812718800,
+   "close": 1812747600,
+   "extClose": 1812751200,
+   "closureTypeAfter": 2
+  },
+  {
+   "extOpen": 1812974400,
+   "open": 1812978000,
+   "close": 1813006800,
+   "extClose": 1813010400,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1813060800,
+   "open": 1813064400,
+   "close": 1813093200,
+   "extClose": 1813096800,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1813147200,
+   "open": 1813150800,
+   "close": 1813179600,
+   "extClose": 1813183200,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1813233600,
+   "open": 1813237200,
+   "close": 1813266000,
+   "extClose": 1813269600,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1813320000,
+   "open": 1813323600,
+   "close": 1813352400,
+   "extClose": 1813356000,
+   "closureTypeAfter": 3
+  },
+  {
+   "extOpen": 1813579200,
+   "open": 1813582800,
+   "close": 1813611600,
+   "extClose": 1813615200,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1813665600,
+   "open": 1813669200,
+   "close": 1813698000,
+   "extClose": 1813701600,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1813752000,
+   "open": 1813755600,
+   "close": 1813784400,
+   "extClose": 1813788000,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1813838400,
+   "open": 1813842000,
+   "close": 1813870800,
+   "extClose": 1813874400,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1813924800,
+   "open": 1813928400,
+   "close": 1813957200,
+   "extClose": 1813960800,
+   "closureTypeAfter": 2
+  },
+  {
+   "extOpen": 1814184000,
+   "open": 1814187600,
+   "close": 1814216400,
+   "extClose": 1814220000,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1814270400,
+   "open": 1814274000,
+   "close": 1814302800,
+   "extClose": 1814306400,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1814356800,
+   "open": 1814360400,
+   "close": 1814389200,
+   "extClose": 1814392800,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1814443200,
+   "open": 1814446800,
+   "close": 1814475600,
+   "extClose": 1814479200,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1814529600,
+   "open": 1814533200,
+   "close": 1814562000,
+   "extClose": 1814565600,
+   "closureTypeAfter": 3
+  },
+  {
+   "extOpen": 1814875200,
+   "open": 1814878800,
+   "close": 1814907600,
+   "extClose": 1814911200,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1814961600,
+   "open": 1814965200,
+   "close": 1814994000,
+   "extClose": 1814997600,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1815048000,
+   "open": 1815051600,
+   "close": 1815080400,
+   "extClose": 1815084000,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1815134400,
+   "open": 1815138000,
+   "close": 1815166800,
+   "extClose": 1815170400,
+   "closureTypeAfter": 2
+  },
+  {
+   "extOpen": 1815393600,
+   "open": 1815397200,
+   "close": 1815426000,
+   "extClose": 1815429600,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1815480000,
+   "open": 1815483600,
+   "close": 1815512400,
+   "extClose": 1815516000,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1815566400,
+   "open": 1815570000,
+   "close": 1815598800,
+   "extClose": 1815602400,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1815652800,
+   "open": 1815656400,
+   "close": 1815685200,
+   "extClose": 1815688800,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1815739200,
+   "open": 1815742800,
+   "close": 1815771600,
+   "extClose": 1815775200,
+   "closureTypeAfter": 2
+  },
+  {
+   "extOpen": 1815998400,
+   "open": 1816002000,
+   "close": 1816030800,
+   "extClose": 1816034400,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1816084800,
+   "open": 1816088400,
+   "close": 1816117200,
+   "extClose": 1816120800,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1816171200,
+   "open": 1816174800,
+   "close": 1816203600,
+   "extClose": 1816207200,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1816257600,
+   "open": 1816261200,
+   "close": 1816290000,
+   "extClose": 1816293600,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1816344000,
+   "open": 1816347600,
+   "close": 1816376400,
+   "extClose": 1816380000,
+   "closureTypeAfter": 2
+  },
+  {
+   "extOpen": 1816603200,
+   "open": 1816606800,
+   "close": 1816635600,
+   "extClose": 1816639200,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1816689600,
+   "open": 1816693200,
+   "close": 1816722000,
+   "extClose": 1816725600,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1816776000,
+   "open": 1816779600,
+   "close": 1816808400,
+   "extClose": 1816812000,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1816862400,
+   "open": 1816866000,
+   "close": 1816894800,
+   "extClose": 1816898400,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1816948800,
+   "open": 1816952400,
+   "close": 1816981200,
+   "extClose": 1816984800,
+   "closureTypeAfter": 2
+  },
+  {
+   "extOpen": 1817208000,
+   "open": 1817211600,
+   "close": 1817240400,
+   "extClose": 1817244000,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1817294400,
+   "open": 1817298000,
+   "close": 1817326800,
+   "extClose": 1817330400,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1817380800,
+   "open": 1817384400,
+   "close": 1817413200,
+   "extClose": 1817416800,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1817467200,
+   "open": 1817470800,
+   "close": 1817499600,
+   "extClose": 1817503200,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1817553600,
+   "open": 1817557200,
+   "close": 1817586000,
+   "extClose": 1817589600,
+   "closureTypeAfter": 2
+  },
+  {
+   "extOpen": 1817812800,
+   "open": 1817816400,
+   "close": 1817845200,
+   "extClose": 1817848800,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1817899200,
+   "open": 1817902800,
+   "close": 1817931600,
+   "extClose": 1817935200,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1817985600,
+   "open": 1817989200,
+   "close": 1818018000,
+   "extClose": 1818021600,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1818072000,
+   "open": 1818075600,
+   "close": 1818104400,
+   "extClose": 1818108000,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1818158400,
+   "open": 1818162000,
+   "close": 1818190800,
+   "extClose": 1818194400,
+   "closureTypeAfter": 2
+  },
+  {
+   "extOpen": 1818417600,
+   "open": 1818421200,
+   "close": 1818450000,
+   "extClose": 1818453600,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1818504000,
+   "open": 1818507600,
+   "close": 1818536400,
+   "extClose": 1818540000,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1818590400,
+   "open": 1818594000,
+   "close": 1818622800,
+   "extClose": 1818626400,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1818676800,
+   "open": 1818680400,
+   "close": 1818709200,
+   "extClose": 1818712800,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1818763200,
+   "open": 1818766800,
+   "close": 1818795600,
+   "extClose": 1818799200,
+   "closureTypeAfter": 2
+  },
+  {
+   "extOpen": 1819022400,
+   "open": 1819026000,
+   "close": 1819054800,
+   "extClose": 1819058400,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1819108800,
+   "open": 1819112400,
+   "close": 1819141200,
+   "extClose": 1819144800,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1819195200,
+   "open": 1819198800,
+   "close": 1819227600,
+   "extClose": 1819231200,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1819281600,
+   "open": 1819285200,
+   "close": 1819314000,
+   "extClose": 1819317600,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1819368000,
+   "open": 1819371600,
+   "close": 1819400400,
+   "extClose": 1819404000,
+   "closureTypeAfter": 2
+  },
+  {
+   "extOpen": 1819627200,
+   "open": 1819630800,
+   "close": 1819659600,
+   "extClose": 1819663200,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1819713600,
+   "open": 1819717200,
+   "close": 1819746000,
+   "extClose": 1819749600,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1819800000,
+   "open": 1819803600,
+   "close": 1819832400,
+   "extClose": 1819836000,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1819886400,
+   "open": 1819890000,
+   "close": 1819918800,
+   "extClose": 1819922400,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1819972800,
+   "open": 1819976400,
+   "close": 1820005200,
+   "extClose": 1820008800,
+   "closureTypeAfter": 3
+  },
+  {
+   "extOpen": 1820318400,
+   "open": 1820322000,
+   "close": 1820350800,
+   "extClose": 1820354400,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1820404800,
+   "open": 1820408400,
+   "close": 1820437200,
+   "extClose": 1820440800,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1820491200,
+   "open": 1820494800,
+   "close": 1820523600,
+   "extClose": 1820527200,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1820577600,
+   "open": 1820581200,
+   "close": 1820610000,
+   "extClose": 1820613600,
+   "closureTypeAfter": 2
+  },
+  {
+   "extOpen": 1820836800,
+   "open": 1820840400,
+   "close": 1820869200,
+   "extClose": 1820872800,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1820923200,
+   "open": 1820926800,
+   "close": 1820955600,
+   "extClose": 1820959200,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1821009600,
+   "open": 1821013200,
+   "close": 1821042000,
+   "extClose": 1821045600,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1821096000,
+   "open": 1821099600,
+   "close": 1821128400,
+   "extClose": 1821132000,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1821182400,
+   "open": 1821186000,
+   "close": 1821214800,
+   "extClose": 1821218400,
+   "closureTypeAfter": 2
+  },
+  {
+   "extOpen": 1821441600,
+   "open": 1821445200,
+   "close": 1821474000,
+   "extClose": 1821477600,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1821528000,
+   "open": 1821531600,
+   "close": 1821560400,
+   "extClose": 1821564000,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1821614400,
+   "open": 1821618000,
+   "close": 1821646800,
+   "extClose": 1821650400,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1821700800,
+   "open": 1821704400,
+   "close": 1821733200,
+   "extClose": 1821736800,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1821787200,
+   "open": 1821790800,
+   "close": 1821819600,
+   "extClose": 1821823200,
+   "closureTypeAfter": 2
+  },
+  {
+   "extOpen": 1822046400,
+   "open": 1822050000,
+   "close": 1822078800,
+   "extClose": 1822082400,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1822132800,
+   "open": 1822136400,
+   "close": 1822165200,
+   "extClose": 1822168800,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1822219200,
+   "open": 1822222800,
+   "close": 1822251600,
+   "extClose": 1822255200,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1822305600,
+   "open": 1822309200,
+   "close": 1822338000,
+   "extClose": 1822341600,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1822392000,
+   "open": 1822395600,
+   "close": 1822424400,
+   "extClose": 1822428000,
+   "closureTypeAfter": 2
+  },
+  {
+   "extOpen": 1822651200,
+   "open": 1822654800,
+   "close": 1822683600,
+   "extClose": 1822687200,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1822737600,
+   "open": 1822741200,
+   "close": 1822770000,
+   "extClose": 1822773600,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1822824000,
+   "open": 1822827600,
+   "close": 1822856400,
+   "extClose": 1822860000,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1822910400,
+   "open": 1822914000,
+   "close": 1822942800,
+   "extClose": 1822946400,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1822996800,
+   "open": 1823000400,
+   "close": 1823029200,
+   "extClose": 1823032800,
+   "closureTypeAfter": 3
+  },
+  {
+   "extOpen": 1823342400,
+   "open": 1823346000,
+   "close": 1823374800,
+   "extClose": 1823378400,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1823428800,
+   "open": 1823432400,
+   "close": 1823461200,
+   "extClose": 1823464800,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1823515200,
+   "open": 1823518800,
+   "close": 1823547600,
+   "extClose": 1823551200,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1823601600,
+   "open": 1823605200,
+   "close": 1823634000,
+   "extClose": 1823637600,
+   "closureTypeAfter": 2
+  },
+  {
+   "extOpen": 1823860800,
+   "open": 1823864400,
+   "close": 1823893200,
+   "extClose": 1823896800,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1823947200,
+   "open": 1823950800,
+   "close": 1823979600,
+   "extClose": 1823983200,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1824033600,
+   "open": 1824037200,
+   "close": 1824066000,
+   "extClose": 1824069600,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1824120000,
+   "open": 1824123600,
+   "close": 1824152400,
+   "extClose": 1824156000,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1824206400,
+   "open": 1824210000,
+   "close": 1824238800,
+   "extClose": 1824242400,
+   "closureTypeAfter": 2
+  },
+  {
+   "extOpen": 1824465600,
+   "open": 1824469200,
+   "close": 1824498000,
+   "extClose": 1824501600,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1824552000,
+   "open": 1824555600,
+   "close": 1824584400,
+   "extClose": 1824588000,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1824638400,
+   "open": 1824642000,
+   "close": 1824670800,
+   "extClose": 1824674400,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1824724800,
+   "open": 1824728400,
+   "close": 1824757200,
+   "extClose": 1824760800,
+   "closureTypeAfter": 1
+  },
+  {
+   "extOpen": 1824811200,
+   "open": 1824814800,
+   "close": 1824843600,
+   "extClose": 1824847200,
+   "closureTypeAfter": 2
+  }
+ ],
+ "sessionsAbiEncoded": "0x0000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000010f000000000000000000000000000000000000000000000000000000006abe4b40000000000000000000000000000000000000000000000000000000006abe5950000000000000000000000000000000000000000000000000000000006abec9d0000000000000000000000000000000000000000000000000000000006abed7e00000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006abf9cc0000000000000000000000000000000000000000000000000000000006abfaad0000000000000000000000000000000000000000000000000000000006ac01b50000000000000000000000000000000000000000000000000000000006ac029600000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000006ac39140000000000000000000000000000000000000000000000000000000006ac39f50000000000000000000000000000000000000000000000000000000006ac40fd0000000000000000000000000000000000000000000000000000000006ac41de00000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006ac4e2c0000000000000000000000000000000000000000000000000000000006ac4f0d0000000000000000000000000000000000000000000000000000000006ac56150000000000000000000000000000000000000000000000000000000006ac56f600000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006ac63440000000000000000000000000000000000000000000000000000000006ac64250000000000000000000000000000000000000000000000000000000006ac6b2d0000000000000000000000000000000000000000000000000000000006ac6c0e00000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006ac785c0000000000000000000000000000000000000000000000000000000006ac793d0000000000000000000000000000000000000000000000000000000006ac80450000000000000000000000000000000000000000000000000000000006ac812600000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006ac8d740000000000000000000000000000000000000000000000000000000006ac8e550000000000000000000000000000000000000000000000000000000006ac955d0000000000000000000000000000000000000000000000000000000006ac963e00000000000000000000000000000000000000000000000000000000000000003000000000000000000000000000000000000000000000000000000006ace1d40000000000000000000000000000000000000000000000000000000006ace2b50000000000000000000000000000000000000000000000000000000006ace9bd0000000000000000000000000000000000000000000000000000000006acea9e00000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006acf6ec0000000000000000000000000000000000000000000000000000000006acf7cd0000000000000000000000000000000000000000000000000000000006acfed50000000000000000000000000000000000000000000000000000000006acffb600000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006ad0c040000000000000000000000000000000000000000000000000000000006ad0ce50000000000000000000000000000000000000000000000000000000006ad13ed0000000000000000000000000000000000000000000000000000000006ad14ce00000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006ad211c0000000000000000000000000000000000000000000000000000000006ad21fd0000000000000000000000000000000000000000000000000000000006ad29050000000000000000000000000000000000000000000000000000000006ad29e600000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000006ad60640000000000000000000000000000000000000000000000000000000006ad61450000000000000000000000000000000000000000000000000000000006ad684d0000000000000000000000000000000000000000000000000000000006ad692e00000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006ad757c0000000000000000000000000000000000000000000000000000000006ad765d0000000000000000000000000000000000000000000000000000000006ad7d650000000000000000000000000000000000000000000000000000000006ad7e4600000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006ad8a940000000000000000000000000000000000000000000000000000000006ad8b750000000000000000000000000000000000000000000000000000000006ad927d0000000000000000000000000000000000000000000000000000000006ad935e00000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006ad9fac0000000000000000000000000000000000000000000000000000000006ada08d0000000000000000000000000000000000000000000000000000000006ada7950000000000000000000000000000000000000000000000000000000006ada87600000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006adb4c40000000000000000000000000000000000000000000000000000000006adb5a50000000000000000000000000000000000000000000000000000000006adbcad0000000000000000000000000000000000000000000000000000000006adbd8e00000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000006adf40c0000000000000000000000000000000000000000000000000000000006adf4ed0000000000000000000000000000000000000000000000000000000006adfbf50000000000000000000000000000000000000000000000000000000006adfcd600000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006ae09240000000000000000000000000000000000000000000000000000000006ae0a050000000000000000000000000000000000000000000000000000000006ae110d0000000000000000000000000000000000000000000000000000000006ae11ee00000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006ae1e3c0000000000000000000000000000000000000000000000000000000006ae1f1d0000000000000000000000000000000000000000000000000000000006ae26250000000000000000000000000000000000000000000000000000000006ae270600000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006ae33540000000000000000000000000000000000000000000000000000000006ae34350000000000000000000000000000000000000000000000000000000006ae3b3d0000000000000000000000000000000000000000000000000000000006ae3c1e00000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006ae486c0000000000000000000000000000000000000000000000000000000006ae494d0000000000000000000000000000000000000000000000000000000006ae50550000000000000000000000000000000000000000000000000000000006ae513600000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000006ae88950000000000000000000000000000000000000000000000000000000006ae89760000000000000000000000000000000000000000000000000000000006ae907e0000000000000000000000000000000000000000000000000000000006ae915f00000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006ae9dad0000000000000000000000000000000000000000000000000000000006ae9e8e0000000000000000000000000000000000000000000000000000000006aea5960000000000000000000000000000000000000000000000000000000006aea67700000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006aeb2c50000000000000000000000000000000000000000000000000000000006aeb3a60000000000000000000000000000000000000000000000000000000006aebaae0000000000000000000000000000000000000000000000000000000006aebb8f00000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006aec7dd0000000000000000000000000000000000000000000000000000000006aec8be0000000000000000000000000000000000000000000000000000000006aecfc60000000000000000000000000000000000000000000000000000000006aed0a700000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006aedcf50000000000000000000000000000000000000000000000000000000006aeddd60000000000000000000000000000000000000000000000000000000006aee4de0000000000000000000000000000000000000000000000000000000006aee5bf00000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000006af1c3d0000000000000000000000000000000000000000000000000000000006af1d1e0000000000000000000000000000000000000000000000000000000006af24260000000000000000000000000000000000000000000000000000000006af250700000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006af31550000000000000000000000000000000000000000000000000000000006af32360000000000000000000000000000000000000000000000000000000006af393e0000000000000000000000000000000000000000000000000000000006af3a1f00000000000000000000000000000000000000000000000000000000000000003000000000000000000000000000000000000000000000000000000006af5b850000000000000000000000000000000000000000000000000000000006af5c660000000000000000000000000000000000000000000000000000000006af636e0000000000000000000000000000000000000000000000000000000006af644f00000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006af709d0000000000000000000000000000000000000000000000000000000006af717e0000000000000000000000000000000000000000000000000000000006af78860000000000000000000000000000000000000000000000000000000006af796700000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000006afafe50000000000000000000000000000000000000000000000000000000006afb0c60000000000000000000000000000000000000000000000000000000006afb7ce0000000000000000000000000000000000000000000000000000000006afb8af00000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006afc4fd0000000000000000000000000000000000000000000000000000000006afc5de0000000000000000000000000000000000000000000000000000000006afcce60000000000000000000000000000000000000000000000000000000006afcdc700000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006afda150000000000000000000000000000000000000000000000000000000006afdaf60000000000000000000000000000000000000000000000000000000006afe1fe0000000000000000000000000000000000000000000000000000000006afe2df00000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006afef2d0000000000000000000000000000000000000000000000000000000006aff00e0000000000000000000000000000000000000000000000000000000006aff7160000000000000000000000000000000000000000000000000000000006aff7f700000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006b004450000000000000000000000000000000000000000000000000000000006b005260000000000000000000000000000000000000000000000000000000006b00c2e0000000000000000000000000000000000000000000000000000000006b00d0f00000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000006b0438d0000000000000000000000000000000000000000000000000000000006b0446e0000000000000000000000000000000000000000000000000000000006b04b760000000000000000000000000000000000000000000000000000000006b04c5700000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006b058a50000000000000000000000000000000000000000000000000000000006b059860000000000000000000000000000000000000000000000000000000006b0608e0000000000000000000000000000000000000000000000000000000006b0616f00000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006b06dbd0000000000000000000000000000000000000000000000000000000006b06e9e0000000000000000000000000000000000000000000000000000000006b075a60000000000000000000000000000000000000000000000000000000006b0768700000000000000000000000000000000000000000000000000000000000000003000000000000000000000000000000000000000000000000000000006b097ed0000000000000000000000000000000000000000000000000000000006b098ce0000000000000000000000000000000000000000000000000000000006b09fd60000000000000000000000000000000000000000000000000000000006b0a0b700000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000006b0d7350000000000000000000000000000000000000000000000000000000006b0d8160000000000000000000000000000000000000000000000000000000006b0df1e0000000000000000000000000000000000000000000000000000000006b0dfff00000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006b0ec4d0000000000000000000000000000000000000000000000000000000006b0ed2e0000000000000000000000000000000000000000000000000000000006b0f4360000000000000000000000000000000000000000000000000000000006b0f51700000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006b101650000000000000000000000000000000000000000000000000000000006b102460000000000000000000000000000000000000000000000000000000006b1094e0000000000000000000000000000000000000000000000000000000006b10a2f00000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006b1167d0000000000000000000000000000000000000000000000000000000006b1175e0000000000000000000000000000000000000000000000000000000006b11e660000000000000000000000000000000000000000000000000000000006b11f4700000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006b12b950000000000000000000000000000000000000000000000000000000006b12c760000000000000000000000000000000000000000000000000000000006b1337e0000000000000000000000000000000000000000000000000000000006b1345f00000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000006b16add0000000000000000000000000000000000000000000000000000000006b16bbe0000000000000000000000000000000000000000000000000000000006b172c60000000000000000000000000000000000000000000000000000000006b173a700000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006b17ff50000000000000000000000000000000000000000000000000000000006b180d60000000000000000000000000000000000000000000000000000000006b187de0000000000000000000000000000000000000000000000000000000006b188bf00000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006b1950d0000000000000000000000000000000000000000000000000000000006b195ee0000000000000000000000000000000000000000000000000000000006b19cf60000000000000000000000000000000000000000000000000000000006b19dd700000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006b1aa250000000000000000000000000000000000000000000000000000000006b1ab060000000000000000000000000000000000000000000000000000000006b1b20e0000000000000000000000000000000000000000000000000000000006b1b2ef00000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006b1bf3d0000000000000000000000000000000000000000000000000000000006b1c01e0000000000000000000000000000000000000000000000000000000006b1c7260000000000000000000000000000000000000000000000000000000006b1c80700000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000006b1fe850000000000000000000000000000000000000000000000000000000006b1ff660000000000000000000000000000000000000000000000000000000006b2066e0000000000000000000000000000000000000000000000000000000006b2074f00000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006b2139d0000000000000000000000000000000000000000000000000000000006b2147e0000000000000000000000000000000000000000000000000000000006b21b860000000000000000000000000000000000000000000000000000000006b21c6700000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006b228b50000000000000000000000000000000000000000000000000000000006b229960000000000000000000000000000000000000000000000000000000006b2309e0000000000000000000000000000000000000000000000000000000006b2317f00000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006b23dcd0000000000000000000000000000000000000000000000000000000006b23eae0000000000000000000000000000000000000000000000000000000006b245b60000000000000000000000000000000000000000000000000000000006b2469700000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006b252e50000000000000000000000000000000000000000000000000000000006b253c60000000000000000000000000000000000000000000000000000000006b25ace0000000000000000000000000000000000000000000000000000000006b25baf00000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000006b2922d0000000000000000000000000000000000000000000000000000000006b2930e0000000000000000000000000000000000000000000000000000000006b29a160000000000000000000000000000000000000000000000000000000006b29af700000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006b2a7450000000000000000000000000000000000000000000000000000000006b2a8260000000000000000000000000000000000000000000000000000000006b2af2e0000000000000000000000000000000000000000000000000000000006b2b00f00000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006b2bc5d0000000000000000000000000000000000000000000000000000000006b2bd3e0000000000000000000000000000000000000000000000000000000006b2c4460000000000000000000000000000000000000000000000000000000006b2c52700000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006b2d1750000000000000000000000000000000000000000000000000000000006b2d2560000000000000000000000000000000000000000000000000000000006b2d95e0000000000000000000000000000000000000000000000000000000006b2da3f00000000000000000000000000000000000000000000000000000000000000003000000000000000000000000000000000000000000000000000000006b325d50000000000000000000000000000000000000000000000000000000006b326b60000000000000000000000000000000000000000000000000000000006b32dbe0000000000000000000000000000000000000000000000000000000006b32e9f00000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006b33aed0000000000000000000000000000000000000000000000000000000006b33bce0000000000000000000000000000000000000000000000000000000006b342d60000000000000000000000000000000000000000000000000000000006b343b700000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006b350050000000000000000000000000000000000000000000000000000000006b350e60000000000000000000000000000000000000000000000000000000006b357ee0000000000000000000000000000000000000000000000000000000006b358cf00000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006b3651d0000000000000000000000000000000000000000000000000000000006b365fe0000000000000000000000000000000000000000000000000000000006b36d060000000000000000000000000000000000000000000000000000000006b36de700000000000000000000000000000000000000000000000000000000000000003000000000000000000000000000000000000000000000000000000006b3b97d0000000000000000000000000000000000000000000000000000000006b3ba5e0000000000000000000000000000000000000000000000000000000006b3c1660000000000000000000000000000000000000000000000000000000006b3c24700000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006b3ce950000000000000000000000000000000000000000000000000000000006b3cf760000000000000000000000000000000000000000000000000000000006b3d67e0000000000000000000000000000000000000000000000000000000006b3d75f00000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006b3e3ad0000000000000000000000000000000000000000000000000000000006b3e48e0000000000000000000000000000000000000000000000000000000006b3eb960000000000000000000000000000000000000000000000000000000006b3ec7700000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006b3f8c50000000000000000000000000000000000000000000000000000000006b3f9a60000000000000000000000000000000000000000000000000000000006b400ae0000000000000000000000000000000000000000000000000000000006b4018f00000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006b40ddd0000000000000000000000000000000000000000000000000000000006b40ebe0000000000000000000000000000000000000000000000000000000006b415c60000000000000000000000000000000000000000000000000000000006b416a700000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000006b44d250000000000000000000000000000000000000000000000000000000006b44e060000000000000000000000000000000000000000000000000000000006b4550e0000000000000000000000000000000000000000000000000000000006b455ef00000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006b4623d0000000000000000000000000000000000000000000000000000000006b4631e0000000000000000000000000000000000000000000000000000000006b46a260000000000000000000000000000000000000000000000000000000006b46b0700000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006b477550000000000000000000000000000000000000000000000000000000006b478360000000000000000000000000000000000000000000000000000000006b47f3e0000000000000000000000000000000000000000000000000000000006b4801f00000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006b48c6d0000000000000000000000000000000000000000000000000000000006b48d4e0000000000000000000000000000000000000000000000000000000006b494560000000000000000000000000000000000000000000000000000000006b4953700000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006b4a1850000000000000000000000000000000000000000000000000000000006b4a2660000000000000000000000000000000000000000000000000000000006b4a96e0000000000000000000000000000000000000000000000000000000006b4aa4f00000000000000000000000000000000000000000000000000000000000000003000000000000000000000000000000000000000000000000000000006b4f5e50000000000000000000000000000000000000000000000000000000006b4f6c60000000000000000000000000000000000000000000000000000000006b4fdce0000000000000000000000000000000000000000000000000000000006b4feaf00000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006b50afd0000000000000000000000000000000000000000000000000000000006b50bde0000000000000000000000000000000000000000000000000000000006b512e60000000000000000000000000000000000000000000000000000000006b513c700000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006b520150000000000000000000000000000000000000000000000000000000006b520f60000000000000000000000000000000000000000000000000000000006b527fe0000000000000000000000000000000000000000000000000000000006b528df00000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006b5352d0000000000000000000000000000000000000000000000000000000006b5360e0000000000000000000000000000000000000000000000000000000006b53d160000000000000000000000000000000000000000000000000000000006b53df700000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000006b574750000000000000000000000000000000000000000000000000000000006b575560000000000000000000000000000000000000000000000000000000006b57c5e0000000000000000000000000000000000000000000000000000000006b57d3f00000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006b5898d0000000000000000000000000000000000000000000000000000000006b58a6e0000000000000000000000000000000000000000000000000000000006b591760000000000000000000000000000000000000000000000000000000006b5925700000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006b59ea50000000000000000000000000000000000000000000000000000000006b59f860000000000000000000000000000000000000000000000000000000006b5a68e0000000000000000000000000000000000000000000000000000000006b5a76f00000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006b5b3bd0000000000000000000000000000000000000000000000000000000006b5b49e0000000000000000000000000000000000000000000000000000000006b5bba60000000000000000000000000000000000000000000000000000000006b5bc8700000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006b5c8d50000000000000000000000000000000000000000000000000000000006b5c9b60000000000000000000000000000000000000000000000000000000006b5d0be0000000000000000000000000000000000000000000000000000000006b5d19f00000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000006b6081d0000000000000000000000000000000000000000000000000000000006b608fe0000000000000000000000000000000000000000000000000000000006b610060000000000000000000000000000000000000000000000000000000006b610e700000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006b61d350000000000000000000000000000000000000000000000000000000006b61e160000000000000000000000000000000000000000000000000000000006b6251e0000000000000000000000000000000000000000000000000000000006b625ff00000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006b6324d0000000000000000000000000000000000000000000000000000000006b6332e0000000000000000000000000000000000000000000000000000000006b63a360000000000000000000000000000000000000000000000000000000006b63b1700000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006b647650000000000000000000000000000000000000000000000000000000006b648460000000000000000000000000000000000000000000000000000000006b64f4e0000000000000000000000000000000000000000000000000000000006b6502f00000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006b65c7d0000000000000000000000000000000000000000000000000000000006b65d5e0000000000000000000000000000000000000000000000000000000006b664660000000000000000000000000000000000000000000000000000000006b6654700000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000006b69bc50000000000000000000000000000000000000000000000000000000006b69ca60000000000000000000000000000000000000000000000000000000006b6a3ae0000000000000000000000000000000000000000000000000000000006b6a48f00000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006b6b0dd0000000000000000000000000000000000000000000000000000000006b6b1be0000000000000000000000000000000000000000000000000000000006b6b8c60000000000000000000000000000000000000000000000000000000006b6b9a700000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006b6c5f50000000000000000000000000000000000000000000000000000000006b6c6d60000000000000000000000000000000000000000000000000000000006b6cdde0000000000000000000000000000000000000000000000000000000006b6cebf00000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006b6db0d0000000000000000000000000000000000000000000000000000000006b6dbee0000000000000000000000000000000000000000000000000000000006b6e2f60000000000000000000000000000000000000000000000000000000006b6e3d700000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006b6f0250000000000000000000000000000000000000000000000000000000006b6f1060000000000000000000000000000000000000000000000000000000006b6f80e0000000000000000000000000000000000000000000000000000000006b6f8ef00000000000000000000000000000000000000000000000000000000000000003000000000000000000000000000000000000000000000000000000006b744850000000000000000000000000000000000000000000000000000000006b745660000000000000000000000000000000000000000000000000000000006b74c6e0000000000000000000000000000000000000000000000000000000006b74d4f00000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006b7599d0000000000000000000000000000000000000000000000000000000006b75a7e0000000000000000000000000000000000000000000000000000000006b761860000000000000000000000000000000000000000000000000000000006b7626700000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006b76eb50000000000000000000000000000000000000000000000000000000006b76f960000000000000000000000000000000000000000000000000000000006b7769e0000000000000000000000000000000000000000000000000000000006b7777f00000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006b783cd0000000000000000000000000000000000000000000000000000000006b784ae0000000000000000000000000000000000000000000000000000000006b78bb60000000000000000000000000000000000000000000000000000000006b78c9700000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000006b7c3150000000000000000000000000000000000000000000000000000000006b7c3f60000000000000000000000000000000000000000000000000000000006b7cafe0000000000000000000000000000000000000000000000000000000006b7cbdf00000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006b7d82d0000000000000000000000000000000000000000000000000000000006b7d90e0000000000000000000000000000000000000000000000000000000006b7e0160000000000000000000000000000000000000000000000000000000006b7e0f700000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006b7ed450000000000000000000000000000000000000000000000000000000006b7ee260000000000000000000000000000000000000000000000000000000006b7f52e0000000000000000000000000000000000000000000000000000000006b7f60f00000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006b8025d0000000000000000000000000000000000000000000000000000000006b8033e0000000000000000000000000000000000000000000000000000000006b80a460000000000000000000000000000000000000000000000000000000006b80b2700000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006b817750000000000000000000000000000000000000000000000000000000006b818560000000000000000000000000000000000000000000000000000000006b81f5e0000000000000000000000000000000000000000000000000000000006b8203f00000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000006b856bd0000000000000000000000000000000000000000000000000000000006b8579e0000000000000000000000000000000000000000000000000000000006b85ea60000000000000000000000000000000000000000000000000000000006b85f8700000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006b86bd50000000000000000000000000000000000000000000000000000000006b86cb60000000000000000000000000000000000000000000000000000000006b873be0000000000000000000000000000000000000000000000000000000006b8749f00000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006b880ed0000000000000000000000000000000000000000000000000000000006b881ce0000000000000000000000000000000000000000000000000000000006b888d60000000000000000000000000000000000000000000000000000000006b889b700000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006b896050000000000000000000000000000000000000000000000000000000006b896e60000000000000000000000000000000000000000000000000000000006b89dee0000000000000000000000000000000000000000000000000000000006b89ecf00000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006b8ab1d0000000000000000000000000000000000000000000000000000000006b8abfe0000000000000000000000000000000000000000000000000000000006b8b3060000000000000000000000000000000000000000000000000000000006b8b3e700000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000006b8ea650000000000000000000000000000000000000000000000000000000006b8eb460000000000000000000000000000000000000000000000000000000006b8f24e0000000000000000000000000000000000000000000000000000000006b8f32f00000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006b8ff7d0000000000000000000000000000000000000000000000000000000006b9005e0000000000000000000000000000000000000000000000000000000006b907660000000000000000000000000000000000000000000000000000000006b9084700000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006b914950000000000000000000000000000000000000000000000000000000006b915760000000000000000000000000000000000000000000000000000000006b91c7e0000000000000000000000000000000000000000000000000000000006b91d5f00000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006b929ad0000000000000000000000000000000000000000000000000000000006b92a8e0000000000000000000000000000000000000000000000000000000006b931960000000000000000000000000000000000000000000000000000000006b9327700000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006b93ec50000000000000000000000000000000000000000000000000000000006b93fa60000000000000000000000000000000000000000000000000000000006b946ae0000000000000000000000000000000000000000000000000000000006b9478f00000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000006b97d2c0000000000000000000000000000000000000000000000000000000006b97e0d0000000000000000000000000000000000000000000000000000000006b985150000000000000000000000000000000000000000000000000000000006b985f600000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006b992440000000000000000000000000000000000000000000000000000000006b993250000000000000000000000000000000000000000000000000000000006b99a2d0000000000000000000000000000000000000000000000000000000006b99b0e00000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006b9a75c0000000000000000000000000000000000000000000000000000000006b9a83d0000000000000000000000000000000000000000000000000000000006b9af450000000000000000000000000000000000000000000000000000000006b9b02600000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006b9bc740000000000000000000000000000000000000000000000000000000006b9bd550000000000000000000000000000000000000000000000000000000006b9c45d0000000000000000000000000000000000000000000000000000000006b9c53e00000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006b9d18c0000000000000000000000000000000000000000000000000000000006b9d26d0000000000000000000000000000000000000000000000000000000006b9d9750000000000000000000000000000000000000000000000000000000006b9da5600000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000006ba10d40000000000000000000000000000000000000000000000000000000006ba11b50000000000000000000000000000000000000000000000000000000006ba18bd0000000000000000000000000000000000000000000000000000000006ba199e00000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006ba25ec0000000000000000000000000000000000000000000000000000000006ba26cd0000000000000000000000000000000000000000000000000000000006ba2dd50000000000000000000000000000000000000000000000000000000006ba2eb600000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006ba3b040000000000000000000000000000000000000000000000000000000006ba3be50000000000000000000000000000000000000000000000000000000006ba42ed0000000000000000000000000000000000000000000000000000000006ba43ce00000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006ba501c0000000000000000000000000000000000000000000000000000000006ba50fd0000000000000000000000000000000000000000000000000000000006ba58050000000000000000000000000000000000000000000000000000000006ba58e600000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006ba65340000000000000000000000000000000000000000000000000000000006ba66150000000000000000000000000000000000000000000000000000000006ba6d1d0000000000000000000000000000000000000000000000000000000006ba6dfe00000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000006baa47c0000000000000000000000000000000000000000000000000000000006baa55d0000000000000000000000000000000000000000000000000000000006baac650000000000000000000000000000000000000000000000000000000006baad4600000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006bab9940000000000000000000000000000000000000000000000000000000006baba750000000000000000000000000000000000000000000000000000000006bac17d0000000000000000000000000000000000000000000000000000000006bac25e00000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006baceac0000000000000000000000000000000000000000000000000000000006bacf8d0000000000000000000000000000000000000000000000000000000006bad6950000000000000000000000000000000000000000000000000000000006bad77600000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006bae3c40000000000000000000000000000000000000000000000000000000006bae4a50000000000000000000000000000000000000000000000000000000006baebad0000000000000000000000000000000000000000000000000000000006baec8e00000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006baf8dc0000000000000000000000000000000000000000000000000000000006baf9bd0000000000000000000000000000000000000000000000000000000006bb00c50000000000000000000000000000000000000000000000000000000006bb01a600000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000006bb38240000000000000000000000000000000000000000000000000000000006bb39050000000000000000000000000000000000000000000000000000000006bb400d0000000000000000000000000000000000000000000000000000000006bb40ee00000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006bb4d3c0000000000000000000000000000000000000000000000000000000006bb4e1d0000000000000000000000000000000000000000000000000000000006bb55250000000000000000000000000000000000000000000000000000000006bb560600000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006bb62540000000000000000000000000000000000000000000000000000000006bb63350000000000000000000000000000000000000000000000000000000006bb6a3d0000000000000000000000000000000000000000000000000000000006bb6b1e00000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006bb776c0000000000000000000000000000000000000000000000000000000006bb784d0000000000000000000000000000000000000000000000000000000006bb7f550000000000000000000000000000000000000000000000000000000006bb803600000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006bb8c840000000000000000000000000000000000000000000000000000000006bb8d650000000000000000000000000000000000000000000000000000000006bb946d0000000000000000000000000000000000000000000000000000000006bb954e00000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000006bbcbcc0000000000000000000000000000000000000000000000000000000006bbccad0000000000000000000000000000000000000000000000000000000006bbd3b50000000000000000000000000000000000000000000000000000000006bbd49600000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006bbe0e40000000000000000000000000000000000000000000000000000000006bbe1c50000000000000000000000000000000000000000000000000000000006bbe8cd0000000000000000000000000000000000000000000000000000000006bbe9ae00000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006bbf5fc0000000000000000000000000000000000000000000000000000000006bbf6dd0000000000000000000000000000000000000000000000000000000006bbfde50000000000000000000000000000000000000000000000000000000006bbfec600000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006bc0b140000000000000000000000000000000000000000000000000000000006bc0bf50000000000000000000000000000000000000000000000000000000006bc12fd0000000000000000000000000000000000000000000000000000000006bc13de00000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006bc202c0000000000000000000000000000000000000000000000000000000006bc210d0000000000000000000000000000000000000000000000000000000006bc28150000000000000000000000000000000000000000000000000000000006bc28f600000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000006bc5f740000000000000000000000000000000000000000000000000000000006bc60550000000000000000000000000000000000000000000000000000000006bc675d0000000000000000000000000000000000000000000000000000000006bc683e00000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006bc748c0000000000000000000000000000000000000000000000000000000006bc756d0000000000000000000000000000000000000000000000000000000006bc7c750000000000000000000000000000000000000000000000000000000006bc7d5600000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006bc89a40000000000000000000000000000000000000000000000000000000006bc8a850000000000000000000000000000000000000000000000000000000006bc918d0000000000000000000000000000000000000000000000000000000006bc926e00000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006bc9ebc0000000000000000000000000000000000000000000000000000000006bc9f9d0000000000000000000000000000000000000000000000000000000006bca6a50000000000000000000000000000000000000000000000000000000006bca78600000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006bcb3d40000000000000000000000000000000000000000000000000000000006bcb4b50000000000000000000000000000000000000000000000000000000006bcbbbd0000000000000000000000000000000000000000000000000000000006bcbc9e00000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000006bcf31c0000000000000000000000000000000000000000000000000000000006bcf3fd0000000000000000000000000000000000000000000000000000000006bcfb050000000000000000000000000000000000000000000000000000000006bcfbe600000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006bd08340000000000000000000000000000000000000000000000000000000006bd09150000000000000000000000000000000000000000000000000000000006bd101d0000000000000000000000000000000000000000000000000000000006bd10fe00000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006bd1d4c0000000000000000000000000000000000000000000000000000000006bd1e2d0000000000000000000000000000000000000000000000000000000006bd25350000000000000000000000000000000000000000000000000000000006bd261600000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006bd32640000000000000000000000000000000000000000000000000000000006bd33450000000000000000000000000000000000000000000000000000000006bd3a4d0000000000000000000000000000000000000000000000000000000006bd3b2e00000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006bd477c0000000000000000000000000000000000000000000000000000000006bd485d0000000000000000000000000000000000000000000000000000000006bd4f650000000000000000000000000000000000000000000000000000000006bd504600000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000006bd86c40000000000000000000000000000000000000000000000000000000006bd87a50000000000000000000000000000000000000000000000000000000006bd8ead0000000000000000000000000000000000000000000000000000000006bd8f8e00000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006bd9bdc0000000000000000000000000000000000000000000000000000000006bd9cbd0000000000000000000000000000000000000000000000000000000006bda3c50000000000000000000000000000000000000000000000000000000006bda4a600000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006bdb0f40000000000000000000000000000000000000000000000000000000006bdb1d50000000000000000000000000000000000000000000000000000000006bdb8dd0000000000000000000000000000000000000000000000000000000006bdb9be00000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006bdc60c0000000000000000000000000000000000000000000000000000000006bdc6ed0000000000000000000000000000000000000000000000000000000006bdcdf50000000000000000000000000000000000000000000000000000000006bdced600000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006bddb240000000000000000000000000000000000000000000000000000000006bddc050000000000000000000000000000000000000000000000000000000006bde30d0000000000000000000000000000000000000000000000000000000006bde3ee00000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000006be1a6c0000000000000000000000000000000000000000000000000000000006be1b4d0000000000000000000000000000000000000000000000000000000006be22550000000000000000000000000000000000000000000000000000000006be233600000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006be2f840000000000000000000000000000000000000000000000000000000006be30650000000000000000000000000000000000000000000000000000000006be376d0000000000000000000000000000000000000000000000000000000006be384e00000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006be449c0000000000000000000000000000000000000000000000000000000006be457d0000000000000000000000000000000000000000000000000000000006be4c850000000000000000000000000000000000000000000000000000000006be4d6600000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006be59b40000000000000000000000000000000000000000000000000000000006be5a950000000000000000000000000000000000000000000000000000000006be619d0000000000000000000000000000000000000000000000000000000006be627e00000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006be6ecc0000000000000000000000000000000000000000000000000000000006be6fad0000000000000000000000000000000000000000000000000000000006be76b50000000000000000000000000000000000000000000000000000000006be779600000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000006beae140000000000000000000000000000000000000000000000000000000006beaef50000000000000000000000000000000000000000000000000000000006beb5fd0000000000000000000000000000000000000000000000000000000006beb6de00000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006bec32c0000000000000000000000000000000000000000000000000000000006bec40d0000000000000000000000000000000000000000000000000000000006becb150000000000000000000000000000000000000000000000000000000006becbf600000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006bed8440000000000000000000000000000000000000000000000000000000006bed9250000000000000000000000000000000000000000000000000000000006bee02d0000000000000000000000000000000000000000000000000000000006bee10e00000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006beed5c0000000000000000000000000000000000000000000000000000000006beee3d0000000000000000000000000000000000000000000000000000000006bef5450000000000000000000000000000000000000000000000000000000006bef62600000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006bf02740000000000000000000000000000000000000000000000000000000006bf03550000000000000000000000000000000000000000000000000000000006bf0a5d0000000000000000000000000000000000000000000000000000000006bf0b3e00000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000006bf41bc0000000000000000000000000000000000000000000000000000000006bf429d0000000000000000000000000000000000000000000000000000000006bf49a50000000000000000000000000000000000000000000000000000000006bf4a8600000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006bf56d40000000000000000000000000000000000000000000000000000000006bf57b50000000000000000000000000000000000000000000000000000000006bf5ebd0000000000000000000000000000000000000000000000000000000006bf5f9e00000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006bf6bec0000000000000000000000000000000000000000000000000000000006bf6ccd0000000000000000000000000000000000000000000000000000000006bf73d50000000000000000000000000000000000000000000000000000000006bf74b600000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006bf81040000000000000000000000000000000000000000000000000000000006bf81e50000000000000000000000000000000000000000000000000000000006bf88ed0000000000000000000000000000000000000000000000000000000006bf89ce00000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006bf961c0000000000000000000000000000000000000000000000000000000006bf96fd0000000000000000000000000000000000000000000000000000000006bf9e050000000000000000000000000000000000000000000000000000000006bf9ee600000000000000000000000000000000000000000000000000000000000000003000000000000000000000000000000000000000000000000000000006bfea7c0000000000000000000000000000000000000000000000000000000006bfeb5d0000000000000000000000000000000000000000000000000000000006bff2650000000000000000000000000000000000000000000000000000000006bff34600000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006bfff940000000000000000000000000000000000000000000000000000000006c000750000000000000000000000000000000000000000000000000000000006c0077d0000000000000000000000000000000000000000000000000000000006c0085e00000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006c014ac0000000000000000000000000000000000000000000000000000000006c0158d0000000000000000000000000000000000000000000000000000000006c01c950000000000000000000000000000000000000000000000000000000006c01d7600000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006c029c40000000000000000000000000000000000000000000000000000000006c02aa50000000000000000000000000000000000000000000000000000000006c031ad0000000000000000000000000000000000000000000000000000000006c0328e00000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000006c0690c0000000000000000000000000000000000000000000000000000000006c069ed0000000000000000000000000000000000000000000000000000000006c070f50000000000000000000000000000000000000000000000000000000006c071d600000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006c07e240000000000000000000000000000000000000000000000000000000006c07f050000000000000000000000000000000000000000000000000000000006c0860d0000000000000000000000000000000000000000000000000000000006c086ee00000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006c0933c0000000000000000000000000000000000000000000000000000000006c0941d0000000000000000000000000000000000000000000000000000000006c09b250000000000000000000000000000000000000000000000000000000006c09c0600000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006c0a8540000000000000000000000000000000000000000000000000000000006c0a9350000000000000000000000000000000000000000000000000000000006c0b03d0000000000000000000000000000000000000000000000000000000006c0b11e00000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006c0bd6c0000000000000000000000000000000000000000000000000000000006c0be4d0000000000000000000000000000000000000000000000000000000006c0c5550000000000000000000000000000000000000000000000000000000006c0c63600000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000006c0fcb40000000000000000000000000000000000000000000000000000000006c0fd950000000000000000000000000000000000000000000000000000000006c1049d0000000000000000000000000000000000000000000000000000000006c1057e00000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006c111cc0000000000000000000000000000000000000000000000000000000006c112ad0000000000000000000000000000000000000000000000000000000006c119b50000000000000000000000000000000000000000000000000000000006c11a9600000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006c126e40000000000000000000000000000000000000000000000000000000006c127c50000000000000000000000000000000000000000000000000000000006c12ecd0000000000000000000000000000000000000000000000000000000006c12fae00000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006c13bfc0000000000000000000000000000000000000000000000000000000006c13cdd0000000000000000000000000000000000000000000000000000000006c143e50000000000000000000000000000000000000000000000000000000006c144c600000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006c151140000000000000000000000000000000000000000000000000000000006c151f50000000000000000000000000000000000000000000000000000000006c158fd0000000000000000000000000000000000000000000000000000000006c159de00000000000000000000000000000000000000000000000000000000000000003000000000000000000000000000000000000000000000000000000006c1905c0000000000000000000000000000000000000000000000000000000006c1913d0000000000000000000000000000000000000000000000000000000006c198450000000000000000000000000000000000000000000000000000000006c1992600000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006c1a5740000000000000000000000000000000000000000000000000000000006c1a6550000000000000000000000000000000000000000000000000000000006c1ad5d0000000000000000000000000000000000000000000000000000000006c1ae3e00000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006c1ba8c0000000000000000000000000000000000000000000000000000000006c1bb6d0000000000000000000000000000000000000000000000000000000006c1c2750000000000000000000000000000000000000000000000000000000006c1c35600000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006c1cfa40000000000000000000000000000000000000000000000000000000006c1d0850000000000000000000000000000000000000000000000000000000006c1d78d0000000000000000000000000000000000000000000000000000000006c1d86e00000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006c1e4bc0000000000000000000000000000000000000000000000000000000006c1e59d0000000000000000000000000000000000000000000000000000000006c1eca50000000000000000000000000000000000000000000000000000000006c1ed8600000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000006c224040000000000000000000000000000000000000000000000000000000006c224e50000000000000000000000000000000000000000000000000000000006c22bed0000000000000000000000000000000000000000000000000000000006c22cce00000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006c2391c0000000000000000000000000000000000000000000000000000000006c239fd0000000000000000000000000000000000000000000000000000000006c241050000000000000000000000000000000000000000000000000000000006c241e600000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006c24e340000000000000000000000000000000000000000000000000000000006c24f150000000000000000000000000000000000000000000000000000000006c2561d0000000000000000000000000000000000000000000000000000000006c256fe00000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006c2634c0000000000000000000000000000000000000000000000000000000006c2642d0000000000000000000000000000000000000000000000000000000006c26b350000000000000000000000000000000000000000000000000000000006c26c1600000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006c278640000000000000000000000000000000000000000000000000000000006c279450000000000000000000000000000000000000000000000000000000006c2804d0000000000000000000000000000000000000000000000000000000006c2812e00000000000000000000000000000000000000000000000000000000000000003000000000000000000000000000000000000000000000000000000006c2ccc40000000000000000000000000000000000000000000000000000000006c2cda50000000000000000000000000000000000000000000000000000000006c2d4ad0000000000000000000000000000000000000000000000000000000006c2d58e00000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006c2e1dc0000000000000000000000000000000000000000000000000000000006c2e2bd0000000000000000000000000000000000000000000000000000000006c2e9c50000000000000000000000000000000000000000000000000000000006c2eaa600000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006c2f6f40000000000000000000000000000000000000000000000000000000006c2f7d50000000000000000000000000000000000000000000000000000000006c2fedd0000000000000000000000000000000000000000000000000000000006c2ffbe00000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006c30c0c0000000000000000000000000000000000000000000000000000000006c30ced0000000000000000000000000000000000000000000000000000000006c313f50000000000000000000000000000000000000000000000000000000006c314d600000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000006c34b540000000000000000000000000000000000000000000000000000000006c34c350000000000000000000000000000000000000000000000000000000006c3533d0000000000000000000000000000000000000000000000000000000006c3541e00000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006c3606c0000000000000000000000000000000000000000000000000000000006c3614d0000000000000000000000000000000000000000000000000000000006c368550000000000000000000000000000000000000000000000000000000006c3693600000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006c375840000000000000000000000000000000000000000000000000000000006c376650000000000000000000000000000000000000000000000000000000006c37d6d0000000000000000000000000000000000000000000000000000000006c37e4e00000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006c38a9c0000000000000000000000000000000000000000000000000000000006c38b7d0000000000000000000000000000000000000000000000000000000006c392850000000000000000000000000000000000000000000000000000000006c3936600000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006c39fb40000000000000000000000000000000000000000000000000000000006c3a0950000000000000000000000000000000000000000000000000000000006c3a79d0000000000000000000000000000000000000000000000000000000006c3a87e00000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000006c3defc0000000000000000000000000000000000000000000000000000000006c3dfdd0000000000000000000000000000000000000000000000000000000006c3e6e50000000000000000000000000000000000000000000000000000000006c3e7c600000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006c3f4140000000000000000000000000000000000000000000000000000000006c3f4f50000000000000000000000000000000000000000000000000000000006c3fbfd0000000000000000000000000000000000000000000000000000000006c3fcde00000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006c4092c0000000000000000000000000000000000000000000000000000000006c40a0d0000000000000000000000000000000000000000000000000000000006c411150000000000000000000000000000000000000000000000000000000006c411f600000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006c41e440000000000000000000000000000000000000000000000000000000006c41f250000000000000000000000000000000000000000000000000000000006c4262d0000000000000000000000000000000000000000000000000000000006c4270e00000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006c4335c0000000000000000000000000000000000000000000000000000000006c4343d0000000000000000000000000000000000000000000000000000000006c43b450000000000000000000000000000000000000000000000000000000006c43c2600000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000006c472a40000000000000000000000000000000000000000000000000000000006c473850000000000000000000000000000000000000000000000000000000006c47a8d0000000000000000000000000000000000000000000000000000000006c47b6e00000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006c487bc0000000000000000000000000000000000000000000000000000000006c4889d0000000000000000000000000000000000000000000000000000000006c48fa50000000000000000000000000000000000000000000000000000000006c4908600000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006c49cd40000000000000000000000000000000000000000000000000000000006c49db50000000000000000000000000000000000000000000000000000000006c4a4bd0000000000000000000000000000000000000000000000000000000006c4a59e00000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006c4b1ec0000000000000000000000000000000000000000000000000000000006c4b2cd0000000000000000000000000000000000000000000000000000000006c4b9d50000000000000000000000000000000000000000000000000000000006c4bab600000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006c4c7040000000000000000000000000000000000000000000000000000000006c4c7e50000000000000000000000000000000000000000000000000000000006c4ceed0000000000000000000000000000000000000000000000000000000006c4cfce00000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000006c5064c0000000000000000000000000000000000000000000000000000000006c5072d0000000000000000000000000000000000000000000000000000000006c50e350000000000000000000000000000000000000000000000000000000006c50f1600000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006c51b640000000000000000000000000000000000000000000000000000000006c51c450000000000000000000000000000000000000000000000000000000006c5234d0000000000000000000000000000000000000000000000000000000006c5242e00000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006c5307c0000000000000000000000000000000000000000000000000000000006c5315d0000000000000000000000000000000000000000000000000000000006c538650000000000000000000000000000000000000000000000000000000006c5394600000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006c545940000000000000000000000000000000000000000000000000000000006c546750000000000000000000000000000000000000000000000000000000006c54d7d0000000000000000000000000000000000000000000000000000000006c54e5e00000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006c55aac0000000000000000000000000000000000000000000000000000000006c55b8d0000000000000000000000000000000000000000000000000000000006c562950000000000000000000000000000000000000000000000000000000006c5637600000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000006c599f40000000000000000000000000000000000000000000000000000000006c59ad50000000000000000000000000000000000000000000000000000000006c5a1dd0000000000000000000000000000000000000000000000000000000006c5a2be00000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006c5af0c0000000000000000000000000000000000000000000000000000000006c5afed0000000000000000000000000000000000000000000000000000000006c5b6f50000000000000000000000000000000000000000000000000000000006c5b7d600000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006c5c4240000000000000000000000000000000000000000000000000000000006c5c5050000000000000000000000000000000000000000000000000000000006c5cc0d0000000000000000000000000000000000000000000000000000000006c5ccee00000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006c5d93c0000000000000000000000000000000000000000000000000000000006c5da1d0000000000000000000000000000000000000000000000000000000006c5e1250000000000000000000000000000000000000000000000000000000006c5e20600000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006c5ee540000000000000000000000000000000000000000000000000000000006c5ef350000000000000000000000000000000000000000000000000000000006c5f63d0000000000000000000000000000000000000000000000000000000006c5f71e00000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000006c62d9c0000000000000000000000000000000000000000000000000000000006c62e7d0000000000000000000000000000000000000000000000000000000006c635850000000000000000000000000000000000000000000000000000000006c6366600000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006c642b40000000000000000000000000000000000000000000000000000000006c643950000000000000000000000000000000000000000000000000000000006c64a9d0000000000000000000000000000000000000000000000000000000006c64b7e00000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006c657cc0000000000000000000000000000000000000000000000000000000006c658ad0000000000000000000000000000000000000000000000000000000006c65fb50000000000000000000000000000000000000000000000000000000006c6609600000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006c66ce40000000000000000000000000000000000000000000000000000000006c66dc50000000000000000000000000000000000000000000000000000000006c674cd0000000000000000000000000000000000000000000000000000000006c675ae00000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006c681fc0000000000000000000000000000000000000000000000000000000006c682dd0000000000000000000000000000000000000000000000000000000006c689e50000000000000000000000000000000000000000000000000000000006c68ac600000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000006c6c1440000000000000000000000000000000000000000000000000000000006c6c2250000000000000000000000000000000000000000000000000000000006c6c92d0000000000000000000000000000000000000000000000000000000006c6ca0e00000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006c6d65c0000000000000000000000000000000000000000000000000000000006c6d73d0000000000000000000000000000000000000000000000000000000006c6de450000000000000000000000000000000000000000000000000000000006c6df2600000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006c6eb740000000000000000000000000000000000000000000000000000000006c6ec550000000000000000000000000000000000000000000000000000000006c6f35d0000000000000000000000000000000000000000000000000000000006c6f43e00000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006c7008c0000000000000000000000000000000000000000000000000000000006c7016d0000000000000000000000000000000000000000000000000000000006c708750000000000000000000000000000000000000000000000000000000006c7095600000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006c715a40000000000000000000000000000000000000000000000000000000006c716850000000000000000000000000000000000000000000000000000000006c71d8d0000000000000000000000000000000000000000000000000000000006c71e6e00000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000006c754ec0000000000000000000000000000000000000000000000000000000006c755cd0000000000000000000000000000000000000000000000000000000006c75cd50000000000000000000000000000000000000000000000000000000006c75db600000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006c76a040000000000000000000000000000000000000000000000000000000006c76ae50000000000000000000000000000000000000000000000000000000006c771ed0000000000000000000000000000000000000000000000000000000006c772ce00000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006c77f1c0000000000000000000000000000000000000000000000000000000006c77ffd0000000000000000000000000000000000000000000000000000000006c787050000000000000000000000000000000000000000000000000000000006c787e600000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006c794340000000000000000000000000000000000000000000000000000000006c795150000000000000000000000000000000000000000000000000000000006c79c1d0000000000000000000000000000000000000000000000000000000006c79cfe00000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006c7a94c0000000000000000000000000000000000000000000000000000000006c7aa2d0000000000000000000000000000000000000000000000000000000006c7b1350000000000000000000000000000000000000000000000000000000006c7b21600000000000000000000000000000000000000000000000000000000000000003000000000000000000000000000000000000000000000000000000006c7fdac0000000000000000000000000000000000000000000000000000000006c7fe8d0000000000000000000000000000000000000000000000000000000006c805950000000000000000000000000000000000000000000000000000000006c8067600000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006c812c40000000000000000000000000000000000000000000000000000000006c813a50000000000000000000000000000000000000000000000000000000006c81aad0000000000000000000000000000000000000000000000000000000006c81b8e00000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006c827dc0000000000000000000000000000000000000000000000000000000006c828bd0000000000000000000000000000000000000000000000000000000006c82fc50000000000000000000000000000000000000000000000000000000006c830a600000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006c83cf40000000000000000000000000000000000000000000000000000000006c83dd50000000000000000000000000000000000000000000000000000000006c844dd0000000000000000000000000000000000000000000000000000000006c845be00000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000006c87c3c0000000000000000000000000000000000000000000000000000000006c87d1d0000000000000000000000000000000000000000000000000000000006c884250000000000000000000000000000000000000000000000000000000006c8850600000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006c891540000000000000000000000000000000000000000000000000000000006c892350000000000000000000000000000000000000000000000000000000006c8993d0000000000000000000000000000000000000000000000000000000006c89a1e00000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006c8a66c0000000000000000000000000000000000000000000000000000000006c8a74d0000000000000000000000000000000000000000000000000000000006c8ae550000000000000000000000000000000000000000000000000000000006c8af3600000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006c8bb840000000000000000000000000000000000000000000000000000000006c8bc650000000000000000000000000000000000000000000000000000000006c8c36d0000000000000000000000000000000000000000000000000000000006c8c44e00000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006c8d09c0000000000000000000000000000000000000000000000000000000006c8d17d0000000000000000000000000000000000000000000000000000000006c8d8850000000000000000000000000000000000000000000000000000000006c8d96600000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000006c90fe40000000000000000000000000000000000000000000000000000000006c910c50000000000000000000000000000000000000000000000000000000006c917cd0000000000000000000000000000000000000000000000000000000006c918ae00000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006c924fc0000000000000000000000000000000000000000000000000000000006c925dd0000000000000000000000000000000000000000000000000000000006c92ce50000000000000000000000000000000000000000000000000000000006c92dc600000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006c93a140000000000000000000000000000000000000000000000000000000006c93af50000000000000000000000000000000000000000000000000000000006c941fd0000000000000000000000000000000000000000000000000000000006c942de00000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006c94f2c0000000000000000000000000000000000000000000000000000000006c9500d0000000000000000000000000000000000000000000000000000000006c957150000000000000000000000000000000000000000000000000000000006c957f600000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006c964440000000000000000000000000000000000000000000000000000000006c965250000000000000000000000000000000000000000000000000000000006c96c2d0000000000000000000000000000000000000000000000000000000006c96d0e00000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000006c9a38c0000000000000000000000000000000000000000000000000000000006c9a46d0000000000000000000000000000000000000000000000000000000006c9ab750000000000000000000000000000000000000000000000000000000006c9ac5600000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006c9b8a40000000000000000000000000000000000000000000000000000000006c9b9850000000000000000000000000000000000000000000000000000000006c9c08d0000000000000000000000000000000000000000000000000000000006c9c16e00000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006c9cdbc0000000000000000000000000000000000000000000000000000000006c9ce9d0000000000000000000000000000000000000000000000000000000006c9d5a50000000000000000000000000000000000000000000000000000000006c9d68600000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006c9e2d40000000000000000000000000000000000000000000000000000000006c9e3b50000000000000000000000000000000000000000000000000000000006c9eabd0000000000000000000000000000000000000000000000000000000006c9eb9e00000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006c9f7ec0000000000000000000000000000000000000000000000000000000006c9f8cd0000000000000000000000000000000000000000000000000000000006c9ffd50000000000000000000000000000000000000000000000000000000006ca00b600000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000006ca37340000000000000000000000000000000000000000000000000000000006ca38150000000000000000000000000000000000000000000000000000000006ca3f1d0000000000000000000000000000000000000000000000000000000006ca3ffe00000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006ca4c4c0000000000000000000000000000000000000000000000000000000006ca4d2d0000000000000000000000000000000000000000000000000000000006ca54350000000000000000000000000000000000000000000000000000000006ca551600000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006ca61640000000000000000000000000000000000000000000000000000000006ca62450000000000000000000000000000000000000000000000000000000006ca694d0000000000000000000000000000000000000000000000000000000006ca6a2e00000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006ca767c0000000000000000000000000000000000000000000000000000000006ca775d0000000000000000000000000000000000000000000000000000000006ca7e650000000000000000000000000000000000000000000000000000000006ca7f4600000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006ca8b940000000000000000000000000000000000000000000000000000000006ca8c750000000000000000000000000000000000000000000000000000000006ca937d0000000000000000000000000000000000000000000000000000000006ca945e00000000000000000000000000000000000000000000000000000000000000003000000000000000000000000000000000000000000000000000000006cadff40000000000000000000000000000000000000000000000000000000006cae0d50000000000000000000000000000000000000000000000000000000006cae7dd0000000000000000000000000000000000000000000000000000000006cae8be00000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006caf50c0000000000000000000000000000000000000000000000000000000006caf5ed0000000000000000000000000000000000000000000000000000000006cafcf50000000000000000000000000000000000000000000000000000000006cafdd600000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006cb0a240000000000000000000000000000000000000000000000000000000006cb0b050000000000000000000000000000000000000000000000000000000006cb120d0000000000000000000000000000000000000000000000000000000006cb12ee00000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006cb1f3c0000000000000000000000000000000000000000000000000000000006cb201d0000000000000000000000000000000000000000000000000000000006cb27250000000000000000000000000000000000000000000000000000000006cb280600000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000006cb5e840000000000000000000000000000000000000000000000000000000006cb5f650000000000000000000000000000000000000000000000000000000006cb666d0000000000000000000000000000000000000000000000000000000006cb674e00000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006cb739c0000000000000000000000000000000000000000000000000000000006cb747d0000000000000000000000000000000000000000000000000000000006cb7b850000000000000000000000000000000000000000000000000000000006cb7c6600000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006cb88b40000000000000000000000000000000000000000000000000000000006cb89950000000000000000000000000000000000000000000000000000000006cb909d0000000000000000000000000000000000000000000000000000000006cb917e00000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006cb9dcc0000000000000000000000000000000000000000000000000000000006cb9ead0000000000000000000000000000000000000000000000000000000006cba5b50000000000000000000000000000000000000000000000000000000006cba69600000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006cbb2e40000000000000000000000000000000000000000000000000000000006cbb3c50000000000000000000000000000000000000000000000000000000006cbbacd0000000000000000000000000000000000000000000000000000000006cbbbae00000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000006cbf22c0000000000000000000000000000000000000000000000000000000006cbf30d0000000000000000000000000000000000000000000000000000000006cbfa150000000000000000000000000000000000000000000000000000000006cbfaf600000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006cc07440000000000000000000000000000000000000000000000000000000006cc08250000000000000000000000000000000000000000000000000000000006cc0f2d0000000000000000000000000000000000000000000000000000000006cc100e00000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006cc1c5c0000000000000000000000000000000000000000000000000000000006cc1d3d0000000000000000000000000000000000000000000000000000000006cc24450000000000000000000000000000000000000000000000000000000006cc252600000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006cc31740000000000000000000000000000000000000000000000000000000006cc32550000000000000000000000000000000000000000000000000000000006cc395d0000000000000000000000000000000000000000000000000000000006cc3a3e00000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006cc468c0000000000000000000000000000000000000000000000000000000006cc476d0000000000000000000000000000000000000000000000000000000006cc4e750000000000000000000000000000000000000000000000000000000006cc4f5600000000000000000000000000000000000000000000000000000000000000002",
+ "sessionDates": [
+  "2026-10-01",
+  "2026-10-02",
+  "2026-10-05",
+  "2026-10-06",
+  "2026-10-07",
+  "2026-10-08",
+  "2026-10-09",
+  "2026-10-13",
+  "2026-10-14",
+  "2026-10-15",
+  "2026-10-16",
+  "2026-10-19",
+  "2026-10-20",
+  "2026-10-21",
+  "2026-10-22",
+  "2026-10-23",
+  "2026-10-26",
+  "2026-10-27",
+  "2026-10-28",
+  "2026-10-29",
+  "2026-10-30",
+  "2026-11-02",
+  "2026-11-03",
+  "2026-11-04",
+  "2026-11-05",
+  "2026-11-06",
+  "2026-11-09",
+  "2026-11-10",
+  "2026-11-12",
+  "2026-11-13",
+  "2026-11-16",
+  "2026-11-17",
+  "2026-11-18",
+  "2026-11-19",
+  "2026-11-20",
+  "2026-11-23",
+  "2026-11-24",
+  "2026-11-25",
+  "2026-11-27",
+  "2026-11-30",
+  "2026-12-01",
+  "2026-12-02",
+  "2026-12-03",
+  "2026-12-04",
+  "2026-12-07",
+  "2026-12-08",
+  "2026-12-09",
+  "2026-12-10",
+  "2026-12-11",
+  "2026-12-14",
+  "2026-12-15",
+  "2026-12-16",
+  "2026-12-17",
+  "2026-12-18",
+  "2026-12-21",
+  "2026-12-22",
+  "2026-12-23",
+  "2026-12-24",
+  "2026-12-28",
+  "2026-12-29",
+  "2026-12-30",
+  "2026-12-31",
+  "2027-01-04",
+  "2027-01-05",
+  "2027-01-06",
+  "2027-01-07",
+  "2027-01-08",
+  "2027-01-11",
+  "2027-01-12",
+  "2027-01-13",
+  "2027-01-14",
+  "2027-01-15",
+  "2027-01-19",
+  "2027-01-20",
+  "2027-01-21",
+  "2027-01-22",
+  "2027-01-25",
+  "2027-01-26",
+  "2027-01-27",
+  "2027-01-28",
+  "2027-01-29",
+  "2027-02-01",
+  "2027-02-02",
+  "2027-02-03",
+  "2027-02-04",
+  "2027-02-05",
+  "2027-02-08",
+  "2027-02-09",
+  "2027-02-10",
+  "2027-02-11",
+  "2027-02-12",
+  "2027-02-16",
+  "2027-02-17",
+  "2027-02-18",
+  "2027-02-19",
+  "2027-02-22",
+  "2027-02-23",
+  "2027-02-24",
+  "2027-02-25",
+  "2027-02-26",
+  "2027-03-01",
+  "2027-03-02",
+  "2027-03-03",
+  "2027-03-04",
+  "2027-03-05",
+  "2027-03-08",
+  "2027-03-09",
+  "2027-03-10",
+  "2027-03-11",
+  "2027-03-12",
+  "2027-03-15",
+  "2027-03-16",
+  "2027-03-17",
+  "2027-03-18",
+  "2027-03-19",
+  "2027-03-22",
+  "2027-03-23",
+  "2027-03-24",
+  "2027-03-25",
+  "2027-03-26",
+  "2027-03-29",
+  "2027-03-30",
+  "2027-03-31",
+  "2027-04-01",
+  "2027-04-02",
+  "2027-04-05",
+  "2027-04-06",
+  "2027-04-07",
+  "2027-04-08",
+  "2027-04-09",
+  "2027-04-12",
+  "2027-04-13",
+  "2027-04-14",
+  "2027-04-15",
+  "2027-04-16",
+  "2027-04-19",
+  "2027-04-20",
+  "2027-04-21",
+  "2027-04-22",
+  "2027-04-23",
+  "2027-04-26",
+  "2027-04-27",
+  "2027-04-28",
+  "2027-04-29",
+  "2027-04-30",
+  "2027-05-03",
+  "2027-05-04",
+  "2027-05-05",
+  "2027-05-06",
+  "2027-05-07",
+  "2027-05-10",
+  "2027-05-11",
+  "2027-05-12",
+  "2027-05-13",
+  "2027-05-14",
+  "2027-05-17",
+  "2027-05-18",
+  "2027-05-19",
+  "2027-05-20",
+  "2027-05-21",
+  "2027-05-24",
+  "2027-05-25",
+  "2027-05-26",
+  "2027-05-27",
+  "2027-05-28",
+  "2027-06-01",
+  "2027-06-02",
+  "2027-06-03",
+  "2027-06-04",
+  "2027-06-07",
+  "2027-06-08",
+  "2027-06-09",
+  "2027-06-10",
+  "2027-06-11",
+  "2027-06-14",
+  "2027-06-15",
+  "2027-06-16",
+  "2027-06-17",
+  "2027-06-18",
+  "2027-06-21",
+  "2027-06-22",
+  "2027-06-23",
+  "2027-06-24",
+  "2027-06-25",
+  "2027-06-28",
+  "2027-06-29",
+  "2027-06-30",
+  "2027-07-01",
+  "2027-07-02",
+  "2027-07-06",
+  "2027-07-07",
+  "2027-07-08",
+  "2027-07-09",
+  "2027-07-12",
+  "2027-07-13",
+  "2027-07-14",
+  "2027-07-15",
+  "2027-07-16",
+  "2027-07-19",
+  "2027-07-20",
+  "2027-07-21",
+  "2027-07-22",
+  "2027-07-23",
+  "2027-07-26",
+  "2027-07-27",
+  "2027-07-28",
+  "2027-07-29",
+  "2027-07-30",
+  "2027-08-02",
+  "2027-08-03",
+  "2027-08-04",
+  "2027-08-05",
+  "2027-08-06",
+  "2027-08-09",
+  "2027-08-10",
+  "2027-08-11",
+  "2027-08-12",
+  "2027-08-13",
+  "2027-08-16",
+  "2027-08-17",
+  "2027-08-18",
+  "2027-08-19",
+  "2027-08-20",
+  "2027-08-23",
+  "2027-08-24",
+  "2027-08-25",
+  "2027-08-26",
+  "2027-08-27",
+  "2027-08-30",
+  "2027-08-31",
+  "2027-09-01",
+  "2027-09-02",
+  "2027-09-03",
+  "2027-09-07",
+  "2027-09-08",
+  "2027-09-09",
+  "2027-09-10",
+  "2027-09-13",
+  "2027-09-14",
+  "2027-09-15",
+  "2027-09-16",
+  "2027-09-17",
+  "2027-09-20",
+  "2027-09-21",
+  "2027-09-22",
+  "2027-09-23",
+  "2027-09-24",
+  "2027-09-27",
+  "2027-09-28",
+  "2027-09-29",
+  "2027-09-30",
+  "2027-10-01",
+  "2027-10-04",
+  "2027-10-05",
+  "2027-10-06",
+  "2027-10-07",
+  "2027-10-08",
+  "2027-10-12",
+  "2027-10-13",
+  "2027-10-14",
+  "2027-10-15",
+  "2027-10-18",
+  "2027-10-19",
+  "2027-10-20",
+  "2027-10-21",
+  "2027-10-22",
+  "2027-10-25",
+  "2027-10-26",
+  "2027-10-27",
+  "2027-10-28",
+  "2027-10-29"
+ ]
+}

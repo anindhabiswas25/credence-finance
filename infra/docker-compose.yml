@@ -1,0 +1,106 @@
+# Credence Finance local stack (Build Guide §13.1). Owner: BE-backend.
+#   make infra-up     → postgres + nitro-devnode, waits until both are healthy
+#   make infra-down   → stops everything (devnode state is ephemeral; postgres keeps its volume)
+# Service containers (relayer, keeper, indexer, api) are behind the `services` profile.
+name: credence
+
+x-backend-env: &backend-env
+  DATABASE_URL: postgres://credence:credence@postgres:5432/credence
+  CHAIN_ID: "412346"
+  RPC_URL: http://devnode:8547
+  RUST_LOG: info
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: credence
+      POSTGRES_PASSWORD: credence
+      POSTGRES_DB: credence
+    ports: ["${POSTGRES_PORT:-5433}:5432"]
+    volumes: ["pgdata:/var/lib/postgresql/data"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U credence -d credence"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  # Local Arbitrum chain with Stylus (anvil cannot run WASM). Chain id 412346.
+  # Healthy only once devnode-init has bootstrapped the CREATE2 factory, the Stylus cache manager and
+  # the StylusDeployer, so "healthy" means "ready for cargo stylus deploy and forge create".
+  devnode:
+    image: offchainlabs/nitro-node:${NITRO_NODE_VERSION:-v3.7.1-926f1ab}
+    command:
+      - --dev
+      - --http.addr=0.0.0.0
+      - --http.api=net,web3,eth,debug
+      - --http.vhosts=*
+      - --http.corsdomain=*
+      - --ws.addr=0.0.0.0
+      - --ws.port=8548
+      - --ws.api=net,web3,eth
+      - --ws.origins=*
+    ports: ["${DEVNODE_PORT:-8547}:8547", "${DEVNODE_WS_PORT:-8548}:8548"]
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          curl -sf -H 'content-type: application/json'
+          -d '{"jsonrpc":"2.0","id":1,"method":"eth_getCode","params":["0xcEcba2F1DC234f70Dd89F2041029807F8D03A990","latest"]}'
+          http://127.0.0.1:8547 | grep -q '"result":"0x[0-9a-f]'
+      interval: 2s
+      timeout: 3s
+      retries: 90
+      start_period: 5s
+
+  devnode-init:
+    image: ghcr.io/foundry-rs/foundry:stable
+    entrypoint: ["/bin/sh", "/devnode/init.sh"]
+    environment:
+      DEVNODE_RPC: http://devnode:8547
+    volumes: ["./devnode:/devnode:ro"]
+    depends_on:
+      devnode: { condition: service_started }
+    restart: "no"
+
+  # One migration tool for the whole repo: dbmate, plain SQL up/down (ADR-0001-backend-db-migrations).
+  migrate:
+    image: ghcr.io/amacneil/dbmate:2
+    profiles: ["tools"]
+    environment:
+      DATABASE_URL: postgres://credence:credence@postgres:5432/credence?sslmode=disable
+      DBMATE_MIGRATIONS_DIR: /db/migrations
+      DBMATE_SCHEMA_FILE: /db/schema.sql
+      DBMATE_NO_DUMP_SCHEMA: "true"
+    volumes: ["./db:/db"]
+    depends_on:
+      postgres: { condition: service_healthy }
+    command: ["--wait", "up"]
+
+  # ── services (docker compose --profile services up) ──
+  relayer:
+    profiles: ["services"]
+    build: { context: .., dockerfile: infra/docker/rust-service.Dockerfile, args: { BIN: credence-relayer } }
+    environment:
+      <<: *backend-env
+      VENDOR: replay
+      METRICS_ADDR: 0.0.0.0:9101
+    env_file: [{ path: ../.env, required: false }]
+    depends_on:
+      postgres: { condition: service_healthy }
+      devnode: { condition: service_healthy }
+
+  keeper:
+    profiles: ["services"]
+    build: { context: .., dockerfile: infra/docker/rust-service.Dockerfile, args: { BIN: credence-keeper } }
+    environment:
+      <<: *backend-env
+      KEEPER_INSTANCE_ID: keeper-local-1
+      METRICS_ADDR: 0.0.0.0:9102
+    env_file: [{ path: ../.env, required: false }]
+    depends_on:
+      postgres: { condition: service_healthy }
+      devnode: { condition: service_healthy }
+
+volumes:
+  pgdata:
