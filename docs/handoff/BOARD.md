@@ -80,3 +80,28 @@ Clock, oracle, risk-core and Stylus decisions are recorded in `docs/adr/ADR-0102
 
 ## 2026-09-28 00:51 · BE-backend · ANSWER
 Re my 00:12 BLOCKED (vendor keys): **unblocked.** The user provided free-tier keys (in `.env`, git-ignored). Live smoke results: Alpaca IEX (status, LIVE with 1,000 trades + NBBO, official open/close) and Polygon Basic (status, halts, official open/close; LIVE `NOT_ENTITLED` on Basic, as expected) both pass. A real recorded session (Alpaca IEX, Fri 2026-09-25 15:45–16:05 ET, NVDA + AAPL) is at `services/relayer/tests/fixtures/replay/`. Replayed through the relayer on the devnode, it put NVDA 225.34 / AAPL 340.775 into feed A. The licensing point for public testnet stands (ADR-0002).
+
+## 2026-09-28 02:40 · QE · BLOCKED
+**20+ years of licensed daily open/close data (brief item 1).** Measured with the keys in `.env`: Polygon/Massive **Basic** returns `NOT_AUTHORIZED` for anything older than 2 years; Alpaca Basic serves **SIP daily bars from 2016-01-04 only** (≈10.7 years) and IEX nothing older. Both are **personal, non-professional licences**, so neither satisfies "licence allows internal model use". Exact plan needed (user decides, one of):
+1. **Tiingo Power, business licence, $50/month** (recommended): 30+ years of EOD open/high/low/close with split factors and cash dividends, 10k requests/hour, licensed for *internal business use* (not redistribution; we only publish derived z-sets, not prices). Put the key in `.env` as `TIINGO_API_KEY`; the pipeline already has the adapter (`make cal-data VENDOR=tiingo`).
+2. **Massive Stocks Business, $2,499/month**: 20+ years, business use. (Stocks Advanced at $199/month has 20+ years but is personal use only.)
+Until then QE builds and runs the whole pipeline on Alpaca SIP 2016→today (cross-checked against Polygon's official open/close endpoint). Every output is labelled `dataGrade: "dev-unlicensed"` and the proposal is a DRAFT; a vendor swap is a re-run of `make cal-all`.
+
+## 2026-09-28 02:40 · QE · DECISION
+QE started Sprint 2. Python env is `calibration/.venv` via `uv` (project-local, no global tool change); any Rust build uses `CARGO_TARGET_DIR=target/quant`. QE make targets live in `mk/quant.mk` with the prefix `cal-`; the existing `calendar-gen`/`calendar-test` targets in `mk/backend.mk` keep working and the calendar format stays frozen at v1. Note for BE-backend: `backend-install` runs `uv sync --frozen` in `calibration/`; QE keeps `calibration/uv.lock` committed and in sync, and `calibration` pytest stays offline and fast.
+
+## 2026-09-28 09:10 · BE-chain · DECISION
+**Sprint 2 started for BE-chain. Global-tool changes (charter §2a):**
+1. **Foundry → v1.8.3 now** (`foundryup --install v1.8.3`), the version the guide and CI pin. No forge/anvil/cargo process of another role was running when I checked (`ps`). If a forge command of yours fails between 09:10 and 09:20 with a missing binary, re-run it. `anvil` / `cast` are upgraded too; the devnode container is not touched.
+2. **maturin is not installed globally.** `make risk-py-develop` runs a pinned `uvx maturin==1.9.6` into a project venv (default `crates/risk-py/.venv`, override with `RISK_PY_VENV=calibration/.venv`). Nothing global changes.
+3. **wasm-pack 0.15.0** is already installed; `make risk-wasm` uses it. It caches its wasm-bindgen CLI in `~/.cache/.wasm-pack` (user cache, not a toolchain).
+4. BE-chain keeps the default `target/`. Stylus on-chain builds stay in `target/stylus-ws`.
+Order of my READYs today: A1 interface v1 + `deployments/abis/v1/`, A5 unified address book, A2 scenario-set format, A3 `risk-py`, A4 `risk-wasm`.
+
+## 2026-09-28 09:45 · BE-chain · READY
+**A1 · Interfaces v1 + `deployments/abis/v1/` (37 ABIs).** `v0` is untouched and stays frozen. Details: `docs/adr/ADR-0104-chain-interfaces-v1.md`; the generated diff is `deployments/abis/v1/CHANGELOG.md` (`make abis-check` proves v1 is additive over v0).
+- **One breaking change (R-25):** `ReportAccepted(bytes32 indexed asset, uint8 kind, uint256 price, uint40 observedAt, uint64 seq, uint8 marketStatus)`. New topic0, so the indexer needs the v1 ABI for `price_point.status`. `CredencePriceFeed` emits it from this commit on.
+- **Additive:** `ICredenceMarket` gets `initializeWiring(MarketWiring)`, `setEngine`/`setOracle`, `setReserveFeeShare`, and views `marketIds()` (creation order), `lotInfo`/`lotBorrowers`/`lotPosition`, `projectedDebt`, `upcomingClosureId`, `totalBorrowsAll`, `wiring`, plus events `MarketWired`, `LotsReleased`, `LotCleared`, `Dequeued`, `EngineSet`, `OracleSet`. `ISeniorVault` gets `redeemRequest(id)`, `queueHead`/`nextRequestId`, `pendingRedeemShares`, `claimableAssets`, `cap`, `supplyQueue`/`withdrawQueue`, `allocator`. There are also guardian / tips / reserve / treasury views, and `ISigmaOracle.hashUpdate` (the J7 digest). New errors are appended to `ICredenceErrors`.
+- Code tables: `MarketAction` (`ActionNotAllowedInState.action`) and `BellOutcome` (`BellEnforced.outcome`) are in `Types.sol` and the ADR. `bytes32(0)` = ALL markets for guardian pauses.
+- Implementation ABIs (CredenceMarket, SeniorVault, SigmaOracle, …) and `credence-bindings` get their own READY with `DeployCoreLocal`.
+- **Foundry is v1.8.3 now** (DECISION 09:10). Linting on build is off in `contracts/foundry.toml`.
