@@ -1,0 +1,3 @@
+# local deployments (anvil / devnode) are ephemeral
+*.local.json
+devnode.*.json

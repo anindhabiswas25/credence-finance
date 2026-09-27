@@ -23,9 +23,10 @@ ABI_CONTRACTS := ICredenceErrors ICalendarStore IAssetClock IPriceSource INavSou
   ISolverVenue ISolverAuction IRiskEngine ISigmaOracle IKeeperTips IProtocolReserve ITreasury ICredenceGuardian \
   ICollateralToken INavFund ICompliance IComplianceRegistry IFaucet
 # Implementations built this sprint (their ABIs add admin functions and constructor args to the interfaces).
-ABI_IMPLS ?=
+ABI_IMPLS ?= CalendarStore AssetClock CredencePriceFeed OracleAdapter SequencerHealth UniV3TwapSource \
+  CredenceStockToken CredenceTreasuryFund ComplianceRegistry Faucet
 
-.PHONY: contracts-deps contracts-build contracts-test contracts-invariant contracts-coverage contracts-fmt \
+.PHONY: local-deploy-clock contracts-deps contracts-build contracts-test contracts-invariant contracts-coverage contracts-fmt \
   contracts-fmt-check contracts-snapshot contracts-clean abis-export risk-build risk-test risk-lint risk-fmt \
   stylus-check stylus-export-abi devnode-up devnode-down devnode-deploy-engine stylus-diff
 
@@ -88,6 +89,18 @@ stylus-check: ## cargo stylus check of the Risk Engine against the devnode (size
 
 stylus-export-abi: ## Print the Stylus Risk Engine Solidity ABI
 	cd $(STYLUS_DIR) && cargo stylus export-abi
+
+XNYS_CALENDAR   ?= $(firstword $(wildcard calibration/out/calendars/XNYS-*.json))
+USBANK_CALENDAR ?= $(firstword $(wildcard calibration/out/calendars/USBANK-*.json))
+LOCAL_RPC       ?= $(DEVNODE_RPC)
+# Local relayer committees (anvil keys 1-3 by default; the relayer's local signer keys go here).
+RELAYER_A_SIGNERS ?= 0x70997970C51812dc3A010C7d01b50e0d17dc79C8,0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC,0x90F79bf6EB2c4f870365E785982E1f101E93b906
+RELAYER_B_SIGNERS ?= $(RELAYER_A_SIGNERS)
+
+local-deploy-clock: contracts-build ## Deploy the clock + price stack and test assets to LOCAL_RPC; writes deployments/<chainId>.local.json
+	cd $(CONTRACTS_DIR) && PRIVATE_KEY=$(DEVNODE_KEY) RELAYER_A_SIGNERS=$(RELAYER_A_SIGNERS) \
+	  RELAYER_B_SIGNERS=$(RELAYER_B_SIGNERS) XNYS_CALENDAR=../$(XNYS_CALENDAR) USBANK_CALENDAR=../$(USBANK_CALENDAR) \
+	  forge script script/DeployClockLocal.s.sol:DeployClockLocal --rpc-url $(LOCAL_RPC) --broadcast --slow
 
 devnode-up: ## Start a local nitro-devnode (Stylus-capable) on :8547 via docker (until infra/ compose exists)
 	@bash $(STYLUS_DIR)/scripts/devnode.sh up
