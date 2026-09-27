@@ -2,11 +2,15 @@
 
 use crate::{
     asset::Asset,
+    metrics::Metrics,
     vendor::{
         alpaca::{Alpaca, AlpacaConfig},
+        alpaca_ws::AlpacaStream,
         halts::{HaltFeed, NASDAQ_HALTS_URL},
         polygon::{Polygon, PolygonConfig},
+        polygon_ws::PolygonStream,
         replay::Replay,
+        stream::{run_stream, StreamCache, StreamOptions, StreamProtocol, Streaming},
         DynVendor,
     },
 };
@@ -135,8 +139,42 @@ pub fn alpaca_config() -> Result<AlpacaConfig> {
     })
 }
 
+/// Put a WebSocket stream in front of a REST vendor (`RELAYER_STREAM=1`, the default) and start it.
+fn with_stream(
+    rest: DynVendor,
+    proto: Arc<dyn StreamProtocol>,
+    common: &Common,
+    metrics: Option<Metrics>,
+) -> Result<DynVendor> {
+    let cache = StreamCache::new(proto.vendor());
+    let symbols = common.assets.iter().map(|a| a.symbol.clone()).collect();
+    tokio::spawn(run_stream(
+        proto,
+        symbols,
+        cache.clone(),
+        StreamOptions::default(),
+        metrics,
+    ));
+    let ttl = Duration::from_millis(env::parse_or("RELAYER_STATUS_TTL_MS", 5_000)?);
+    Ok(Arc::new(Streaming::new(rest, cache, ttl)))
+}
+
+fn plans(common: &Common) -> std::collections::HashMap<String, crate::asset::Plan> {
+    common
+        .assets
+        .iter()
+        .map(|a| (a.symbol.clone(), a.plan()))
+        .collect()
+}
+
 /// Build the vendor and the calendar the node should use (a replay carries its own warped calendar).
-pub async fn build_vendor(common: &Common) -> Result<(DynVendor, Arc<Calendar>)> {
+/// `stream` = `Some(metrics)` starts the vendor WebSocket (unless `RELAYER_STREAM=0`); `None` is
+/// REST only (smoke tests, recording).
+pub async fn build_vendor(
+    common: &Common,
+    stream: Option<Metrics>,
+) -> Result<(DynVendor, Arc<Calendar>)> {
+    let stream = stream.filter(|_| env::or("RELAYER_STREAM", "1") != "0");
     match common.vendor_kind {
         VendorKind::Replay => {
             let path = PathBuf::from(env::required("REPLAY_FILE")?);
@@ -152,14 +190,26 @@ pub async fn build_vendor(common: &Common) -> Result<(DynVendor, Arc<Calendar>)>
                 tracing::warn!(error = %e, "halt feed: first refresh failed (halts unknown until it succeeds)");
             }
             tokio::spawn(halts.clone().run(Duration::from_secs(10)));
-            let p = Polygon::new(polygon_config()?, halts);
+            let cfg = polygon_config()?;
+            let p = Polygon::new(cfg.clone(), halts);
             match p.load_conditions().await {
                 Ok(n) => tracing::info!(n, "polygon condition table loaded"),
                 Err(e) => {
                     tracing::warn!(error = %e, "polygon conditions: using the built-in table")
                 }
             }
-            Ok((Arc::new(p), Arc::new(load_calendar()?)))
+            let conditions = p.conditions_snapshot().await;
+            let mut v: DynVendor = Arc::new(p);
+            if let Some(m) = stream {
+                let proto = PolygonStream {
+                    url: env::or("POLYGON_WS_URL", "wss://socket.polygon.io/stocks"),
+                    api_key: cfg.api_key,
+                    conditions,
+                    plans: plans(common),
+                };
+                v = with_stream(v, Arc::new(proto), common, Some(m))?;
+            }
+            Ok((v, Arc::new(load_calendar()?)))
         }
         VendorKind::Alpaca => {
             let halts = halt_feed();
@@ -167,10 +217,19 @@ pub async fn build_vendor(common: &Common) -> Result<(DynVendor, Arc<Calendar>)>
                 tracing::warn!(error = %e, "halt feed: first refresh failed (halts unknown until it succeeds)");
             }
             tokio::spawn(halts.clone().run(Duration::from_secs(10)));
-            Ok((
-                Arc::new(Alpaca::new(alpaca_config()?, halts)),
-                Arc::new(load_calendar()?),
-            ))
+            let cfg = alpaca_config()?;
+            let mut v: DynVendor = Arc::new(Alpaca::new(cfg.clone(), halts));
+            if let Some(m) = stream {
+                let proto = AlpacaStream::new(
+                    &env::or("ALPACA_STREAM_URL", "wss://stream.data.alpaca.markets/v2"),
+                    &cfg.feed,
+                    cfg.key_id,
+                    cfg.secret,
+                    plans(common),
+                );
+                v = with_stream(v, Arc::new(proto), common, Some(m))?;
+            }
+            Ok((v, Arc::new(load_calendar()?)))
         }
     }
 }

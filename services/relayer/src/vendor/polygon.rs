@@ -209,6 +209,29 @@ struct RawCondition {
     data_types: Vec<String>,
 }
 
+impl RawTrade {
+    /// A trade from the WebSocket `T` event (timestamps already in ns).
+    pub(crate) fn from_ws(
+        conditions: Vec<u32>,
+        exchange: u32,
+        price: f64,
+        size: f64,
+        sip_ns: u64,
+        participant_ns: Option<u64>,
+        tape: Option<u8>,
+    ) -> Self {
+        Self {
+            conditions,
+            exchange,
+            price,
+            size,
+            sip_timestamp: sip_ns,
+            participant_timestamp: participant_ns,
+            tape,
+        }
+    }
+}
+
 // ── parsing (pure, used by the recorded-response tests) ──────────────────────────────────────────
 
 pub(crate) fn parse_conditions(body: &str) -> Result<HashMap<u32, SipCodes>, VendorError> {
@@ -376,6 +399,11 @@ impl Polygon {
             return Err(http_error(V, path, status, &body));
         }
         Ok(body)
+    }
+
+    /// A copy of the condition table (for the WebSocket parser).
+    pub async fn conditions_snapshot(&self) -> HashMap<u32, SipCodes> {
+        self.conditions.read().await.clone()
     }
 
     /// Refresh the condition table from the API (the fallback table stays if this fails).

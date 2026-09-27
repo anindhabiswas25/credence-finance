@@ -28,6 +28,12 @@ pub struct Metrics {
     pub refusals: IntCounterVec,
     /// last seq submitted per asset.
     pub last_seq: IntGaugeVec,
+    /// 1 while the vendor WebSocket is authenticated and subscribed, per vendor.
+    pub stream_connected: IntGaugeVec,
+    /// WebSocket reconnects, per vendor.
+    pub stream_reconnects: IntCounterVec,
+    /// WebSocket events by vendor and kind (trade, quote, status, luld, control).
+    pub stream_messages: IntCounterVec,
 }
 
 impl Metrics {
@@ -92,6 +98,24 @@ impl Metrics {
                 Opts::new("relayer_last_seq", "last submitted seq"),
                 &["feed", "asset"],
             )?,
+            stream_connected: IntGaugeVec::new(
+                Opts::new(
+                    "relayer_stream_connected",
+                    "vendor WebSocket up (1) or on REST fallback (0)",
+                ),
+                &["vendor"],
+            )?,
+            stream_reconnects: IntCounterVec::new(
+                Opts::new(
+                    "relayer_stream_reconnects_total",
+                    "vendor WebSocket reconnects",
+                ),
+                &["vendor"],
+            )?,
+            stream_messages: IntCounterVec::new(
+                Opts::new("relayer_stream_messages_total", "vendor WebSocket events"),
+                &["vendor", "kind"],
+            )?,
         };
         registry.register(Box::new(m.report_latency.clone()))?;
         registry.register(Box::new(m.tick_latency.clone()))?;
@@ -103,6 +127,9 @@ impl Metrics {
         registry.register(Box::new(m.rejections.clone()))?;
         registry.register(Box::new(m.refusals.clone()))?;
         registry.register(Box::new(m.last_seq.clone()))?;
+        registry.register(Box::new(m.stream_connected.clone()))?;
+        registry.register(Box::new(m.stream_reconnects.clone()))?;
+        registry.register(Box::new(m.stream_messages.clone()))?;
         Ok(m)
     }
 

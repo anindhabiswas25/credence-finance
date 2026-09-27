@@ -3,9 +3,12 @@
 //! and refuses to start on Arbitrum Sepolia.
 
 pub mod alpaca;
+pub mod alpaca_ws;
 pub mod halts;
 pub mod polygon;
+pub mod polygon_ws;
 pub mod replay;
+pub mod stream;
 
 use crate::asset::{Asset, Plan};
 use async_trait::async_trait;
@@ -144,6 +147,12 @@ pub trait MarketDataVendor: Send + Sync {
 
     /// STATUS: the vendor's market session plus the single-stock halt state (LULD / regulatory).
     async fn status(&self, asset: &Asset) -> VendorResult<StatusInput>;
+
+    /// Push notifications (symbol) when the vendor streams: the node re-observes that asset at once.
+    /// `None` for polled vendors.
+    fn updates(&self) -> Option<tokio::sync::broadcast::Receiver<String>> {
+        None
+    }
 }
 
 pub type DynVendor = Arc<dyn MarketDataVendor>;

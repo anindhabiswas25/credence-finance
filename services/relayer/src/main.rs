@@ -202,7 +202,8 @@ async fn aggregator(
     let cfg = AggregatorConfig {
         feed: common.feed_id.clone(),
         threshold: env::parse_or("RELAYER_THRESHOLD", 2usize)?,
-        tick: Duration::from_millis(env::parse_or("RELAYER_TICK_MS", 1000)?),
+        // 250 ms: an idle tick only collects snapshots; a streamed ≥ 0.10% move is submitted within a tick
+        tick: Duration::from_millis(env::parse_or("RELAYER_TICK_MS", 250)?),
         committee,
         assets: common
             .assets
@@ -375,7 +376,7 @@ async fn smoke(
         Some(a) => Asset::parse(&a)?,
         None => common.assets[0].clone(),
     };
-    let (vendor, cal) = build_vendor(common).await?;
+    let (vendor, cal) = build_vendor(common, None).await?;
     let now = credence_relayer::node::now_s();
     let session = cal
         .current_or_last_session(now)
@@ -505,7 +506,7 @@ async fn main() -> Result<()> {
             if !is_dev_chain(common.chain_id) {
                 bail!("`run` (all nodes in one process) is for dev chains; use `node` + `aggregator` on {}", common.chain_id);
             }
-            let (vendor, cal) = build_vendor(&common).await?;
+            let (vendor, cal) = build_vendor(&common, Some(metrics.clone())).await?;
             let mut nodes: Vec<Arc<dyn NodeClient>> = Vec::new();
             for (i, dev_key) in ANVIL_KEYS.iter().enumerate().skip(1) {
                 let n = node(
@@ -527,7 +528,7 @@ async fn main() -> Result<()> {
             Ok(())
         }
         Cmd::Node { id, listen } => {
-            let (vendor, cal) = build_vendor(&common).await?;
+            let (vendor, cal) = build_vendor(&common, Some(metrics.clone())).await?;
             let n = node(&common, &id, "RELAYER_NODE", None, vendor, cal, metrics).await?;
             tokio::spawn(n.clone().run());
             ops.set_ready(true);

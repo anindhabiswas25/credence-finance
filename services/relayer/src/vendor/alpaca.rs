@@ -94,10 +94,10 @@ struct LatestTradeResp {
 }
 
 #[derive(Deserialize)]
-struct RawQuote {
-    t: String,
-    ap: f64,
-    bp: f64,
+pub(crate) struct RawQuote {
+    pub(crate) t: String,
+    pub(crate) ap: f64,
+    pub(crate) bp: f64,
 }
 
 #[derive(Deserialize)]
@@ -139,7 +139,7 @@ pub(crate) fn ts_ns(s: &str) -> Option<u64> {
         .map(|n| n as u64)
 }
 
-fn to_trade(t: &RawTrade, listing_plan: Plan) -> Option<Trade> {
+pub(crate) fn to_trade(t: &RawTrade, listing_plan: Plan) -> Option<Trade> {
     Some(Trade {
         price_wad: wad_from_f64(t.p).ok()?,
         size: t.s.max(0.0) as u64,

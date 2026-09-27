@@ -54,6 +54,9 @@ pub struct Node {
     clock: fn() -> u64,
 }
 
+/// Stream events arriving within this window are handled as one re-observation.
+pub const REACT_DEBOUNCE: Duration = Duration::from_millis(20);
+
 pub fn now_s() -> u64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -369,13 +372,63 @@ impl Node {
         }
     }
 
-    /// Poll forever.
+    /// Re-observe only the assets whose symbols are in `symbols` (stream push).
+    pub async fn observe_symbols(&self, symbols: &std::collections::HashSet<String>) {
+        for asset in self
+            .cfg
+            .assets
+            .iter()
+            .filter(|a| symbols.contains(&a.symbol))
+        {
+            let obs = self.observe(asset).await;
+            self.state.write().await.insert(asset.id, obs);
+        }
+    }
+
+    /// Poll forever. With a streaming vendor, also re-observe an asset as soon as its stream pushes an
+    /// event (bursts coalesced over [`REACT_DEBOUNCE`]); the poll keeps running as the fallback path.
     pub async fn run(self: Arc<Self>) {
+        use tokio::sync::broadcast::error::{RecvError, TryRecvError};
         let mut tick = tokio::time::interval(self.cfg.poll_interval);
         tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+        let mut updates = self.vendor.updates();
         loop {
-            tick.tick().await;
-            self.poll_once().await;
+            let Some(rx) = updates.as_mut() else {
+                tick.tick().await;
+                self.poll_once().await;
+                continue;
+            };
+            let first = tokio::select! {
+                _ = tick.tick() => { self.poll_once().await; continue; }
+                r = rx.recv() => r,
+            };
+            let mut all = false;
+            let mut syms = std::collections::HashSet::new();
+            match first {
+                Ok(s) => {
+                    syms.insert(s);
+                }
+                Err(RecvError::Lagged(_)) => all = true,
+                Err(RecvError::Closed) => {
+                    updates = None;
+                    continue;
+                }
+            }
+            tokio::time::sleep(REACT_DEBOUNCE).await;
+            loop {
+                match rx.try_recv() {
+                    Ok(s) => {
+                        syms.insert(s);
+                    }
+                    Err(TryRecvError::Lagged(_)) => all = true,
+                    Err(_) => break,
+                }
+            }
+            if all {
+                self.poll_once().await;
+            } else {
+                self.observe_symbols(&syms).await;
+            }
         }
     }
 
