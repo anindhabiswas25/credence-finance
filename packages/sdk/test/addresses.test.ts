@@ -29,6 +29,29 @@ describe("address book (§13.2)", () => {
   });
 });
 
+describe("local (flat) address book", () => {
+  it("is lifted into the §13.2 shape", () => {
+    const b = parseAddressBook(
+      {
+        chainId: 31337,
+        startBlock: 3,
+        calendar: "0x0000000000000000000000000000000000000001",
+        clock: "0x0000000000000000000000000000000000000002",
+        feedA: "0x0000000000000000000000000000000000000003",
+        feedB: "0x0000000000000000000000000000000000000004",
+        tNVDA: "0x0000000000000000000000000000000000000005",
+        assetId_NVDA: "0x" + "22".repeat(32),
+      },
+      31337,
+    );
+    expect(b.shared.clock).toBe("0x0000000000000000000000000000000000000002");
+    expect(b.shared.feedB).toBe("0x0000000000000000000000000000000000000004");
+    expect(b.tokens?.tNVDA).toBe("0x0000000000000000000000000000000000000005");
+    expect(b.assetIds?.NVDA).toBe("0x" + "22".repeat(32));
+    expect(b.startBlock).toBe(3);
+  });
+});
+
 describe("ids and enums", () => {
   it("asset and venue ids", () => {
     expect(assetId("nvda", "xnas")).toBe("0x2ba7fe0221993f0b564e6bd78704eab0e0162888663625d7124a5d01aa95c620");

@@ -3,7 +3,7 @@ import js from "@eslint/js";
 import tseslint from "typescript-eslint";
 
 export default tseslint.config(
-  { ignores: ["dist/**", "generated/**", ".ponder/**", "node_modules/**"] },
+  { ignores: ["dist/**", "generated/**", ".ponder/**", "node_modules/**", "**/ponder-env.d.ts"] },
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {

@@ -19,7 +19,7 @@ PNPM := pnpm
 
 .PHONY: backend-install backend-build backend-test backend-lint backend-fmt \
         infra-up infra-down infra-reset infra-ps db-migrate db-rollback calendar-gen calendar-test \
-        relayer-dev relayer-smoke keeper-dev indexer-dev api-dev relayer-e2e keeper-e2e services-up
+        relayer-dev relayer-smoke keeper-dev indexer-dev api-dev relayer-e2e keeper-e2e indexer-e2e services-up
 
 backend-install: ## Install backend deps: pnpm workspace, uv calibration env, Rust crates fetched
 	$(PNPM) install --frozen-lockfile
@@ -82,6 +82,11 @@ keeper-dev: ## Run one keeper instance locally (reads .env)
 
 keeper-e2e: contracts-build ## Keeper e2e on anvil + Postgres: J1 pokes on schedule; leader failover with no duplicate txs (needs infra-up)
 	TEST_DATABASE_URL=$(TEST_DATABASE_URL) $(CARGO) test -p credence-keeper --test keeper_e2e -- --ignored --nocapture
+
+indexer-e2e: ## Indexer + API e2e on the devnode: StateChanged/ReportAccepted → Ponder → GET /v1/clock/:assetId
+	@[ -f deployments/412346.local.json ] || $(MAKE) local-deploy-clock LOCAL_RPC=http://127.0.0.1:8547 ASSETS=NVDA,AAPL
+	$(PNPM) --filter @credence/sdk build
+	bash indexer/scripts/e2e.sh
 
 indexer-dev: ## Run the Ponder indexer against the local devnode
 	$(PNPM) --filter @credence/indexer dev

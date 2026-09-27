@@ -1,0 +1,29 @@
+{
+  "name": "@credence/indexer",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Ponder 0.17 indexer (Build Guide §10.3): clock_state, clock_transition, price_point.",
+  "scripts": {
+    "dev": "ponder dev",
+    "start": "ponder start --schema ${DATABASE_SCHEMA:-indexer}",
+    "codegen": "ponder codegen",
+    "build": "ponder codegen",
+    "typecheck": "ponder codegen && tsc --noEmit",
+    "lint": "eslint .",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@credence/sdk": "workspace:*",
+    "hono": "4.13.9",
+    "ponder": "0.17.12",
+    "viem": "2.56.9"
+  },
+  "devDependencies": {
+    "@credence/config": "workspace:*",
+    "@types/node": "24.19.0",
+    "eslint": "9.39.5",
+    "typescript": "~5.9.3",
+    "vitest": "3.2.7"
+  }
+}

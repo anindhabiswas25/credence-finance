@@ -1,0 +1,22 @@
+import { describe, expect, it } from "vitest";
+import { feedLabeler, indexerBook } from "../src/book";
+
+describe("indexer address book", () => {
+  it("labels the two relayer feeds", () => {
+    const label = feedLabeler({
+      shared: {
+        calendar: "0x0000000000000000000000000000000000000001",
+        clock: "0x0000000000000000000000000000000000000002",
+        feedA: "0x1B9CbDC65a7BebB0bE7F18d93A1896ea1FD46d7A",
+        feedB: "0x47Cec0749BD110bc11F9577a70061202b1b6C034",
+      },
+    });
+    expect(label("0x1b9cbdc65a7bebb0be7f18d93a1896ea1fd46d7a")).toBe("A");
+    expect(label("0x47CEC0749BD110BC11F9577A70061202B1B6C034".replace("0X", "0x"))).toBe("B");
+    expect(label("0x0000000000000000000000000000000000000009")).toBe("0x0000000000000000000000000000000000000009");
+  });
+  it("falls back to placeholders when no deployment exists", () => {
+    const b = indexerBook(999_999, "/nonexistent");
+    expect(b.shared.clock).toBe("0x0000000000000000000000000000000000000000");
+  });
+});

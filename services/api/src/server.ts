@@ -1,0 +1,36 @@
+// Node 24 entry point: `node src/server.ts` (type stripping) or `node dist/server.js`.
+import { serve } from "@hono/node-server";
+import { createPublicClient, http } from "viem";
+import { createApp } from "./app.ts";
+import { assetVenues, boundariesAfter, loadCalendars } from "./calendar.ts";
+import { loadConfig } from "./config.ts";
+import { pgRepos } from "./repo.ts";
+
+const config = loadConfig();
+const repos = pgRepos(config.databaseUrl, config.indexerSchema);
+const calendars = loadCalendars();
+const venues = assetVenues(
+  (process.env.ASSETS ?? "NVDA:XNAS,AAPL:XNAS,TSLA:XNAS,COIN:XNAS,MSFT:XNAS,SPY:ARCX").split(",").concat("TBILL:USBANK"),
+);
+const app = createApp({
+  config,
+  clock: repos.clock,
+  auth: repos.auth,
+  publicClient: config.rpcUrl ? createPublicClient({ transport: http(config.rpcUrl) }) : undefined,
+  nextBoundaries: (id, now) => {
+    const v = venues.get(id);
+    const s = v ? calendars.get(v) : undefined;
+    return s ? boundariesAfter(s, now) : undefined;
+  },
+});
+
+const server = serve({ fetch: app.fetch, port: config.port }, (info) => {
+  console.log(JSON.stringify({ level: "info", msg: "credence-api listening", port: info.port, indexerSchema: config.indexerSchema }));
+});
+
+for (const sig of ["SIGINT", "SIGTERM"] as const) {
+  process.on(sig, () => {
+    server.close();
+    void repos.close().then(() => process.exit(0));
+  });
+}
