@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity 0.8.30;
 
-/// @title Credence shared types (Build Guide §8.1). Interfaces v0.
+/// @title Credence shared types (Build Guide §8.1). Interfaces v1 (v0 + additive S2 types, ADR-0104).
 /// @dev Every struct and enum that crosses a contract boundary lives here. Enum values are part of the ABI:
 ///      append only, never reorder.
 
@@ -87,6 +87,26 @@ library KeeperJob {
     uint8 internal constant EPOCH = 7;
 }
 
+/// @dev v1. `ActionNotAllowedInState(action, state)` action codes (the §8.2.2 permission matrix rows).
+library MarketAction {
+    uint8 internal constant BORROW = 0;
+    uint8 internal constant WITHDRAW_COLLATERAL = 1;
+    uint8 internal constant REPAY = 2;
+    uint8 internal constant ADD_COLLATERAL = 3;
+    uint8 internal constant BUY_COVER = 4;
+    uint8 internal constant FLAG_FOR_AUCTION = 5;
+    uint8 internal constant ENFORCE_BELL = 6;
+}
+
+/// @dev v1. `BellEnforced.outcome` values (§8.4.3 `enforceBell`).
+library BellOutcome {
+    uint8 internal constant SAFE = 0; // already at or below the safe LTV (no tip)
+    uint8 internal constant ALREADY_COVERED = 1; // covered for the upcoming closure (no tip)
+    uint8 internal constant AUTO_COVERED = 2; // auto-cover bought, premium added to debt
+    uint8 internal constant PRECLOSE_THEN_COVER = 3; // above maxLtv + δ: pre-close sale to maxLtv, then cover (R-03)
+    uint8 internal constant PRECLOSE_SALE = 4; // pre-close sale down to the safe LTV
+}
+
 // ─────────────────────────────── markets ───────────────────────────────
 
 struct RateParams {
@@ -137,6 +157,45 @@ struct GuardianOverlay {
     uint40 haircutUntil;
     bool borrowPaused;
     bool coverPaused;
+}
+
+/// @notice v1. Contract-to-contract wiring of `CredenceMarket`, set once through `initializeWiring` (§7.4).
+/// @dev `engine` and `oracle` are replaceable later through the timelock (R-21); the rest are fixed.
+struct MarketWiring {
+    address clock;
+    address oracle;
+    address engine;
+    address vault;
+    address pool;
+    address auctionHouse;
+    address settlement;
+    address reserve;
+    address treasury;
+    address tips;
+}
+
+/// @notice v1. Read-only view of a liquidation lot (`LotBook` in §8.4.1).
+struct LotInfo {
+    bytes32 marketId;
+    AuctionKind kind;
+    uint128 totalQty; // Σ x_i released to the auction house (0 until `releaseLots`)
+    uint128 proceeds; // loan units received in `onAuctionCleared`
+    uint128 blendedPrice; // p̄, WAD per token
+    uint128 proceedsSettled; // loan units already attributed to settled positions
+    uint32 positions; // borrowers in the lot
+    uint32 settledCount;
+    bool released;
+    bool cleared;
+}
+
+/// @notice v1. One ERC-7540-style redeem request of the Senior Vault (R-17).
+struct RedeemRequest {
+    address owner;
+    address receiver;
+    uint128 shares; // escrowed in the vault until processed
+    uint128 assets; // set when processed (share price at processing time); claimable
+    bool processed;
+    bool claimed;
 }
 
 // ─────────────────────────────── clock ───────────────────────────────

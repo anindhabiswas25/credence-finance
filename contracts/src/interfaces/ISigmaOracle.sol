@@ -5,7 +5,7 @@ import {SigmaUpdate} from "../libraries/Types.sol";
 import {ICredenceErrors} from "../libraries/Errors.sol";
 import {ISigmaOracleEvents} from "../libraries/Events.sol";
 
-/// @title σ committee gate for the Risk Engine (Build Guide §8.10, R-15). Implemented in S2.
+/// @title σ committee gate for the Risk Engine (Build Guide §8.10, R-15). Interface v1.
 /// @notice EIP-712 domain: name "CredenceSigmaOracle", version "1".
 ///         SIGMA_TYPEHASH = keccak256("SigmaUpdate(bytes32 assetId,uint8 closureType,uint256 sigma,uint32 asOfDay,uint64 nonce)")
 ///         Signatures sorted by ascending signer, no duplicates, ≥ threshold.
@@ -17,4 +17,9 @@ interface ISigmaOracle is ISigmaOracleEvents, ICredenceErrors {
     function engine() external view returns (address);
     function SIGMA_TYPEHASH() external view returns (bytes32);
     function domainSeparator() external view returns (bytes32);
+
+    // ── v1 additions ──
+    /// @notice The EIP-712 digest the committee signs for `u` (for keeper J7 cross-checks).
+    function hashUpdate(SigmaUpdate calldata u) external view returns (bytes32);
+    function timelock() external view returns (address);
 }

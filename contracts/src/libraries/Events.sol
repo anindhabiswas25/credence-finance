@@ -8,10 +8,11 @@ import {
     AuctionKind,
     MarketParams,
     RiskParams,
-    OracleConfig
+    OracleConfig,
+    MarketWiring
 } from "./Types.sol";
 
-/// @title Credence event catalogue (Build Guide Appendix B). Interfaces v0.
+/// @title Credence event catalogue (Build Guide Appendix B). Interfaces v1 (v0 + appended events, ADR-0104).
 /// @dev One events-interface per component. Each component interface inherits its events-interface, so the
 ///      exported ABI of `I<Component>` carries its events. Implementations emit them as `emit Name(...)`.
 ///      Events not fully specified in Appendix B ("…") are defined here and are frozen with v0.
@@ -46,7 +47,11 @@ interface IAssetClockEvents {
 }
 
 interface IPriceFeedEvents {
-    event ReportAccepted(bytes32 indexed asset, uint8 kind, uint256 price, uint40 observedAt, uint64 seq);
+    /// @dev v1 (R-25): `marketStatus` (FeedMarketStatus) appended, so `price_point.status` can be indexed.
+    ///      The topic0 differs from v0's 5-argument event.
+    event ReportAccepted(
+        bytes32 indexed asset, uint8 kind, uint256 price, uint40 observedAt, uint64 seq, uint8 marketStatus
+    );
     event CommitteeChanged(address[] signers, uint8 threshold);
 }
 
@@ -103,6 +108,14 @@ interface ICredenceMarketEvents {
         bytes32 indexed id, uint64 haircut, uint40 haircutUntil, bool borrowPaused, bool coverPaused
     );
     event AutoCoverSet(bytes32 indexed id, address indexed owner, bool enabled);
+    // v1 additions (S2)
+    event MarketWired(MarketWiring w);
+    event EngineSet(address engine);
+    event OracleSet(address oracle);
+    event ReserveFeeShareSet(uint16 bps);
+    event LotsReleased(uint64 indexed auctionId, uint256 totalQty, uint256 positions);
+    event LotCleared(uint64 indexed auctionId, uint256 proceeds, uint256 blendedPrice);
+    event Dequeued(bytes32 indexed id, address indexed owner, uint64 auctionId);
 }
 
 interface ISeniorVaultEvents {
@@ -113,6 +126,8 @@ interface ISeniorVaultEvents {
     event CapSet(bytes32 indexed id, uint256 cap);
     event SupplyQueueSet(bytes32[] ids);
     event WithdrawQueueSet(bytes32[] ids);
+    // v1 additions (S2)
+    event AllocatorSet(address allocator);
 }
 
 interface IUnderwriterPoolEvents {
@@ -216,6 +231,9 @@ interface IProtocolReserveEvents {
     event ReserveCovered(uint256 requested, uint256 paid);
     event ReserveFunded(uint256 amount, uint256 overflowToTreasury);
     event TargetSizeSet(uint256 target);
+    // v1 additions (S2)
+    event TargetBpsSet(uint16 bps);
+    event MarketSet(address market);
 }
 
 interface IGuardianEvents {
@@ -228,6 +246,9 @@ interface IGuardianEvents {
     event CoverUnpaused(address target);
     event AssetHalted(bytes32 asset, uint40 until);
     event ClosedExtended(bytes32 asset, uint40 until);
+    // v1 additions (S2)
+    event CoverUnpauseScheduled(address target, uint40 executableAt);
+    event GuardianWired(address market, address clock);
 }
 
 interface ICollateralTokenEvents {

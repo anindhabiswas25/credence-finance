@@ -177,7 +177,7 @@ contract CredencePriceFeed is ICredencePriceFeed, EIP712 {
             // STATUS
             f.status = r.marketStatus;
         }
-        emit ReportAccepted(r.assetId, kind, r.price, r.observedAt, r.seq);
+        emit ReportAccepted(r.assetId, kind, r.price, r.observedAt, r.seq, r.marketStatus);
     }
 
     function _pushObs(bytes32 asset, AssetFeed storage f, uint128 price, uint40 at) internal {

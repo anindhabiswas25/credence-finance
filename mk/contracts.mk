@@ -2,7 +2,8 @@
 # Every target has a `## help` comment; `make help` lists them.
 
 CONTRACTS_DIR   := contracts
-ABI_VERSION     ?= v0
+# v0 is frozen history (S1); v1 = S2 (ADR-0104). Never re-export v0.
+ABI_VERSION     ?= v1
 ABI_OUT         := deployments/abis/$(ABI_VERSION)
 DEVNODE_RPC     ?= http://127.0.0.1:8547
 # Pre-funded dev key of nitro-devnode (public, local only; never used on a real network).
@@ -24,7 +25,7 @@ ABI_CONTRACTS := ICredenceErrors ICalendarStore IAssetClock IPriceSource INavSou
 ABI_IMPLS ?= CalendarStore AssetClock CredencePriceFeed OracleAdapter SequencerHealth UniV3TwapSource \
   CredenceStockToken CredenceTreasuryFund ComplianceRegistry Faucet
 
-.PHONY: local-deploy-clock contracts-deps contracts-build contracts-test contracts-invariant contracts-coverage contracts-fmt \
+.PHONY: abis-check local-deploy-clock contracts-deps contracts-build contracts-test contracts-invariant contracts-coverage contracts-fmt \
   contracts-fmt-check contracts-snapshot contracts-clean abis-export risk-build risk-test risk-lint risk-fmt stylus-test stylus-abi-check \
   stylus-check stylus-export-abi devnode-up devnode-down devnode-deploy-engine stylus-diff
 
@@ -67,6 +68,9 @@ abis-export: contracts-build ## Export frozen ABIs to deployments/abis/$(ABI_VER
 	  forge inspect $$c abi --json > ../$(ABI_OUT)/$$c.json || exit 1; \
 	done
 	@echo "exported $$(ls $(ABI_OUT) | wc -l) ABIs to $(ABI_OUT)"
+
+abis-check: ## ABIs v1 are additive over the frozen v0 (except the allowed R-25 break); regenerates v1/CHANGELOG.md
+	python3 $(CONTRACTS_DIR)/script/abi_diff.py deployments/abis/v0 deployments/abis/v1 --write deployments/abis/v1/CHANGELOG.md
 
 risk-build: ## Build risk-core and risk-cli (native, release)
 	cargo build --release -p credence-risk-core -p credence-risk-cli

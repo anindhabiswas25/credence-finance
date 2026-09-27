@@ -3,7 +3,7 @@ pragma solidity 0.8.30;
 
 import {ClockState} from "./Types.sol";
 
-/// @title Credence error catalogue (Build Guide Appendix C). Interfaces v0.
+/// @title Credence error catalogue (Build Guide Appendix C). Interfaces v1 (v0 + appended errors).
 /// @dev Every Credence interface inherits this, so every ABI can decode every Credence revert.
 ///      Custom errors only; no revert strings anywhere in the protocol.
 interface ICredenceErrors {
@@ -74,6 +74,15 @@ interface ICredenceErrors {
     error HealthFactorTooLow(uint256 hf, uint256 min);
     error NoDebt();
     error ZeroAmount();
+    // v1 additions (S2)
+    error PositionInAuction(uint64 auctionId);
+    error NotInLot(uint64 auctionId, address borrower);
+    error LotNotCleared(uint64 auctionId);
+    error LotAlreadyReleased(uint64 auctionId);
+    error LotAlreadyCleared(uint64 auctionId);
+    error TooManyPositions(uint256 n, uint256 max);
+    error OverlayNotRiskReducing();
+    error IncompatibleRiskParams();
 
     // ── vault / pool (S2–S3) ──
     error RequestNotFound(uint256 requestId);
@@ -82,6 +91,12 @@ interface ICredenceErrors {
     error EpochAlreadySettled(uint64 epochId);
     error EpochNotSettled(uint64 epochId);
     error WithdrawWindowClosed(uint64 epochId);
+    // v1 additions (S2)
+    error RequestAlreadyProcessed(uint256 requestId);
+    error RequestNotProcessed(uint256 requestId);
+    error RequestAlreadyClaimed(uint256 requestId);
+    error UnknownMarket(bytes32 id);
+    error QueueTooLong(uint256 n, uint256 max);
 
     // ── auctions / settlement (S3–S4) ──
     error PhaseClosed(uint8 phase);
@@ -104,4 +119,12 @@ interface ICredenceErrors {
 
     // ── sigma oracle ──
     error SigmaNotNewer(uint32 asOfDay, uint32 lastAsOfDay);
+
+    // ── governance (v1, S2) ──
+    error UnpauseNotScheduled(bytes32 key);
+    error UnpauseNotReady(bytes32 key, uint40 executableAt);
+    error HaircutTooLarge(uint64 bps, uint64 max);
+    error HaircutNotHigher(uint64 bps, uint64 current);
+    error UntilTooLate(uint40 until, uint40 maxUntil);
+    error UntilInPast(uint40 until);
 }
