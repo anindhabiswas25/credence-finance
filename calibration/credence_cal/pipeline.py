@@ -121,7 +121,51 @@ def stage_sigma(c: Ctx) -> None:
     print(f"sigma: z for {int(z['z'].notna().sum())} gaps; calibration -> {p.name}")
 
 
-STAGES = {"gaps": stage_gaps, "sigma": stage_sigma}
+def stage_sets(c: Ctx) -> None:
+    from . import sets as sets_mod
+    from .setfile import set_document
+
+    z = pd.read_parquet(c.work / "z.parquet")
+    z = z[[d >= COMPARABLE_FROM.get(s, "") for s, d in zip(z["symbol"], z["date"])]]
+    index = []
+    for a in LISTED:
+        for t in (1, 2, 3):
+            q, info = sets_mod.build_set(z, a, t)
+            doc = set_document(a, t, q, info, c)
+            p, h = write_addressed(c.out / "scenarios", f"{a}-{ClosureType(t).name}", doc)
+            index.append({**info, "file": p.name})
+    cols, jinfo = sets_mod.joint(z)
+    from .setfile import joint_document
+
+    jp, _ = write_addressed(c.out / "joint", "joint", joint_document(cols, jinfo, c))
+    write_json(c.work / "sets-index.json", {"sets": index, "joint": {**jinfo, "file": jp.name}})
+    (c.out / "scenarios" / "README.md").write_text(sets_markdown(index, jinfo, jp.name, c))
+    print(f"sets: {len(index)} scenario sets, joint K={jinfo['k']} -> {jp.name}")
+
+
+def sets_markdown(index: list[dict], jinfo: dict, jname: str, c: Ctx) -> str:
+    L = [f"# Scenario sets ({c.vendor}, data grade `{c.grade}`, through {c.end})", "",
+         "Pooling rule and its effect on the tail: ADR-0203. z in thousandths of σ; i* = ceil(α N) − 1 at α = 0.1%.", "",
+         "| Asset | Closure | N | Pool | z at i* (pooled) | min (pooled) | own N | z at α (own only) | min (own) | padded with weekend | File |",
+         "| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- | --- |"]
+    for x in index:
+        t = x["tail"]
+        pad = ", ".join(x["paddedWithWeekend"]) or "—"
+        L.append(f"| {x['asset']} | {x['closureType']} | {x['n']} | {x['poolSize']} | {t['zAlphaPooled']} | {t['zMinPooled']} | "
+                 f"{t['ownN']} | {t['zAlphaOwn']} | {t['zMinOwn']} | {pad} | `{x['file']}` |")
+    L += ["", f"## Joint stress set (`{jname}`)", "",
+          f"K = {jinfo['k']} worst of {jinfo['candidates']} non-overnight closures ({jinfo['firstClosure']} → {jinfo['lastClosure']}), "
+          f"ranked by {jinfo['ranking']}. Back-fill: {jinfo['betaMethod']}.", "",
+          "| Asset | β to SPY (z) | back-filled closures |", "| --- | ---: | ---: |"]
+    for a, b in jinfo["beta"].items():
+        L.append(f"| {a} | {b:.3f} | {jinfo['backfilled'][a]} |")
+    L += ["", "Worst ten:", "", "| # | Reopen session | Closure | basket mean z |", "| ---: | --- | --- | ---: |"]
+    for i, x in enumerate(jinfo["closures"][:10]):
+        L.append(f"| {i + 1} | {x['date']} | {x['type']} | {x['basketZ']:.3f} |")
+    return "\n".join(L) + "\n"
+
+
+STAGES = {"gaps": stage_gaps, "sigma": stage_sigma, "sets": stage_sets}
 
 
 def hashes(c: Ctx) -> None:

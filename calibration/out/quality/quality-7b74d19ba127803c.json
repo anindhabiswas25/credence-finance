@@ -11,6 +11,7 @@
   "AAPL": {
    "badBars": [],
    "bars": 2698,
+   "excluded": [],
    "firstSession": "2016-01-04",
    "gaps": {
     "HOLIDAY_WEEKEND": 102,
@@ -47,6 +48,7 @@
   "ADBE": {
    "badBars": [],
    "bars": 2698,
+   "excluded": [],
    "firstSession": "2016-01-04",
    "gaps": {
     "HOLIDAY_WEEKEND": 102,
@@ -83,6 +85,7 @@
   "AMD": {
    "badBars": [],
    "bars": 2698,
+   "excluded": [],
    "firstSession": "2016-01-04",
    "gaps": {
     "HOLIDAY_WEEKEND": 102,
@@ -135,6 +138,7 @@
   "AMZN": {
    "badBars": [],
    "bars": 2698,
+   "excluded": [],
    "firstSession": "2016-01-04",
    "gaps": {
     "HOLIDAY_WEEKEND": 102,
@@ -171,6 +175,7 @@
   "AVGO": {
    "badBars": [],
    "bars": 2698,
+   "excluded": [],
    "firstSession": "2016-01-04",
    "gaps": {
     "HOLIDAY_WEEKEND": 102,
@@ -207,6 +212,7 @@
   "COIN": {
    "badBars": [],
    "bars": 1370,
+   "excluded": [],
    "firstSession": "2021-04-14",
    "gaps": {
     "HOLIDAY_WEEKEND": 53,
@@ -264,6 +270,7 @@
   "CSCO": {
    "badBars": [],
    "bars": 2698,
+   "excluded": [],
    "firstSession": "2016-01-04",
    "gaps": {
     "HOLIDAY_WEEKEND": 102,
@@ -300,6 +307,7 @@
   "DIA": {
    "badBars": [],
    "bars": 2698,
+   "excluded": [],
    "firstSession": "2016-01-04",
    "gaps": {
     "HOLIDAY_WEEKEND": 102,
@@ -336,6 +344,7 @@
   "GOOGL": {
    "badBars": [],
    "bars": 2698,
+   "excluded": [],
    "firstSession": "2016-01-04",
    "gaps": {
     "HOLIDAY_WEEKEND": 102,
@@ -372,6 +381,7 @@
   "HOOD": {
    "badBars": [],
    "bars": 1296,
+   "excluded": [],
    "firstSession": "2021-07-29",
    "gaps": {
     "HOLIDAY_WEEKEND": 51,
@@ -414,6 +424,7 @@
   "INTC": {
    "badBars": [],
    "bars": 2698,
+   "excluded": [],
    "firstSession": "2016-01-04",
    "gaps": {
     "HOLIDAY_WEEKEND": 102,
@@ -466,6 +477,7 @@
   "IWM": {
    "badBars": [],
    "bars": 2698,
+   "excluded": [],
    "firstSession": "2016-01-04",
    "gaps": {
     "HOLIDAY_WEEKEND": 102,
@@ -502,6 +514,7 @@
   "MARA": {
    "badBars": [],
    "bars": 2238,
+   "excluded": [],
    "firstSession": "2017-10-30",
    "gaps": {
     "HOLIDAY_WEEKEND": 87,
@@ -624,6 +637,7 @@
   "META": {
    "badBars": [],
    "bars": 2698,
+   "excluded": [],
    "firstSession": "2016-01-04",
    "gaps": {
     "HOLIDAY_WEEKEND": 102,
@@ -671,6 +685,7 @@
   "MSFT": {
    "badBars": [],
    "bars": 2698,
+   "excluded": [],
    "firstSession": "2016-01-04",
    "gaps": {
     "HOLIDAY_WEEKEND": 102,
@@ -707,6 +722,7 @@
   "MSTR": {
    "badBars": [],
    "bars": 2698,
+   "excluded": [],
    "firstSession": "2016-01-04",
    "gaps": {
     "HOLIDAY_WEEKEND": 102,
@@ -754,6 +770,7 @@
   "MU": {
    "badBars": [],
    "bars": 2698,
+   "excluded": [],
    "firstSession": "2016-01-04",
    "gaps": {
     "HOLIDAY_WEEKEND": 102,
@@ -790,6 +807,7 @@
   "NFLX": {
    "badBars": [],
    "bars": 2698,
+   "excluded": [],
    "firstSession": "2016-01-04",
    "gaps": {
     "HOLIDAY_WEEKEND": 102,
@@ -837,6 +855,7 @@
   "NVDA": {
    "badBars": [],
    "bars": 2698,
+   "excluded": [],
    "firstSession": "2016-01-04",
    "gaps": {
     "HOLIDAY_WEEKEND": 102,
@@ -879,6 +898,7 @@
   "ORCL": {
    "badBars": [],
    "bars": 2698,
+   "excluded": [],
    "firstSession": "2016-01-04",
    "gaps": {
     "HOLIDAY_WEEKEND": 102,
@@ -921,6 +941,7 @@
   "PLTR": {
    "badBars": [],
    "bars": 1504,
+   "excluded": [],
    "firstSession": "2020-09-30",
    "gaps": {
     "HOLIDAY_WEEKEND": 59,
@@ -968,6 +989,7 @@
   "QCOM": {
    "badBars": [],
    "bars": 2698,
+   "excluded": [],
    "firstSession": "2016-01-04",
    "gaps": {
     "HOLIDAY_WEEKEND": 102,
@@ -1004,6 +1026,7 @@
   "QQQ": {
    "badBars": [],
    "bars": 2698,
+   "excluded": [],
    "firstSession": "2016-01-04",
    "gaps": {
     "HOLIDAY_WEEKEND": 102,
@@ -1040,6 +1063,7 @@
   "RIOT": {
    "badBars": [],
    "bars": 2698,
+   "excluded": [],
    "firstSession": "2016-01-04",
    "gaps": {
     "HOLIDAY_WEEKEND": 102,
@@ -1129,6 +1153,7 @@
   "ROKU": {
    "badBars": [],
    "bars": 2260,
+   "excluded": [],
    "firstSession": "2017-09-28",
    "gaps": {
     "HOLIDAY_WEEKEND": 87,
@@ -1186,6 +1211,7 @@
   "SHOP": {
    "badBars": [],
    "bars": 2698,
+   "excluded": [],
    "firstSession": "2016-01-04",
    "gaps": {
     "HOLIDAY_WEEKEND": 102,
@@ -1228,6 +1254,7 @@
   "SPY": {
    "badBars": [],
    "bars": 2698,
+   "excluded": [],
    "firstSession": "2016-01-04",
    "gaps": {
     "HOLIDAY_WEEKEND": 102,
@@ -1264,6 +1291,7 @@
   "TSLA": {
    "badBars": [],
    "bars": 2698,
+   "excluded": [],
    "firstSession": "2016-01-04",
    "gaps": {
     "HOLIDAY_WEEKEND": 102,
@@ -1300,6 +1328,7 @@
   "TXN": {
    "badBars": [],
    "bars": 2698,
+   "excluded": [],
    "firstSession": "2016-01-04",
    "gaps": {
     "HOLIDAY_WEEKEND": 102,
@@ -1336,6 +1365,7 @@
   "XLE": {
    "badBars": [],
    "bars": 2698,
+   "excluded": [],
    "firstSession": "2016-01-04",
    "gaps": {
     "HOLIDAY_WEEKEND": 102,
@@ -1372,11 +1402,17 @@
   "XLF": {
    "badBars": [],
    "bars": 2698,
+   "excluded": [
+    {
+     "date": "2016-09-19",
+     "reason": "XLRE spin-off distribution (Sep 2016) is missing from the vendor's corporate actions; the -17.5% bar is the distribution, not a gap"
+    }
+   ],
    "firstSession": "2016-01-04",
    "gaps": {
     "HOLIDAY_WEEKEND": 102,
     "OVERNIGHT": 2111,
-    "WEEKEND": 484
+    "WEEKEND": 483
    },
    "missingSessions": [],
    "offCalendarBars": [],
@@ -1396,9 +1432,9 @@
     },
     "WEEKEND": {
      "max": 0.080929,
-     "min": -0.175237,
-     "n": 484,
-     "sd": 0.014867
+     "min": -0.161612,
+     "n": 483,
+     "sd": 0.012566
     }
    },
    "suspectUnadjustedSplits": [],
@@ -1408,6 +1444,7 @@
   "XLI": {
    "badBars": [],
    "bars": 2698,
+   "excluded": [],
    "firstSession": "2016-01-04",
    "gaps": {
     "HOLIDAY_WEEKEND": 102,
@@ -1444,6 +1481,7 @@
   "XLK": {
    "badBars": [],
    "bars": 2698,
+   "excluded": [],
    "firstSession": "2016-01-04",
    "gaps": {
     "HOLIDAY_WEEKEND": 102,
@@ -1480,6 +1518,7 @@
   "XLP": {
    "badBars": [],
    "bars": 2698,
+   "excluded": [],
    "firstSession": "2016-01-04",
    "gaps": {
     "HOLIDAY_WEEKEND": 102,
@@ -1516,6 +1555,7 @@
   "XLU": {
    "badBars": [],
    "bars": 2698,
+   "excluded": [],
    "firstSession": "2016-01-04",
    "gaps": {
     "HOLIDAY_WEEKEND": 102,
@@ -1552,6 +1592,7 @@
   "XLV": {
    "badBars": [],
    "bars": 2698,
+   "excluded": [],
    "firstSession": "2016-01-04",
    "gaps": {
     "HOLIDAY_WEEKEND": 102,
@@ -1588,6 +1629,7 @@
   "XLY": {
    "badBars": [],
    "bars": 2698,
+   "excluded": [],
    "firstSession": "2016-01-04",
    "gaps": {
     "HOLIDAY_WEEKEND": 102,

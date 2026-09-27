@@ -25,6 +25,11 @@ import pandas as pd
 from .calendar import _classify, _session_days
 from .common import ClosureType
 
+# Gaps removed by hand, each with its reason (ADR-0203). Everything else, however extreme, stays.
+EXCLUDE = {
+    ("XLF", "2016-09-19"): "XLRE spin-off distribution (Sep 2016) is missing from the vendor's corporate actions; "
+                           "the -17.5% bar is the distribution, not a gap",
+}
 OUTLIER_ABS_R = 0.20  # flagged for review, never dropped
 SPLIT_RATIOS = (2, 3, 4, 5, 8, 10, 15, 20, 1 / 2, 1 / 3, 1 / 4, 1 / 5, 1 / 8, 1 / 10, 1 / 20)
 
@@ -42,13 +47,16 @@ def compute(symbol: str, raw: pd.DataFrame, sessions: list[dt.date], holidays: s
     off_calendar = sorted(str(d) for d in raw["d"] if d not in sess)
     bars = raw[raw["d"].isin(sess)].set_index("d")
     first = bars.index.min()
-    rows, spans, halted, bad = [], [], [], []
+    rows, spans, halted, bad, excluded = [], [], [], [], []
     idx = [d for d in sessions if first is not None and d >= first]
     for p, s in zip(idx, idx[1:]):
         if s not in bars.index:
             spans.append(str(s))
             continue
         b = bars.loc[s]
+        if (symbol, str(s)) in EXCLUDE:
+            excluded.append({"date": str(s), "reason": EXCLUDE[(symbol, str(s))]})
+            continue
         if p not in bars.index:
             continue  # already reported as a span on p
         c_prev = float(bars.loc[p, "close"])
@@ -81,6 +89,7 @@ def compute(symbol: str, raw: pd.DataFrame, sessions: list[dt.date], holidays: s
         "outliers": [{"date": x["date"], "type": ClosureType(int(x["type"])).name, "r": round(float(x["r"]), 6)}
                      for _, x in outliers.iterrows()],
         "suspectUnadjustedSplits": suspect,
+        "excluded": excluded,
     }
     return g, q
 

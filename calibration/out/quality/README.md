@@ -1,6 +1,6 @@
 # Data-quality report (alpaca, data grade `dev-unlicensed`, through 2026-09-25)
 
-Machine-readable: `quality-ace44ae727ec4f48.json`. Outliers are |r| > 20%; they are flagged, never dropped.
+Machine-readable: `quality-7b74d19ba127803c.json`. Outliers are |r| > 20%; they are flagged, never dropped.
 
 | Symbol | First session | Overnight | Weekend | Holiday | Missing sessions | Zero-volume | Bad bars | Outliers | Suspect splits |
 | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |
@@ -34,7 +34,7 @@ Machine-readable: `quality-ace44ae727ec4f48.json`. Outliers are |r| > 20%; they 
 | IWM | 2016-01-04 | 2111 | 484 | 102 | 0 | 0 | 0 | 0 | — |
 | DIA | 2016-01-04 | 2111 | 484 | 102 | 0 | 0 | 0 | 0 | — |
 | XLK | 2016-01-04 | 2111 | 484 | 102 | 0 | 0 | 0 | 0 | — |
-| XLF | 2016-01-04 | 2111 | 484 | 102 | 0 | 0 | 0 | 0 | — |
+| XLF | 2016-01-04 | 2111 | 483 | 102 | 0 | 0 | 0 | 0 | — |
 | XLE | 2016-01-04 | 2111 | 484 | 102 | 0 | 0 | 0 | 0 | — |
 | XLV | 2016-01-04 | 2111 | 484 | 102 | 0 | 0 | 0 | 0 | — |
 | XLI | 2016-01-04 | 2111 | 484 | 102 | 0 | 0 | 0 | 0 | — |
