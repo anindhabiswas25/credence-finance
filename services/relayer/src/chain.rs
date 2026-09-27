@@ -3,11 +3,14 @@
 
 use crate::report::{ICredencePriceFeed, Report};
 use alloy::{
+    eips::BlockNumberOrTag,
     network::EthereumWallet,
     primitives::{Address, Bytes, B256},
     providers::{DynProvider, Provider, ProviderBuilder},
+    rpc::types::{BlockOverrides, TransactionRequest},
     sol,
     sol_types::SolInterface,
+    transports::{RpcError, TransportErrorKind},
 };
 use anyhow::{anyhow, bail, Context, Result};
 use async_trait::async_trait;
@@ -105,6 +108,49 @@ impl ChainClient {
             .await?)
     }
 
+    /// Estimate gas. On a chain that only mines on demand (the nitro devnode, or any quiet chain) the
+    /// head can be minutes old, and `observedAt ≤ block.timestamp + 5 s` would reject fresh reports at
+    /// estimation even though the block the tx lands in is current. So when the head is stale, estimate
+    /// with a block-timestamp override of "now" (geth/nitro `eth_estimateGas` block overrides), falling
+    /// back to a plain estimate if the node does not support overrides.
+    async fn estimate(
+        &self,
+        p: &DynProvider,
+        tx: TransactionRequest,
+    ) -> std::result::Result<u64, RpcError<TransportErrorKind>> {
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_secs())
+            .unwrap_or(0);
+        let head = p
+            .get_block_by_number(BlockNumberOrTag::Latest)
+            .await
+            .ok()
+            .flatten()
+            .map(|b| b.header.timestamp);
+        if head.is_some_and(|h| now > h + 2) {
+            let overrides = BlockOverrides {
+                time: Some(now),
+                ..Default::default()
+            };
+            match p
+                .estimate_gas(tx.clone())
+                .block(BlockNumberOrTag::Latest.into())
+                .with_block_overrides(overrides)
+                .await
+            {
+                Ok(g) => return Ok(g),
+                Err(e) if e.as_error_resp().and_then(|r| r.as_revert_data()).is_some() => {
+                    return Err(e)
+                }
+                Err(e) => {
+                    tracing::debug!(error = %e, "estimate with block overrides unsupported; plain estimate")
+                }
+            }
+        }
+        p.estimate_gas(tx).await
+    }
+
     async fn submit_via(
         &self,
         p: &DynProvider,
@@ -113,10 +159,13 @@ impl ChainClient {
     ) -> Result<SubmitOutcome> {
         let feed = ICredencePriceFeed::new(self.feed, p);
         let call = feed.submit(reports.to_vec(), sigs);
-        let gas = match call.estimate_gas().await {
+        let gas = match self
+            .estimate(p, call.clone().into_transaction_request())
+            .await
+        {
             Ok(g) => g,
             Err(e) => {
-                if let Some(data) = e.as_revert_data() {
+                if let Some(data) = e.as_error_resp().and_then(|r| r.as_revert_data()) {
                     return Ok(SubmitOutcome::Rejected {
                         reason: decode_revert(&data),
                     });

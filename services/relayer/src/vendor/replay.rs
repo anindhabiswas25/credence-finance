@@ -122,8 +122,9 @@ fn wall_now_ns() -> u64 {
 }
 
 impl Replay {
-    /// Load a recording. Fails on any non-dev chain.
-    pub fn load(path: &Path, speed: f64, chain_id: u64) -> Result<Self> {
+    /// Load a recording, starting the replay `start_offset_s` seconds into it (recording time).
+    /// Fails on any non-dev chain.
+    pub fn load(path: &Path, speed: f64, chain_id: u64, start_offset_s: u64) -> Result<Self> {
         let raw =
             std::fs::read_to_string(path).with_context(|| format!("reading {}", path.display()))?;
         let events = raw
@@ -134,7 +135,14 @@ impl Replay {
                 serde_json::from_str::<Event>(l).with_context(|| format!("line {}", i + 1))
             })
             .collect::<Result<Vec<_>>>()?;
-        Self::from_events(events, speed, chain_id, wall_now_ns())
+        // recording start maps to "now − offset" (wall), so the replay is `offset` seconds in right away
+        let offset_wall_ns = (start_offset_s as f64 * 1e9 / speed) as u64;
+        Self::from_events(
+            events,
+            speed,
+            chain_id,
+            wall_now_ns().saturating_sub(offset_wall_ns),
+        )
     }
 
     /// Build from events, starting the replay at `wall_start_ns`.

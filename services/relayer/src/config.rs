@@ -141,7 +141,8 @@ pub async fn build_vendor(common: &Common) -> Result<(DynVendor, Arc<Calendar>)>
         VendorKind::Replay => {
             let path = PathBuf::from(env::required("REPLAY_FILE")?);
             let speed: f64 = env::parse_or("REPLAY_SPEED", 1.0)?;
-            let r = Replay::load(&path, speed, common.chain_id)?;
+            let offset: u64 = env::parse_or("REPLAY_START_OFFSET_S", 0)?;
+            let r = Replay::load(&path, speed, common.chain_id, offset)?;
             let cal = Arc::new(r.calendar().clone());
             Ok((Arc::new(r), cal))
         }

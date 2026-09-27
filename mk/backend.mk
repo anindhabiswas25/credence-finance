@@ -68,8 +68,14 @@ calendar-gen: ## Generate XNYS + USBANK Session[] JSON for 13 months into calibr
 calendar-test: ## Calendar edge-case tests (holidays, early closes, DST, 24/5)
 	cd calibration && $(UV) run --frozen pytest -q
 
-relayer-dev: ## Run the price relayer locally: 3 nodes + aggregator (VENDOR=replay by default; reads .env)
-	VENDOR=$${VENDOR:-replay} $(CARGO) run -p credence-relayer -- run
+relayer-dev: ## Run the relayer on the devnode: 3 nodes + aggregator (VENDOR=replay with a synthetic session unless set)
+	@[ -f deployments/412346.local.json ] || $(MAKE) local-deploy-clock LOCAL_RPC=http://127.0.0.1:8547
+	@if [ "$${VENDOR:-replay}" = replay ] && [ -z "$${REPLAY_FILE:-}" ]; then \
+	  ASSETS=$${ASSETS:-NVDA:XNAS,AAPL:XNAS} $(CARGO) run -q -p credence-relayer -- sample-replay --out target/replay-sample.jsonl; fi
+	CHAIN_ID=$${CHAIN_ID:-412346} RPC_URL=$${RPC_URL:-http://127.0.0.1:8547} VENDOR=$${VENDOR:-replay} \
+	  REPLAY_FILE=$${REPLAY_FILE:-target/replay-sample.jsonl} REPLAY_START_OFFSET_S=$${REPLAY_START_OFFSET_S:-4200} ASSETS=$${ASSETS:-NVDA:XNAS,AAPL:XNAS} \
+	  FEED_ADDRESS=$${FEED_ADDRESS:-$$(jq -r .feedA deployments/412346.local.json)} \
+	  $(CARGO) run -p credence-relayer -- run
 
 relayer-smoke: ## Live vendor smoke test (VENDOR=polygon|alpaca, keys in .env)
 	$(CARGO) run -p credence-relayer -- smoke --out target/relayer-smoke-$${VENDOR:-polygon}.json

@@ -53,6 +53,14 @@ enum Cmd {
     },
     /// The aggregator of one feed.
     Aggregator,
+    /// Write a synthetic replay session (clearly labelled synthetic) whose regular session opened
+    /// `--minutes-in` minutes ago, for local runs without vendor keys.
+    SampleReplay {
+        #[arg(long)]
+        out: std::path::PathBuf,
+        #[arg(long, default_value_t = 10)]
+        minutes_in: u64,
+    },
     /// Hit every vendor endpoint once for one asset and report what the key is entitled to.
     Smoke {
         /// Asset to test (defaults to the first in ASSETS).
@@ -302,12 +310,40 @@ async fn main() -> Result<()> {
     env::load_dotenv();
     telemetry::init("credence-relayer");
     let cli = Cli::parse();
+    if let Cmd::SampleReplay { out, minutes_in } = &cli.cmd {
+        let open = credence_relayer::node::now_s() - minutes_in * 60;
+        let symbols: Vec<(String, String, f64)> = env::list("ASSETS")
+            .iter()
+            .filter_map(|a| a.split_once(':').map(|(t, m)| (t.to_owned(), m.to_owned())))
+            .enumerate()
+            .map(|(i, (t, m))| (t, m, 100.0 + 25.0 * i as f64))
+            .collect();
+        let refs: Vec<(&str, &str, f64)> = symbols
+            .iter()
+            .map(|(t, m, p)| (t.as_str(), m.as_str(), *p))
+            .collect();
+        let events = credence_relayer::vendor::replay::synthetic_session(&refs, open);
+        let mut body = String::from("");
+        for e in events {
+            body.push_str(&serde_json::to_string(&e)?);
+            body.push('\n');
+        }
+        std::fs::write(out, body)?;
+        println!(
+            "wrote a SYNTHETIC replay session ({} symbols) to {}; replay it {minutes_in} min into the regular session with REPLAY_START_OFFSET_S={}",
+            refs.len(),
+            out.display(),
+            3600 + minutes_in * 60
+        );
+        return Ok(());
+    }
     let common = Common::from_env()?;
     let ops = OpsState::new("credence-relayer");
     let metrics = Metrics::new(&ops.registry)?;
     let metrics_addr: SocketAddr = env::parse_or("METRICS_ADDR", "0.0.0.0:9101".parse()?)?;
 
     match cli.cmd {
+        Cmd::SampleReplay { .. } => unreachable!("handled above"),
         Cmd::Smoke { asset, out } => smoke(&common, asset, out).await,
         Cmd::Run => {
             if !is_dev_chain(common.chain_id) {
