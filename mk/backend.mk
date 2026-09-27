@@ -5,7 +5,9 @@ BACKEND_RUST_PKGS := -p credence-common -p credence-relayer -p credence-keeper
 # Backend crates follow rust-toolchain.toml (1.95.0; alloy 2.5 needs >= 1.94.1, ADR-0005 / ADR-0102).
 # Set BACKEND_RUST_TOOLCHAIN=<name> only to override locally.
 BACKEND_RUST_TOOLCHAIN ?=
-CARGO := $(if $(BACKEND_RUST_TOOLCHAIN),RUSTUP_TOOLCHAIN=$(BACKEND_RUST_TOOLCHAIN) )cargo
+# Charter §2a: BE-backend builds into its own target dir (set per command, never exported to other fragments).
+BACKEND_TARGET_DIR ?= target/be
+CARGO := CARGO_TARGET_DIR=$(BACKEND_TARGET_DIR) $(if $(BACKEND_RUST_TOOLCHAIN),RUSTUP_TOOLCHAIN=$(BACKEND_RUST_TOOLCHAIN) )cargo
 TEST_DATABASE_URL ?= postgres://credence:credence@127.0.0.1:$${POSTGRES_PORT:-5433}/credence
 COMPOSE           := docker compose -f infra/docker-compose.yml
 UV                := $(shell command -v uv 2>/dev/null || echo $$HOME/.local/bin/uv)
@@ -19,7 +21,8 @@ PNPM := pnpm
 
 .PHONY: backend-install backend-build backend-test backend-lint backend-fmt \
         infra-up infra-down infra-reset infra-ps db-migrate db-rollback calendar-gen calendar-test \
-        relayer-dev relayer-smoke keeper-dev indexer-dev api-dev relayer-e2e keeper-e2e indexer-e2e services-up
+        relayer-dev relayer-smoke keeper-dev indexer-dev api-dev relayer-e2e keeper-e2e indexer-e2e services-up \
+        notifier-dev notifier-e2e
 
 backend-install: ## Install backend deps: pnpm workspace, uv calibration env, Rust crates fetched
 	$(PNPM) install --frozen-lockfile
@@ -99,6 +102,13 @@ indexer-dev: ## Run the Ponder indexer against the local devnode
 
 api-dev: ## Run the Hono API on :8787
 	$(PNPM) --filter @credence/api dev
+
+notifier-dev: ## Run the notifier (queue consumer + /healthz /readyz /metrics on :9103; reads .env)
+	$(PNPM) --filter @credence/notifier dev
+
+notifier-e2e: ## Notifier e2e on Postgres: scenario A Bell heads-up (G-10, G-11) by email + push + Telegram against mock providers; retries, dead-letter, SKIP LOCKED (needs infra-up)
+	$(CARGO) build -q -p credence-risk-cli
+	TEST_DATABASE_URL=$(TEST_DATABASE_URL) RISK_CLI=$(abspath $(BACKEND_TARGET_DIR))/debug/risk-cli $(PNPM) --filter @credence/notifier e2e
 
 services-up: ## Build and start relayer + keeper containers on the local stack
 	$(COMPOSE) --profile services up -d --build
