@@ -1,0 +1,32 @@
+# TypeScript workspace: SDK, indexer, API (+ the calendar generator's Python tests). Owner: BE-backend.
+name: ts
+on:
+  pull_request:
+    paths: ["packages/**", "services/api/**", "services/notifier/**", "indexer/**", "deployments/abis/**",
+            "package.json", "pnpm-lock.yaml", "pnpm-workspace.yaml", "turbo.json", "calibration/**", ".github/workflows/ts.yml"]
+  push:
+    branches: [main]
+
+jobs:
+  ts:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4 # version from package.json "packageManager"
+      - uses: actions/setup-node@v4
+        with: { node-version: 24, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm turbo run build
+      - run: pnpm turbo run typecheck lint
+      - run: pnpm turbo run test
+
+  calendar:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - run: cd calibration && uv sync --frozen && uv run --frozen pytest -q
+      - name: committed calendars are reproducible
+        run: |
+          cd calibration && uv run --frozen python -m credence_cal.calendar --from 2026-10-01
+          git diff --exit-code -- out/calendars

@@ -57,3 +57,16 @@ Re the 22:25 BE-backend REQUEST (toolchain): **done.** `rust-toolchain.toml` now
 - `IRiskEngine` gained two views, `timelock()` and `sigmaOracle()`. This is additive: no selector changed. `deployments/abis/v0/IRiskEngine.json` is re-exported.
 - `make devnode-deploy-engine` deploys and activates the engine through the StylusDeployer, constructor included, and writes `deployments/devnode.engine.json` (git-ignored). The engine implements `safeLtv`, `liquidationLot` and `clear`, the scenario-set, params and σ writers, and the views. The on-chain build uses a pinned nightly with build-std so the program fits one code fragment on ArbOS 40. It is 23.6 KB compressed.
 - The keeper's J12 `programTimeLeft` check can target that address. Timelock and sigma oracle are both the deployer on local.
+
+## 2026-09-28 00:12 · BE-backend · BLOCKED
+**Live vendor smoke tests need user-provided keys** (the user has chosen the free tiers for S1). Put them in `.env` (git-ignored): `POLYGON_API_KEY` (https://massive.com/dashboard/signup), `ALPACA_API_KEY_ID` + `ALPACA_API_SECRET_KEY` (https://app.alpaca.markets, Paper account → API Keys), `ALPACA_FEED=iex`. Then run `make relayer-smoke VENDOR=polygon` and `VENDOR=alpaca`. Everything else runs on the replay vendor. Also for the PM, before any public testnet: both vendors' individual plans are **personal-use only**, and publishing prices on-chain needs business/redistribution licences (ADR-0002).
+
+## 2026-09-28 00:12 · BE-backend · DECISION
+Backend decisions the guide leaves open, one ADR each in `docs/adr/`: 0001 dbmate as the single migration tool (Postgres on host port 5433); 0002 vendors (Polygon/Massive = A, Alpaca = B, halts from the Nasdaq Trader feed); 0003 calendar windows (early-close post-market ends 17:00; USBANK 08/09/17/18 ET; Fed Saturday rule); 0004 relayer protocol (two signing rounds, lower median, seq recovery, stale-head gas estimation, replay refused on every non-dev chain); 0005 toolchain (alloy 2.5 needs ≥ 1.94.1; thanks for the 1.95.0 bump); 0006 keeper (advisory-lock fencing with 15 s takeover, write-ahead txs, one poke covers all due keys of an asset); 0007 indexer/API (views schema `indexer`, viem/siwe, in-process rate limits).
+
+## 2026-09-28 00:12 · BE-backend · READY
+**Backend services on the local stack.** Everything below runs from `make`, and the e2e targets need `make infra-up db-migrate`:
+- `make relayer-dev` runs 3 signer nodes + the aggregator against your `CredencePriceFeed` A on the devnode (synthetic replay session unless `VENDOR`/`REPLAY_FILE` are set). `make relayer-e2e` covers acceptance on anvil.
+- `make keeper-dev` / `make keeper-e2e` poke your `AssetClock` at every calendar boundary and heartbeat, with leader failover.
+- `make indexer-e2e` runs Ponder on the devnode (`clock_state`, `clock_transition`, `price_point` as views in schema `indexer`) and checks `GET /v1/clock/:assetId` (API on :8787 with `make api-dev`).
+- `@credence/sdk` (`packages/sdk`) gives you ABIs from `deployments/abis/v0`, the address-book loader (it also reads your flat `*.local.json`), and `reportsDigest()`, which matches the Rust signer and your `hashReports`.

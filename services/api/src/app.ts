@@ -12,6 +12,7 @@ import type { Config } from "./config.ts";
 import type { AuthRepo, ClockRepo } from "./repo.ts";
 import { FixedWindow, clientIp, rateLimit } from "./ratelimit.ts";
 import { SESSION_COOKIE, newNonce, newSessionId, signSession, verifySession } from "./session.ts";
+import { log } from "./log.ts";
 
 export interface Deps {
   config: Config;
@@ -120,7 +121,7 @@ export function createApp(deps: Deps) {
   app.use("/v1/auth/*", rateLimit(authLimiter, (c) => [`auth-ip:${ipOf(c)}`]));
 
   app.onError((err, c) => {
-    console.error(err);
+    log.error({ err, path: c.req.path }, "unhandled error");
     return c.json({ error: "internal", message: "Internal error" }, 500);
   });
 

@@ -5,6 +5,7 @@ import { createApp } from "./app.ts";
 import { assetVenues, boundariesAfter, loadCalendars } from "./calendar.ts";
 import { loadConfig } from "./config.ts";
 import { pgRepos } from "./repo.ts";
+import { log } from "./log.ts";
 
 const config = loadConfig();
 const repos = pgRepos(config.databaseUrl, config.indexerSchema);
@@ -25,7 +26,7 @@ const app = createApp({
 });
 
 const server = serve({ fetch: app.fetch, port: config.port }, (info) => {
-  console.log(JSON.stringify({ level: "info", msg: "credence-api listening", port: info.port, indexerSchema: config.indexerSchema }));
+  log.info({ port: info.port, indexerSchema: config.indexerSchema, corsOrigins: config.corsOrigins }, "credence-api listening");
 });
 
 for (const sig of ["SIGINT", "SIGTERM"] as const) {

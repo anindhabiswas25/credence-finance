@@ -1,0 +1,48 @@
+# Rust services (relayer, keeper, credence-common): fmt, clippy -D warnings, test; plus the on-chain
+# e2e suites against anvil + Postgres. Owner: BE-backend.
+name: services
+on:
+  pull_request:
+    paths: ["services/relayer/**", "services/keeper/**", "crates/credence-common/**", "infra/db/**",
+            "contracts/src/**", "deployments/abis/**", "calibration/out/**", "Cargo.toml", "Cargo.lock",
+            "rust-toolchain.toml", ".github/workflows/services.yml"]
+  push:
+    branches: [main]
+
+env:
+  CARGO_TERM_COLOR: always
+  PKGS: -p credence-common -p credence-relayer -p credence-keeper
+
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - run: rustup show # installs the toolchain pinned in rust-toolchain.toml
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo fmt $PKGS -- --check
+      - run: cargo clippy --locked $PKGS --all-targets -- -D warnings
+      - run: cargo test --locked $PKGS
+
+  e2e:
+    runs-on: ubuntu-24.04
+    needs: check
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env: { POSTGRES_USER: credence, POSTGRES_PASSWORD: credence, POSTGRES_DB: credence }
+        ports: ["5432:5432"]
+        options: --health-cmd "pg_isready -U credence" --health-interval 2s --health-retries 30
+    env:
+      TEST_DATABASE_URL: postgres://credence:credence@127.0.0.1:5432/credence
+    steps:
+      - uses: actions/checkout@v4
+      - run: rustup show
+      - uses: Swatinem/rust-cache@v2
+      - uses: foundry-rs/foundry-toolchain@v1
+        with: { version: v1.8.3 }
+      - run: make contracts-build
+      - name: relayer e2e (2-of-3 accepted; 1-of-3, wrong domain, unsorted, stale/old seq rejected)
+        run: cargo test --locked -p credence-relayer --test e2e -- --ignored --nocapture --test-threads=1
+      - name: keeper e2e (J1 on schedule; leader failover without duplicates)
+        run: cargo test --locked -p credence-keeper --test keeper_e2e -- --ignored --nocapture
