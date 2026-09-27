@@ -9,7 +9,7 @@ Owner: Product Manager · Applies to every engineer session working in this repo
 | Product Manager (PM) | Active | Specs, sprint scope, acceptance, reviews every sprint report, writes the next prompts | S0 |
 | **Blockchain Engineer (BE-chain)** | **Active** | Solidity contracts, the `risk-core` crate, the Stylus Risk Engine, `risk-cli`, contract CI | S1 |
 | **Backend Engineer (BE-backend)** | **Active** | Relayer, keeper, indexer, API, notifier, DB, infra, TS SDK, calendar generator | S1 |
-| Quant Engineer | Planned | Calibration pipeline, scenario sets, backtest, launch parameters | S2 |
+| **Quant Engineer (QE)** | **Active from S2** | Calibration pipeline, scenario sets, joint stress set, σ methodology, backtest, launch parameters | S2 |
 | Frontend Engineer | Planned | Web app, risk page, bidder console | S3 |
 | QA / Security Engineer | Planned | Invariant review, e2e, pre-audit gates, threat model | S4 |
 | DevOps / SRE | Planned | Testnet deploy pipeline, monitoring, on-call tooling | S5 |
@@ -21,7 +21,7 @@ Engineers run **at the same time, in the same working tree**. Never create, edit
 | Path | Owner |
 | --- | --- |
 | `contracts/**` | BE-chain |
-| `crates/risk-core/**`, `crates/risk-cli/**`, `crates/risk-py/**`, `stylus/**` | BE-chain |
+| `crates/risk-core/**`, `crates/risk-cli/**`, `crates/risk-py/**`, `crates/risk-wasm/**`, `stylus/**`, root `Stylus.toml` | BE-chain |
 | `crates/credence-bindings/**` | BE-chain (generated from contract ABIs) |
 | `deployments/abis/**` | BE-chain (frozen ABIs) |
 | `mk/contracts.mk`, `.github/workflows/contracts.yml`, `.github/workflows/rust.yml`, `rust-toolchain.toml`, `.tool-versions` | BE-chain |
@@ -29,13 +29,21 @@ Engineers run **at the same time, in the same working tree**. Never create, edit
 | `crates/credence-common/**`, `services/**` | BE-backend |
 | `indexer/**`, `packages/**`, `infra/**` | BE-backend |
 | Root `package.json`, `pnpm-workspace.yaml`, `turbo.json`, `.env.example` | BE-backend |
-| `calibration/**` | BE-backend in S1 (calendar only), Quant from S2 |
+| `calibration/**` | **QE from S2** (includes the calendar generator BE-backend wrote in S1; the output format is frozen at v1) |
+| `mk/quant.mk`, `.github/workflows/calibration.yml` | QE |
 | `mk/backend.mk`, `.github/workflows/ts.yml`, `.github/workflows/services.yml` | BE-backend |
 | `docs/CREDENCE_BUILD_GUIDE.md`, `docs/Architecture.md`, the money docs, `docs/team/**` | PM only |
 | `docs/adr/**` | Anyone; one file per decision, numbered `ADR-XXXX-<role>-<slug>.md` |
 | `docs/handoff/BOARD.md` | Everyone, **append only** |
 | `docs/handoff/sprint-N-<role>-report.md` | That role |
 | Root `Makefile`, `README.md`, `.gitignore` | PM. Put your make targets in your `mk/*.mk` fragment |
+
+## 2a. Shared machine rules (added after S1)
+
+- **Separate Cargo target dirs** (S1 had lock contention): BE-chain uses the default `target/`, BE-backend `CARGO_TARGET_DIR=target/be`, and QE `CARGO_TARGET_DIR=target/quant`.
+- **Global tools** (rustup toolchains, foundry, cargo-stylus, node, uv): before installing or upgrading one, post a `DECISION` on the board and wait until no other role's build is running. Two concurrent rustup installs corrupted a toolchain in S1.
+- **Local chain:** the devnode is shared (`make infra-up`, owned by BE-backend). Do not run `make infra-down` or `infra-reset` without posting on the board first.
+- **Address book:** every local deploy writes to **one** file, `deployments/<chainId>.local.json`, owned by BE-chain, with the `shared.riskEngine` key included. No separate per-component address files.
 
 ## 3. Git rules
 

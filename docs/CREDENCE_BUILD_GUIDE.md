@@ -1,10 +1,22 @@
 # Credence Finance: Engineering Build Guide
 
 **Target:** Arbitrum Sepolia (chain id `421614`) public testnet, built to mainnet quality
-**Version:** 1.0 · Sep 27, 2026
+**Version:** 1.1 · Sep 28, 2026 (changelog below)
 **Audience:** Solidity engineers, Rust/Stylus engineers, backend engineers, frontend engineers, the quant, DevOps, and audit prep
 **Source specs:** `Architecture.md` (Rev 2), `One week of money in Credence Finance.md` (scenario A), `One week of money flow.md` (scenario B)
 **Status:** Approved for build. Section 2 lists every decision that refines or overrides the source specs.
+
+**Changelog**
+- **v1.1 (Sep 28, 2026), after the Sprint 1 review.**
+  - R-22 is corrected: the loss model floors the price at zero, so loss ≤ debt (F-4.3, F-4.4). Premium golden values change.
+  - Golden vectors G-06..G-11 and G-17 now carry full-precision inputs.
+  - The NAV staleness rule is based on business days (R-23).
+  - Toolchain: Rust 1.95.0, plus a pinned nightly for the Stylus on-chain build (R-24). Uniswap v3-core is removed from the dependencies.
+  - Measured Stylus gas replaces the estimates.
+  - `BorrowPaused` event → `BorrowPausedByGuardian`.
+  - `ReportAccepted` gains `marketStatus` (R-25).
+  - Market-data licensing is a launch gate (R-26).
+- v1.0 (Sep 27, 2026). Initial.
 
 ---
 
@@ -159,7 +171,11 @@ The three source documents were reviewed line by line by product and engineering
 | R-19 | Open intraday batches | Open batches are visible, which invites last-block sniping; the intraday reserve price is undefined. | Reserve `R = (1 − κ) × min(V_start, V_clear)`. Batch end is a timestamp boundary. The minimum price increment is 1 bp. The pool backstop at R applies to intraday and emergency batches too. |
 | R-20 | Sequencer outage | No sequencer-uptime feed is guaranteed on Arbitrum Sepolia. | `AssetClock` detects a gap in L2 block timestamps (> 120 s between observed pokes during a phase) and extends every open auction phase by the gap plus a 120 s grace. On mainnet, the Chainlink L2 sequencer uptime feed is used as a second input. |
 | R-21 | Market structure and upgrades | "One immutable market per asset" leaves the contract layout open. | A **singleton `CredenceMarket`** holds isolated markets keyed by `marketId` (Morpho Blue pattern), with one position per (market, borrower). Money contracts are **immutable, with no proxies**. The Risk Engine and the price sources are replaceable through the timelock, because they hold no funds. |
-| R-22 | Accuracy of doc figures | The premium figures ($4.52, $6.53, $10.89, $35.95) are 1–3% below the closed-form value of the stated Student-t model ($4.64, $6.61, $11.01, $36.40). They look like Monte Carlo estimates. The keeper-call count in scenario B was wrong. | Golden tests use the engine's deterministic output on a fixed scenario set (Appendix A), not the doc figures. The text errors in scenario B were corrected in Rev 2. |
+| R-22 | Accuracy of doc figures | **Corrected in v1.1.** A collateral price cannot fall below zero, so a scenario's loss can never exceed the debt: `g_k = max(0, 1 + r_k)(1 − κ)`. Under that correct model, the exact premiums are $4.39, $6.26, $10.44 and $34.39. The doc figures ($4.52, $6.53, $10.89, $35.95) are 3–5% above that. (v1.0 of this guide claimed the opposite, because its closed form let prices go negative. Sprint 1 found this.) The keeper-call count in scenario B was wrong. | Golden tests use the engine's deterministic output (Appendix A G-22), not the doc figures. Scenario tests inject the doc premiums through `MockRiskEngine`. The text errors in scenario B were corrected in Rev 2. |
+| R-23 | NAV staleness vs weekends | "NAV older than 50 h → HALTED" halts every NAV market every Monday morning, because Friday's 17:00 NAV is about 64 h old by then (Sprint 1 finding). | Staleness is measured in **USBANK sessions**, not hours. *Fresh* means the NAV belongs to the most recent USBANK session whose strike (session `close`, 17:00 ET) has passed. *Stale* means that strike passed more than 6 h ago with no NAV, and the asset becomes CLOSED. *Invalid* means no NAV for the last **two** strikes, or a one-step drop > 0.5%, and the asset becomes HALTED. Weekends and holidays never make a NAV stale. |
+| R-24 | Toolchain | alloy 2.5 needs Rust ≥ 1.94.1. The Stylus engine fits one code fragment on ArbOS 40 only with a nightly `build-std` build. Uniswap v3-core's math does not compile on Solidity 0.8. | Rust **1.95.0** for everything, and **`nightly-2025-08-01`** pinned for the Stylus on-chain artifact only, built reproducibly (ADR-0102). Revisit before the mainnet audit: a stable build if ArbOS allows multi-fragment programs, or a split into two engines. `UniV3TwapSource` uses its own minimal pool interface. |
+| R-25 | Feed status in the index | `price_point.status` cannot be derived, because `ReportAccepted` has no status. | Interface v1: `ReportAccepted(bytes32 indexed asset, uint8 kind, uint256 price, uint40 observedAt, uint64 seq, uint8 marketStatus)`. |
+| R-26 | Market-data licensing | Individual vendor plans (Polygon/Massive, Alpaca) are personal-use only. Publishing their prices on-chain, even on a testnet, needs a redistribution licence. | This is a **launch gate for any public deployment**: either business or redistribution licences for both vendors, or testnet feeds from providers already licensed for on-chain publication (evaluated in S2, see §10.1). Local and devnode use of the free keys is fine. |
 
 ### 2.2 Open questions this build resolves or defers
 
@@ -188,7 +204,7 @@ Every number in both money documents was recomputed from the Architecture formul
 | Pool P&L in scenario B: +$660.82 in, −$672.59 out, share price 0.9998823 | ✅ |
 | Pool P&L in scenario A: Uma $40,000 → $35,123.19 | ✅ |
 | Monday auction cash in = cash out ($31,087.15) | ✅ |
-| Gap Cover premiums | ⚠️ 1–3% below the closed form (R-22) |
+| Gap Cover premiums | ⚠️ 3–5% above the exact value under the zero price floor (R-22, corrected in v1.1) |
 | Kai's "12 successful calls" | ❌ Actually 7 calls earning 12 tips. Corrected. |
 
 ---
@@ -543,7 +559,7 @@ Versions were checked against the package registries on **Sep 27, 2026**. Pin ex
 | --- | --- | --- |
 | Solidity | 0.8.30 (pin in `foundry.toml`; move to a newer 0.8.x only between audits) | Contracts |
 | Foundry (forge, cast, anvil) | v1.8.3 | Build, test, scripts |
-| Rust | stable 1.9x via `rust-toolchain.toml`, plus target `wasm32-unknown-unknown` | Risk core, Stylus, services |
+| Rust | **1.95.0** via `rust-toolchain.toml` (alloy 2.5 needs ≥ 1.94.1), plus target `wasm32-unknown-unknown`. The Stylus on-chain artifact uses the pinned `nightly-2025-08-01` with `build-std` (R-24) | Risk core, Stylus, services |
 | cargo-stylus | 0.10.9 | Check, deploy, activate, export ABI |
 | Docker | 27+ | nitro-devnode, reproducible Stylus builds, services |
 | nitro-devnode | latest tag of `OffchainLabs/nitro-devnode` | Local Arbitrum chain **with Stylus** (anvil cannot run WASM) |
@@ -558,7 +574,7 @@ Versions were checked against the package registries on **Sep 27, 2026**. Pin ex
 
 ```toml
 [toolchain]
-channel = "1.91.0"          # pin; bump deliberately
+channel = "1.95.0"          # pin; bump deliberately (R-24)
 components = ["rustfmt", "clippy"]
 targets = ["wasm32-unknown-unknown"]
 ```
@@ -570,7 +586,6 @@ cd contracts
 forge install OpenZeppelin/openzeppelin-contracts@v5.6.1 --no-git
 forge install foundry-rs/forge-std --no-git
 forge install Vectorized/solady --no-git        # FixedPointMathLib, SafeTransferLib, LibSort
-forge install Uniswap/v3-core --no-git           # OracleLibrary interfaces for UniV3TwapSource
 ```
 
 `contracts/foundry.toml`
@@ -614,7 +629,6 @@ int_types = "long"
 @openzeppelin/=lib/openzeppelin-contracts/
 forge-std/=lib/forge-std/src/
 solady/=lib/solady/src/
-@uniswap/v3-core/=lib/v3-core/
 ```
 
 ### 6.3 Rust dependencies
@@ -1169,7 +1183,7 @@ interface IOracleAdapter {
 
 **Shallow pool:** for the Uniswap v3 source, depth ≈ `L × (√P − √(0.98 P))` in token1 terms, using in-range liquidity. If it is below `minDepth` ($250k), the TWAP is ignored. This is conservative, because liquidity that ends before −2% is overestimated only if ticks are crossed, and those pools fail the depth test anyway.
 
-**NAV rules:** fresh means published within 26 h. HALTED if the NAV is older than 50 h, or it fell more than 0.5% in one update, or the issuer's `redemptionsGated()` is true.
+**NAV rules (R-23):** freshness is counted in USBANK sessions, not hours. The NAV is fresh if it belongs to the latest session whose 17:00 ET strike has passed. It is CLOSED (stale) if that strike is more than 6 h old with no NAV. It is HALTED if NAVs for two strikes are missing, if it fell more than 0.5% in one update, or if the issuer's `redemptionsGated()` is true.
 
 **Invariant `INV-ORA-01`:** in EXTENDED, CLOSED and HALTED, `valuationPrice ≤ refPrice`.
 
@@ -1743,13 +1757,15 @@ impl RiskEngine {
 
 **Size and gas.** The Stylus program must fit the network's compressed-size limit (`cargo stylus check` reports it). Build with `--profile stylus`. If the engine outgrows the limit, split it into `PricingEngine` (safe LTV, premium, capacity) and `AuctionMath` (lots, clearing) behind the same Solidity interface. Estimated gas on Arbitrum is below; measure it in M2 and record it in the gas snapshot.
 
-| Call | Main cost | Estimate |
-| --- | --- | --- |
-| `safeLtv` | 2–3 SLOADs | < 15k |
-| `quoteCover` (N = 3,000, tail ≈ 3%) | ~6–10 words of sorted tail + compute | < 60k |
-| `coverLossVector` (K = 256) | 16 words of the joint column | < 80k |
-| `poolCapacity` (K = 256, ≤ 10 markets) | compute only (vectors in calldata) | < 150k |
-| `clear` (64 bids) | sort + fill | < 60k |
+Measured in Sprint 1 on the devnode (`eth_estimateGas`, including the 21k intrinsic cost and the Stylus program entry): `safeLtv` (N = 3,000) **80.7k**, `liquidationLot` **71.3k**, `clear` (64 bids) **143.6k**. On Arbitrum these are cheap in dollar terms. S2 must profile them (`cargo stylus trace`), and the budgets below are hard ceilings for CI.
+
+| Call | CI ceiling |
+| --- | --- |
+| `safeLtv` | 100k |
+| `quoteCover` (N = 3,000) | 250k |
+| `coverLossVector` (K = 256) | 300k |
+| `poolCapacity` (K = 256, ≤ 10 markets) | 600k |
+| `clear` (64 bids) | 200k |
 
 #### 8.9.4 Program lifecycle on Arbitrum
 
@@ -1865,7 +1881,7 @@ cureCollateral  Δq = max(0, D_proj / (LTV_safe × V) − q)  → shown as token
 Loss in scenario k (it is monotone decreasing in z, so the ascending set means the losses sit at the start):
 
 ```text
-g_k = (1 + σ z_k / 1000 − d)(1 − κ)
+g_k = max(0, 1 + σ z_k / 1000 − d) × (1 − κ)      (a price cannot go below zero, so L_k ≤ D_proj)
 L_k = max(0, D_proj − C × g_k)
 z0  = 1000 × ((D_proj / (C (1 − κ)) − 1 + d) / σ)          loss iff z_k < z0
 
@@ -1882,8 +1898,9 @@ m(u)  = 1 + η × u²                                     (u = pool utilisation 
 For stress weekend j = 1..K (the K = 256 worst joint weekends by equal-weighted basket return, chosen by calibration):
 
 ```text
-policy loss      L_{p,j} = max(0, D_proj,p − C_p × (1 + σ_a z_{a,j}/1000 − d_a)(1 − κ))
-uncovered bound  B_{m,j} = C_unc,m × max(0, LTV_safe,m − (1 + σ_a z_{a,j}/1000 − d_a)(1 − κ))
+g_{a,j}          = max(0, 1 + σ_a z_{a,j}/1000 − d_a) × (1 − κ)
+policy loss      L_{p,j} = max(0, D_proj,p − C_p × g_{a,j})
+uncovered bound  B_{m,j} = C_unc,m × max(0, LTV_safe,m − g_{a,j})
 Λ_j = Σ_policies L_{p,j} + Σ_markets B_{m,j}
 u   = max_j Λ_j / J           accept iff u_after ≤ u_max (0.50)
 ```
@@ -1972,7 +1989,7 @@ flowchart LR
 
 Every report is batched over all assets into **one tx per feed per tick**. Gas is paid from a relayer hot wallet, which is monitored and auto-topped-up from an ops wallet. The signer keys live in **AWS KMS** (`alloy-signer-aws`) and are never exported.
 
-Vendor selection: any licensed real-time SIP source (Polygon.io, Databento, Alpaca, Nasdaq Basic plus a NYSE feed, or similar). Pick two **different** vendors for A and B. Store each vendor contract's redistribution terms in `docs/adr/`.
+Vendor selection: any licensed real-time SIP source (Polygon.io/Massive, Databento, Alpaca, Nasdaq Basic plus a NYSE feed, or similar). Pick two **different** vendors for A and B. **Publishing on-chain requires a redistribution licence** (R-26); individual plans are personal-use only. The alternative is feeds already licensed for on-chain publication (for example equity feeds from on-chain oracle networks), with the relayer kept as a monitoring shadow. Store each vendor contract's redistribution terms in `docs/adr/`.
 
 ### 10.2 Keeper (`services/keeper`, Rust)
 
@@ -2571,23 +2588,23 @@ These come from the Architecture and the money documents, recomputed exactly (§
 | G-03 | `kinkedRate` | U = 182,500 / 230,000 | 0.0728986e18 (±1e12) |
 | G-04 | senior rate | U = 0.85, ρ_J = ρ_p = 10% | 0.0521333e18 |
 | G-05 | `safeLtv` formula | z = −5,897 (‰σ), σ = 3%, d = 0, κ = 3%, max 75% | 0.75e18 (capped; g = 0.79839) |
-| G-06 | `safeLtv` formula | z = −5,897, σ = 4% | 0.741182e18 (±1e14) |
-| G-07 | `safeLtv` formula | z = −5,897, σ = 4.5% | 0.712580e18 (±1e14) |
-| G-08 | `safeLtv` formula | z = −5,897, σ = 6% | 0.626773e18 (±1e14) |
-| G-09 | cures | D = 13,500, q = 100, V = 180, LTV_s = 0.741182 | repay 158.72; add 1.1897 tokens |
-| G-10 | cures | D = 67,028.99, q = 500, V = 180, LTV_s = 0.712580 | repay 2,896.78; add 22.584 tokens |
-| G-11 | cures | D = 55,535.10, q = 300, V = 250, LTV_s = 0.626773 | repay 8,527.09; add 54.419 tokens |
+| G-06 | `safeLtv` formula | z = −5.897362714633 (exact t₃ quantile), σ = 4% | 0.741182326672e18 (±1e12) |
+| G-07 | `safeLtv` formula | z = −5.897362714633, σ = 4.5% | 0.712580117506e18 (±1e12) |
+| G-08 | `safeLtv` formula | z = −5.897362714633, σ = 6% | 0.626773490008e18 (±1e12) |
+| G-09 | cures | D = 13,500, q = 100, V = 180, LTV_s = 0.741182326672 | repay 158.72; add 1.1897 tokens |
+| G-10 | cures | D = 67,028.99, q = 500, V = 180, LTV_s = 0.712580117506 | repay 2,896.78; add 22.584 tokens |
+| G-11 | cures | D = 55,535.10, q = 300, V = 250, LTV_s = 0.626773490008 | repay 8,527.09; add 54.419 tokens |
 | G-12 | `liquidationLot` | D = 13,500, q = 100, P° = 158.40, R = 153.648 | 58.5131 |
 | G-13 | `liquidationLot` | D = 14,809.35, q = 50, P = 364, R = 353.08 | 20.2286 |
 | G-14 | `liquidationLot` | D = 13,519.02, q = 100, P° = 158.40 | 59.0752 |
 | G-15 | `liquidationLot` | D = 22,542.59, q = 100, P° = 225 | 128.551 → clamped to 100 (full close) |
 | G-16 | `liquidationLot` | D = 67,066.69, q = 500, P° = 126 | 789.41 → 500 (full close) |
-| G-17 | `precloseLot` (R-06) | D = 55,536.02, q = 300, V = 250, R_pre = 247.50, LTV_s = 0.626773, λ_pre = 1% | 96.5454; LTV after = 0.626773 exactly if it clears at R |
+| G-17 | `precloseLot` (R-06) | D = 55,536.02, q = 300, V = 250, R_pre = 247.50, LTV_s = 0.626773490008, λ_pre = 1% | 96.5454; LTV after = 0.626773 exactly if it clears at R |
 | G-18 | `clear` | bids (300 @ 124.40), (300 @ 124.11); Q = 500; R = 122.22 | p* = 124.11; fills 300 / 200; qPool = 0 |
 | G-19 | `clear` | bid (60 @ 219.00); Q = 100; R = 218.25 | p* = 219.00; fill 60; qPool = 40; p̄ = 218.70 |
 | G-20 | settle partial | D = 13,500, x = 58.5131, p̄ = 156.024 (98.5% of 158.40) | proceeds 9,129.45; penalty 273.88; debt 4,644.43; HF 1.13 |
 | G-21 | settle short | D = 22,542.59, proceeds 21,870.00 | penalty 0; shortfall 672.59 → pool |
-| G-22 | premium (closed form, t₃ model, for the calibration cross-check) | C = 18,000, D = 13,500, σ = 4%, τ = 3/365, u = 0 | E[L] 2.26, ES 90.51, π 4.64 (±0.01) |
+| G-22 | premium (exact, t₃ model with the zero price floor) | C = 18,000, D = 13,500, σ = 4%, τ = 3/365, u = 0 | E[L] 2.14, ES 85.77, π 4.39 (±0.01) |
 
 ### A.2 Scenario-level
 
@@ -2605,14 +2622,14 @@ In scenario tests, premiums are injected through `MockRiskEngine` at the doc's v
 | Contract | Event |
 | --- | --- |
 | AssetClock | `StateChanged(bytes32 indexed asset, ClockState from, ClockState to, uint64 closureId)`, `ClosureStarted(bytes32 indexed asset, uint64 closureId, uint64 venueEpoch, ClosureType t, uint256 refPrice, uint40 reopenAt)`, `OpenPrint(bytes32 indexed asset, uint64 closureId, uint256 price, bool fallbackUsed)`, `ReopenComplete(bytes32 indexed asset, uint64 closureId)`, `Restricted(bytes32 indexed asset, ClockState s, uint40 until)`, `PhaseExtended(uint40 gap)` |
-| CredencePriceFeed | `ReportAccepted(bytes32 indexed asset, uint8 kind, uint256 price, uint40 observedAt, uint64 seq)`, `CommitteeChanged(address[] signers, uint8 threshold)` |
+| CredencePriceFeed | `ReportAccepted(bytes32 indexed asset, uint8 kind, uint256 price, uint40 observedAt, uint64 seq, uint8 marketStatus)` (v1, R-25), `CommitteeChanged(address[] signers, uint8 threshold)` |
 | CredenceMarket | `MarketCreated(bytes32 indexed id, MarketParams p)`, `Accrued(bytes32 indexed id, uint256 interest, uint256 poolFee, uint256 treasuryFee)`, `CollateralAdded(bytes32 indexed id, address indexed owner, address caller, uint256 amt)`, `CollateralWithdrawn(…)`, `Borrow(bytes32 indexed id, address indexed owner, address to, uint256 assets, uint256 shares)`, `Repay(bytes32 indexed id, address indexed owner, address payer, uint256 assets, uint256 shares)`, `CoverBought(bytes32 indexed id, address indexed owner, uint64 closureId, uint64 policyId, uint256 premium, bool addedToDebt, bool auto)`, `BellEnforced(bytes32 indexed id, address indexed owner, uint64 closureId, uint8 outcome)`, `Flagged(bytes32 indexed id, address indexed owner, uint64 auctionId, AuctionKind kind)`, `LotReleased(uint64 indexed auctionId, address indexed owner, uint256 qty)`, `PositionSettled(uint64 indexed auctionId, address indexed owner, uint256 proceeds, uint256 penalty, uint256 repaid, uint256 refund)`, `Shortfall(bytes32 indexed id, address indexed owner, uint256 s, uint256 paidPool, uint256 paidReserve, uint256 seniorLoss)`, `FeesClaimed(bytes32 indexed id, uint256 pool, uint256 treasury)` |
 | SeniorVault | ERC-4626 `Deposit` / `Withdraw`, `RedeemRequested(uint256 indexed id, address owner, uint256 shares)`, `RedeemProcessed(uint256 indexed id, uint256 assets)`, `Allocated(bytes32 indexed id, int256 delta)` |
 | UnderwriterPool | `EpochOpened(uint64 indexed e)`, `EpochSnapshotted(uint64 indexed e, uint256 equity)`, `EpochSettled(uint64 indexed e, uint256 premiums, uint256 fees, uint256 penalties, uint256 bonds, uint256 losses, uint256 sharePriceAfter)`, `CoverWritten(uint64 indexed policyId, bytes32 marketId, address owner, uint64 epoch, uint256 premium, uint256 uAfter)`, `ShortfallPaid(uint256 amount)`, `BackstopBought(bytes32 asset, uint256 qty, uint256 price)`, `DepositQueued`, `WithdrawRequested`, `WithdrawClaimed` |
 | AuctionHouse | `AuctionCreated(uint64 indexed id, AuctionKind kind, bytes32 asset, uint64 closureId, uint40[4] deadlines)`, `LotsFixed(uint64 indexed id, uint256 lot, uint256 reserve)`, `BidCommitted(uint64 indexed id, address indexed bidder, bytes32 c, uint256 maxNotional)`, `BidRevealed(…)`, `BidPlaced(…)`, `AuctionCleared(uint64 indexed id, uint256 pStar, uint256 filled, uint256 qPool, uint256 proceeds)`, `BondForfeited(uint64 indexed id, address bidder, uint256 bond)`, `Claimed(…)`, `GdaStarted(…)`, `GdaBuy(…)` |
 | SettlementAdapter / SolverAuction | `SettlementOpened`, `SolverBid`, `SettlementFilled`, `FallbackAdvanced`, `RedemptionClaimed` |
 | RiskEngine | `ScenarioSetUpdated(bytes32 asset, uint8 type, bytes32 hash, uint32 n)`, `SigmaUpdated(bytes32 asset, uint8 type, uint256 sigma)`, `ParamsUpdated(RiskParams p)` |
-| CredenceGuardian | `BorrowPaused`, `UnpauseScheduled`, `HaircutRaised(bytes32 id, uint64 bps, uint40 until)`, `CoverPaused`, `AssetHalted` |
+| CredenceGuardian | `BorrowPausedByGuardian`, `UnpauseScheduled`, `HaircutRaised(bytes32 id, uint64 bps, uint40 until)`, `CoverPaused`, `AssetHalted` |
 
 ## Appendix C: Error catalogue (selection; the full list is in `Errors.sol`)
 
