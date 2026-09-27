@@ -1,0 +1,16 @@
+[package]
+name = "credence-risk-cli"
+description = "risk-core as a JSON-in / JSON-out CLI (Foundry FFI, calibration)"
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "risk-cli"
+path = "src/main.rs"
+
+[dependencies]
+credence-risk-core = { path = "../risk-core", features = ["std"] }
+alloy-primitives = { workspace = true, features = ["std", "serde"] }
+serde = { workspace = true }
+serde_json = { workspace = true }

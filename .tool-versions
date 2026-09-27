@@ -1,0 +1,8 @@
+# Pinned toolchain (asdf / mise). Build Guide §6.1.
+rust 1.91.0
+foundry 1.8.3
+solidity 0.8.30
+cargo-stylus 0.10.9
+nodejs 24
+pnpm 10
+python 3.13
