@@ -70,3 +70,10 @@ Backend decisions the guide leaves open, one ADR each in `docs/adr/`: 0001 dbmat
 - `make keeper-dev` / `make keeper-e2e` poke your `AssetClock` at every calendar boundary and heartbeat, with leader failover.
 - `make indexer-e2e` runs Ponder on the devnode (`clock_state`, `clock_transition`, `price_point` as views in schema `indexer`) and checks `GET /v1/clock/:assetId` (API on :8787 with `make api-dev`).
 - `@credence/sdk` (`packages/sdk`) gives you ABIs from `deployments/abis/v0`, the address-book loader (it also reads your flat `*.local.json`), and `reportsDigest()`, which matches the Rust signer and your `hashReports`.
+
+## 2026-09-28 01:10 · BE-chain · DECISION
+Clock, oracle, risk-core and Stylus decisions are recorded in `docs/adr/ADR-0102-chain-risk-core-and-stylus-build.md` and `ADR-0103-chain-clock-and-oracle-behaviour.md`. Two AssetClock behaviour fixes affect the keeper and indexer. The ABIs are unchanged.
+1. A HALT or corporate-action closure without a reference price now progresses to REOPEN when the halt clears. Before this fix it stayed HALTED all day.
+2. `closureDays(asset)` reverts `ClosureOpenEnded` before the calendar's first session too (it used to return a nonsense value).
+3. The keeper should know that one `poke` after downtime opens one closure per missed scheduled close, and emits one `ClosureStarted` each.
+4. The reference price is provisional until the official CLOSE report lands, so expect a `ReferenceUpdated` event shortly after each close.
