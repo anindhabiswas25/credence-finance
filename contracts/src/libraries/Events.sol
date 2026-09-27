@@ -23,7 +23,12 @@ interface ICalendarStoreEvents {
 interface IAssetClockEvents {
     event StateChanged(bytes32 indexed asset, ClockState from, ClockState to, uint64 closureId);
     event ClosureStarted(
-        bytes32 indexed asset, uint64 closureId, uint64 venueEpoch, ClosureType t, uint256 refPrice, uint40 reopenAt
+        bytes32 indexed asset,
+        uint64 closureId,
+        uint64 venueEpoch,
+        ClosureType t,
+        uint256 refPrice,
+        uint40 reopenAt
     );
     event OpenPrint(bytes32 indexed asset, uint64 closureId, uint256 price, bool fallbackUsed);
     event ReopenComplete(bytes32 indexed asset, uint64 closureId);
@@ -34,7 +39,9 @@ interface IAssetClockEvents {
     event ReferenceUpdated(bytes32 indexed asset, uint64 closureId, uint256 refPrice, uint40 refTime);
     event CorporateActionBegun(bytes32 indexed asset, uint64 closureId);
     event CorporateActionConfirmed(bytes32 indexed asset, uint256 sharesPerToken);
-    event WiringInitialized(address oracle, address sequencerHealth, address auctionHouse, address settlement);
+    event WiringInitialized(
+        address oracle, address sequencerHealth, address auctionHouse, address settlement
+    );
     event OracleSet(address oracle);
 }
 
@@ -73,16 +80,28 @@ interface ICredenceMarketEvents {
     event Flagged(bytes32 indexed id, address indexed owner, uint64 auctionId, AuctionKind kind);
     event LotReleased(uint64 indexed auctionId, address indexed owner, uint256 qty);
     event PositionSettled(
-        uint64 indexed auctionId, address indexed owner, uint256 proceeds, uint256 penalty, uint256 repaid, uint256 refund
+        uint64 indexed auctionId,
+        address indexed owner,
+        uint256 proceeds,
+        uint256 penalty,
+        uint256 repaid,
+        uint256 refund
     );
     event Shortfall(
-        bytes32 indexed id, address indexed owner, uint256 s, uint256 paidPool, uint256 paidReserve, uint256 seniorLoss
+        bytes32 indexed id,
+        address indexed owner,
+        uint256 s,
+        uint256 paidPool,
+        uint256 paidReserve,
+        uint256 seniorLoss
     );
     event FeesClaimed(bytes32 indexed id, uint256 pool, uint256 treasury);
     event CapsSet(bytes32 indexed id, uint128 supplyCap, uint128 borrowCap);
     event RiskParamsSet(bytes32 indexed id, uint64 maxLtv, uint64 lt, uint64 penalty);
     event FeeSplitSet(bytes32 indexed id, uint16 poolBps, uint16 treasuryBps);
-    event OverlayApplied(bytes32 indexed id, uint64 haircut, uint40 haircutUntil, bool borrowPaused, bool coverPaused);
+    event OverlayApplied(
+        bytes32 indexed id, uint64 haircut, uint40 haircutUntil, bool borrowPaused, bool coverPaused
+    );
     event AutoCoverSet(bytes32 indexed id, address indexed owner, bool enabled);
 }
 
@@ -109,7 +128,12 @@ interface IUnderwriterPoolEvents {
         uint256 sharePriceAfter
     );
     event CoverWritten(
-        uint64 indexed policyId, bytes32 marketId, address owner, uint64 epoch, uint256 premium, uint256 uAfter
+        uint64 indexed policyId,
+        bytes32 marketId,
+        address owner,
+        uint64 epoch,
+        uint256 premium,
+        uint256 uAfter
     );
     event ShortfallPaid(uint256 amount);
     event BackstopBought(bytes32 asset, uint256 qty, uint256 price);
@@ -124,7 +148,9 @@ interface IUnderwriterPoolEvents {
 }
 
 interface IAuctionHouseEvents {
-    event AuctionCreated(uint64 indexed id, AuctionKind kind, bytes32 asset, uint64 closureId, uint40[4] deadlines);
+    event AuctionCreated(
+        uint64 indexed id, AuctionKind kind, bytes32 asset, uint64 closureId, uint40[4] deadlines
+    );
     event LotsFixed(uint64 indexed id, uint256 lot, uint256 reserve);
     event BidCommitted(uint64 indexed id, address indexed bidder, bytes32 c, uint256 maxNotional);
     event BidRevealed(uint64 indexed id, address indexed bidder, uint256 qty, uint256 price);
@@ -133,14 +159,25 @@ interface IAuctionHouseEvents {
     event BondForfeited(uint64 indexed id, address bidder, uint256 bond);
     event Claimed(uint64 indexed id, address indexed bidder, uint256 tokens, uint256 refund);
     event GdaStarted(
-        uint64 indexed gdaId, bytes32 asset, address token, uint256 qty, uint256 k, uint256 decay, uint256 emissionPerSec
+        uint64 indexed gdaId,
+        bytes32 asset,
+        address token,
+        uint256 qty,
+        uint256 k,
+        uint256 decay,
+        uint256 emissionPerSec
     );
     event GdaBuy(uint64 indexed gdaId, address indexed buyer, uint256 qty, uint256 cost);
 }
 
 interface ISettlementEvents {
     event SettlementOpened(
-        uint64 indexed id, bytes32 indexed marketId, address venue, uint256 qty, uint256 floorPrice, uint40 endsAt
+        uint64 indexed id,
+        bytes32 indexed marketId,
+        address venue,
+        uint256 qty,
+        uint256 floorPrice,
+        uint40 endsAt
     );
     event SolverBid(uint64 indexed id, address indexed solver, uint256 price);
     event SettlementFilled(uint64 indexed id, address indexed solver, uint256 qty, uint256 proceeds);
@@ -157,7 +194,9 @@ interface IRiskEngineEvents {
 }
 
 interface ISigmaOracleEvents {
-    event SigmaSubmitted(bytes32 indexed asset, uint8 closureType, uint256 sigma, uint32 asOfDay, uint64 nonce);
+    event SigmaSubmitted(
+        bytes32 indexed asset, uint8 closureType, uint256 sigma, uint32 asOfDay, uint64 nonce
+    );
     event CommitteeChanged(address[] signers, uint8 threshold);
 }
 
@@ -203,7 +242,11 @@ interface INavFundEvents {
     event NavPublished(uint256 navPerShare, uint40 at);
     event RedemptionsGatedSet(bool gated);
     event RedeemRequest(
-        address indexed controller, address indexed owner, uint256 indexed requestId, address sender, uint256 shares
+        address indexed controller,
+        address indexed owner,
+        uint256 indexed requestId,
+        address sender,
+        uint256 shares
     );
     event RedeemFulfilled(uint256 indexed requestId, uint256 shares, uint256 assets);
     event Redeemed(uint256 indexed requestId, address indexed receiver, uint256 assets);

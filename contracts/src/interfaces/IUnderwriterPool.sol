@@ -26,7 +26,9 @@ interface IUnderwriterPool is IERC20, IUnderwriterPoolEvents, ICredenceErrors {
     // losses and backstop (onlyMarket / onlyAuctionHouse / onlySettlement)
     function payShortfall(uint256 s) external returns (uint256 paid);
     function backstopBuy(bytes32 assetId, address token, uint256 qty, uint256 price) external;
-    function fallbackAdvance(bytes32 marketId, uint256 qty, uint256 price) external returns (uint256 requestId);
+    function fallbackAdvance(bytes32 marketId, uint256 qty, uint256 price)
+        external
+        returns (uint256 requestId);
 
     // lifecycle (permissionless, tipped)
     function openEpoch(bytes32 venue) external;

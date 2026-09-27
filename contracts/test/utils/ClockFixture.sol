@@ -50,7 +50,10 @@ abstract contract ClockFixture is Test {
 
     function setUpStack() internal {
         _loadCalendarFixture("test/fixtures/XNYS-20261001-20270402.json");
+        _deployStack();
+    }
 
+    function _deployStack() internal {
         calendar = new CalendarStore(timelock);
         vm.prank(timelock);
         calendar.appendSessions(XNYS, sessions);
@@ -70,7 +73,29 @@ abstract contract ClockFixture is Test {
         token = new CredenceStockToken("Credence Test NVIDIA", "tNVDA", issuer, address(0));
         dex = new MockTwapSource();
         vm.prank(timelock);
-        oracle.setAssetConfig(NVDA, address(feedA), address(feedB), address(dex), address(token), MarketKind.EQUITY, 250_000e18);
+        oracle.setAssetConfig(
+            NVDA, address(feedA), address(feedB), address(dex), address(token), MarketKind.EQUITY, 250_000e18
+        );
+    }
+
+    /// @dev A deterministic Mon–Fri calendar: `weeks` weeks from Monday 00:00 UTC `t0`. Per day: extOpen 00:00,
+    ///      open 09:00, close 15:30, extClose 20:00. Fridays are followed by a WEEKEND closure (next Monday).
+    function _syntheticSessions(uint40 t0, uint256 weeks_) internal {
+        delete sessions;
+        for (uint256 w; w < weeks_; ++w) {
+            for (uint256 d; d < 5; ++d) {
+                uint40 base = t0 + uint40(w * 7 days + d * 1 days);
+                sessions.push(
+                    Session(
+                        base,
+                        base + 9 hours,
+                        base + 15 hours + 30 minutes,
+                        base + 20 hours,
+                        d == 4 ? ClosureType.WEEKEND : ClosureType.OVERNIGHT
+                    )
+                );
+            }
+        }
     }
 
     function _loadCalendarFixture(string memory path) internal {
@@ -116,10 +141,15 @@ abstract contract ClockFixture is Test {
         }
     }
 
-    function _report(CredencePriceFeed feed, bytes32 asset, uint8 kind, uint256 price, uint40 at, uint40 sessionDate, uint8 status)
-        internal
-        returns (Report memory r)
-    {
+    function _report(
+        CredencePriceFeed feed,
+        bytes32 asset,
+        uint8 kind,
+        uint256 price,
+        uint40 at,
+        uint40 sessionDate,
+        uint8 status
+    ) internal returns (Report memory r) {
         uint64 s = ++seqOf[address(feed)][asset];
         r = Report({
             assetId: asset,
@@ -139,7 +169,7 @@ abstract contract ClockFixture is Test {
     }
 
     function _live(CredencePriceFeed feed, bytes32 asset, uint256 price, uint8 status) internal {
-        _submit(feed, _report(feed, asset, ReportKind.LIVE, price, uint40(block.timestamp), 0, status));
+        _submit(feed, _report(feed, asset, ReportKind.LIVE, price, uint40(vm.getBlockTimestamp()), 0, status));
     }
 
     /// @dev Both feeds print the same live price now.
@@ -149,15 +179,31 @@ abstract contract ClockFixture is Test {
     }
 
     function _openPrint(CredencePriceFeed feed, bytes32 asset, uint256 price, uint40 sessionOpen) internal {
-        _submit(feed, _report(feed, asset, ReportKind.OPEN, price, sessionOpen, sessionOpen / 1 days, FeedMarketStatus.REGULAR));
+        _submit(
+            feed,
+            _report(
+                feed,
+                asset,
+                ReportKind.OPEN,
+                price,
+                sessionOpen,
+                sessionOpen / 1 days,
+                FeedMarketStatus.REGULAR
+            )
+        );
     }
 
-    function _closePrint(CredencePriceFeed feed, bytes32 asset, uint256 price, uint40 sessionOpen, uint40 at) internal {
-        _submit(feed, _report(feed, asset, ReportKind.CLOSE, price, at, sessionOpen / 1 days, FeedMarketStatus.POST));
+    function _closePrint(CredencePriceFeed feed, bytes32 asset, uint256 price, uint40 sessionOpen, uint40 at)
+        internal
+    {
+        _submit(
+            feed,
+            _report(feed, asset, ReportKind.CLOSE, price, at, sessionOpen / 1 days, FeedMarketStatus.POST)
+        );
     }
 
     function _status(CredencePriceFeed feed, bytes32 asset, uint8 status) internal {
-        _submit(feed, _report(feed, asset, ReportKind.STATUS, 0, uint40(block.timestamp), 0, status));
+        _submit(feed, _report(feed, asset, ReportKind.STATUS, 0, uint40(vm.getBlockTimestamp()), 0, status));
     }
 
     // ───────────── clock helpers ─────────────

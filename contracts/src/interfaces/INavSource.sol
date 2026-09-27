@@ -7,5 +7,8 @@ interface INavSource {
     /// @return at Timestamp the NAV was published.
     /// @return prevNav The NAV before it (0 if none), for the one-step-drop rule.
     /// @return prevAt Timestamp of `prevNav`.
-    function latestNav(bytes32 assetId) external view returns (uint256 nav, uint40 at, uint256 prevNav, uint40 prevAt);
+    function latestNav(bytes32 assetId)
+        external
+        view
+        returns (uint256 nav, uint40 at, uint256 prevNav, uint40 prevAt);
 }

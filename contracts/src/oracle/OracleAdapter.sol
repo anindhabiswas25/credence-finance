@@ -173,7 +173,11 @@ contract OracleAdapter is IOracleAdapter {
         p = _tok(p, c);
     }
 
-    function _lastRegularShare(bytes32 assetId, OracleConfig storage c) internal view returns (uint256 p, uint40 t) {
+    function _lastRegularShare(bytes32 assetId, OracleConfig storage c)
+        internal
+        view
+        returns (uint256 p, uint40 t)
+    {
         (uint256 cp, uint40 ct,) = IPriceSource(c.primary).officialClose(assetId);
         (uint256 rp, uint40 rt) = IPriceSource(c.primary).lastRegular(assetId);
         // The official closing print wins unless a newer regular-session print exists (the CLOSE report of today
@@ -207,38 +211,62 @@ contract OracleAdapter is IOracleAdapter {
     {
         OracleConfig storage c = _cfg(assetId);
         ClockData memory d = IAssetClock(clock).closureInfo(assetId);
-
-        if (c.kind == MarketKind.NAV) {
-            // REOPEN for a fund = the first fresh, valid NAV published after the closure started (Architecture §3.8).
-            (uint256 nav, uint40 at, uint256 prev,) = INavSource(c.primary).latestNav(assetId);
-            if (nav == 0 || at <= d.closeAt || _navInvalid(nav, at, prev) || _older(at, NAV_FRESH)) {
-                return (false, 0, false);
-            }
-            return (true, _tok(nav, c), false);
-        }
-
+        if (c.kind == MarketKind.NAV) return _navOpen(assetId, c, d.closeAt);
         if (d.closureType == ClosureType.HALT || d.closureType == ClosureType.CORP_ACTION) {
-            // After a halt: the first fresh cross-checked regular-session price is the open print (§8.2.2 step 8).
-            (uint256 p1, uint40 t1, uint8 s1) = IPriceSource(c.primary).latest(assetId);
-            (uint256 p2, uint40 t2, uint8 s2) = IPriceSource(c.secondary).latest(assetId);
-            if (
-                _freshRegular(p1, t1, s1, d.closeAt) && _freshRegular(p2, t2, s2, d.closeAt)
-                    && p1.relDiffUp(p2) <= DISAGREE
-            ) return (true, _tok(p1, c), false);
+            return _haltOpen(assetId, c, d.closeAt);
+        }
+        return _scheduledOpen(assetId, c, reopenAt, ext);
+    }
+
+    /// @dev REOPEN for a fund = the first fresh, valid NAV published after the closure started (Architecture §3.8).
+    function _navOpen(bytes32 assetId, OracleConfig storage c, uint40 closeAt)
+        internal
+        view
+        returns (bool, uint256, bool)
+    {
+        (uint256 nav, uint40 at, uint256 prev,) = INavSource(c.primary).latestNav(assetId);
+        if (nav == 0 || at <= closeAt || _navInvalid(nav, at, prev) || _older(at, NAV_FRESH)) {
             return (false, 0, false);
         }
+        return (true, _tok(nav, c), false);
+    }
 
+    /// @dev After a halt: the first fresh cross-checked regular-session price is the open print (§8.2.2 step 8).
+    function _haltOpen(bytes32 assetId, OracleConfig storage c, uint40 closeAt)
+        internal
+        view
+        returns (bool, uint256, bool)
+    {
+        (uint256 p1, uint40 t1, uint8 s1) = IPriceSource(c.primary).latest(assetId);
+        (uint256 p2, uint40 t2, uint8 s2) = IPriceSource(c.secondary).latest(assetId);
+        if (
+            _freshRegular(p1, t1, s1, closeAt) && _freshRegular(p2, t2, s2, closeAt)
+                && p1.relDiffUp(p2) <= DISAGREE
+        ) {
+            return (true, _tok(p1, c), false);
+        }
+        return (false, 0, false);
+    }
+
+    /// @dev Both official opens, agreeing within 1.5%; after 15 min + ext, the agreeing 5-minute TWAPs.
+    function _scheduledOpen(bytes32 assetId, OracleConfig storage c, uint40 reopenAt, uint40 ext)
+        internal
+        view
+        returns (bool, uint256, bool)
+    {
         (uint256 o1,, bool ok1) = IPriceSource(c.primary).officialOpen(assetId, reopenAt);
         (uint256 o2,, bool ok2) = IPriceSource(c.secondary).officialOpen(assetId, reopenAt);
         if (ok1 && ok2 && o1.relDiffUp(o2) <= DISAGREE) return (true, _tok(o1, c), false);
+        if (block.timestamp < uint256(reopenAt) + OPEN_WAIT + ext) return (false, 0, false);
+        // Fallback: 5-minute TWAPs. The window ends now ≥ reopenAt + 15 min, so it only holds prints from after
+        // the scheduled open.
+        return _twapOpen(assetId, c);
+    }
 
-        if (block.timestamp >= uint256(reopenAt) + OPEN_WAIT + ext) {
-            // Fallback: 5-minute TWAPs. The window ends now ≥ reopenAt + 15 min, so it only holds prints from after
-            // the scheduled open.
-            (uint256 w1, bool okA) = IPriceSource(c.primary).twap(assetId, OPEN_TWAP);
-            (uint256 w2, bool okB) = IPriceSource(c.secondary).twap(assetId, OPEN_TWAP);
-            if (okA && okB && w1 != 0 && w1.relDiffUp(w2) <= DISAGREE) return (true, _tok(w1, c), true);
-        }
+    function _twapOpen(bytes32 assetId, OracleConfig storage c) internal view returns (bool, uint256, bool) {
+        (uint256 w1, bool okA) = IPriceSource(c.primary).twap(assetId, OPEN_TWAP);
+        (uint256 w2, bool okB) = IPriceSource(c.secondary).twap(assetId, OPEN_TWAP);
+        if (okA && okB && w1 != 0 && w1.relDiffUp(w2) <= DISAGREE) return (true, _tok(w1, c), true);
         return (false, 0, false);
     }
 

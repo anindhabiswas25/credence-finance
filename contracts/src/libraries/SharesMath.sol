@@ -15,19 +15,35 @@ library SharesMath {
     uint256 internal constant VIRTUAL_SHARES = 1e6;
     uint256 internal constant VIRTUAL_ASSETS = 1;
 
-    function toSharesDown(uint256 assets, uint256 totalAssets, uint256 totalShares) internal pure returns (uint256) {
+    function toSharesDown(uint256 assets, uint256 totalAssets, uint256 totalShares)
+        internal
+        pure
+        returns (uint256)
+    {
         return FPM.fullMulDiv(assets, totalShares + VIRTUAL_SHARES, totalAssets + VIRTUAL_ASSETS);
     }
 
-    function toSharesUp(uint256 assets, uint256 totalAssets, uint256 totalShares) internal pure returns (uint256) {
+    function toSharesUp(uint256 assets, uint256 totalAssets, uint256 totalShares)
+        internal
+        pure
+        returns (uint256)
+    {
         return FPM.fullMulDivUp(assets, totalShares + VIRTUAL_SHARES, totalAssets + VIRTUAL_ASSETS);
     }
 
-    function toAssetsDown(uint256 shares, uint256 totalAssets, uint256 totalShares) internal pure returns (uint256) {
+    function toAssetsDown(uint256 shares, uint256 totalAssets, uint256 totalShares)
+        internal
+        pure
+        returns (uint256)
+    {
         return FPM.fullMulDiv(shares, totalAssets + VIRTUAL_ASSETS, totalShares + VIRTUAL_SHARES);
     }
 
-    function toAssetsUp(uint256 shares, uint256 totalAssets, uint256 totalShares) internal pure returns (uint256) {
+    function toAssetsUp(uint256 shares, uint256 totalAssets, uint256 totalShares)
+        internal
+        pure
+        returns (uint256)
+    {
         return FPM.fullMulDivUp(shares, totalAssets + VIRTUAL_ASSETS, totalShares + VIRTUAL_SHARES);
     }
 }

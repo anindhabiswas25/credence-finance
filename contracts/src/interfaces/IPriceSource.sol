@@ -9,11 +9,20 @@ interface IPriceSource {
     /// @return price Latest live price (WAD per share), 0 if none.
     /// @return observedAt Exchange timestamp of that print.
     /// @return marketStatus FeedMarketStatus of the most recent LIVE or STATUS report.
-    function latest(bytes32 assetId) external view returns (uint256 price, uint40 observedAt, uint8 marketStatus);
+    function latest(bytes32 assetId)
+        external
+        view
+        returns (uint256 price, uint40 observedAt, uint8 marketStatus);
     /// @notice Official regular-session opening print for the session whose regular open is `sessionOpen`.
-    function officialOpen(bytes32 assetId, uint40 sessionOpen) external view returns (uint256 price, uint40 at, bool ok);
+    function officialOpen(bytes32 assetId, uint40 sessionOpen)
+        external
+        view
+        returns (uint256 price, uint40 at, bool ok);
     /// @notice Most recent official closing print.
-    function officialClose(bytes32 assetId) external view returns (uint256 price, uint40 at, uint40 sessionDate);
+    function officialClose(bytes32 assetId)
+        external
+        view
+        returns (uint256 price, uint40 at, uint40 sessionDate);
     /// @notice Time-weighted mean of LIVE prints over the trailing `window` seconds.
     /// @return price The TWAP (WAD per share).
     /// @return ok false if the stored history does not cover the whole window.

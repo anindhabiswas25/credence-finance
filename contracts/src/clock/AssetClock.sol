@@ -223,7 +223,15 @@ contract AssetClock is IAssetClock {
         _refreshReference(a, cfg.kind, orc, d, c);
 
         // 4–6. Oracle, guardian and corporate-action inputs; the most restrictive wins (INV-FAIL-01).
-        ClockState target = _target(a, cfg.kind, orc, d.reopenPending, d.refPrice, d.corporateAction, calState);
+        ClockState target = _target(
+            a,
+            cfg.kind,
+            orc,
+            d.reopenPending && _scheduled(d.closureType),
+            d.refPrice,
+            d.corporateAction,
+            calState
+        );
 
         // A non-calendar closure (halt, guardian, feed-closed, corporate action) also opens a closure.
         if (!d.reopenPending && target.rank() >= ClockState.CLOSED.rank()) {
@@ -286,9 +294,13 @@ contract AssetClock is IAssetClock {
         emit ClosureStarted(a, cid, idx, s.closureTypeAfter, ref, reopenAt);
     }
 
-    function _openUnscheduledClosure(bytes32 a, IOracleAdapter orc, ClockData storage d, Cal memory c, uint40 nowTs)
-        internal
-    {
+    function _openUnscheduledClosure(
+        bytes32 a,
+        IOracleAdapter orc,
+        ClockData storage d,
+        Cal memory c,
+        uint40 nowTs
+    ) internal {
         uint64 cid = d.closureId + 1;
         d.closureId = cid;
         d.venueEpoch = c.cursor;
@@ -317,14 +329,19 @@ contract AssetClock is IAssetClock {
 
     /// @dev While a scheduled closure's reference is provisional (the official CLOSE had not landed at the close)
     ///      or missing, adopt a newer regular-session close as soon as the oracle has one.
-    function _refreshReference(bytes32 a, MarketKind kind, IOracleAdapter orc, ClockData storage d, Cal memory c)
-        internal
-    {
+    function _refreshReference(
+        bytes32 a,
+        MarketKind kind,
+        IOracleAdapter orc,
+        ClockData storage d,
+        Cal memory c
+    ) internal {
         if (!d.reopenPending || d.openPrint != 0 || kind != MarketKind.EQUITY) return;
         ClosureType t = d.closureType;
-        if (t != ClosureType.OVERNIGHT && t != ClosureType.WEEKEND && t != ClosureType.HOLIDAY_WEEKEND) return;
+        if (!_scheduled(t)) return;
         if (d.refTime >= d.closeAt) return; // final
-        uint40 sessionOpen = d.venueEpoch == c.cursor ? c.cur.open : c.store.session(c.venue, d.venueEpoch).open;
+        uint40 sessionOpen =
+            d.venueEpoch == c.cursor ? c.cur.open : c.store.session(c.venue, d.venueEpoch).open;
         (uint128 ref, uint40 rt) = _fetchRef(a, kind, orc, sessionOpen);
         if (ref != 0 && rt > d.refTime) {
             d.refPrice = ref;
@@ -335,27 +352,34 @@ contract AssetClock is IAssetClock {
 
     // ═════════════════════════════ shared state logic (poke + preview) ═════════════════════════════
 
+    function _scheduled(ClosureType t) internal pure returns (bool) {
+        return t == ClosureType.OVERNIGHT || t == ClosureType.WEEKEND || t == ClosureType.HOLIDAY_WEEKEND;
+    }
+
     /// @dev Steps 4–6. Pure function of inputs + oracle views; used by both `poke` and `previewState`.
+    /// @param inScheduledClosure A scheduled closure is pending: its reference close must exist (step 3).
     function _target(
         bytes32 a,
         MarketKind kind,
         IOracleAdapter orc,
-        bool reopenPending,
+        bool inScheduledClosure,
         uint128 refPrice,
         bool corporateAction,
         ClockState calState
     ) internal view returns (ClockState target) {
-        target = calState.mostRestrictive(_oracleState(a, kind, orc, reopenPending, refPrice, calState));
+        target = calState.mostRestrictive(_oracleState(a, kind, orc, inScheduledClosure, refPrice, calState));
         target = target.mostRestrictive(_guardianState(a));
         if (corporateAction) target = ClockState.CORP_ACTION;
     }
 
     /// @dev Step 4. A failing oracle is HALTED (fail closed).
+    ///      A HALT / CORP_ACTION closure without a reference is not held HALTED by this rule: its valuation already
+    ///      fails closed (`NoReferencePrice`), and holding it would stop it from ever reaching REOPEN.
     function _oracleState(
         bytes32 a,
         MarketKind kind,
         IOracleAdapter orc,
-        bool reopenPending,
+        bool inScheduledClosure,
         uint128 refPrice,
         ClockState calState
     ) internal view returns (ClockState s) {
@@ -372,7 +396,7 @@ contract AssetClock is IAssetClock {
                 return ClockState.HALTED;
             }
             // §8.2.2 step 3: a closure without a valid regular-session reference is HALTED.
-            if (reopenPending && refPrice == 0) return ClockState.HALTED;
+            if (inScheduledClosure && refPrice == 0) return ClockState.HALTED;
             if (open && h.statusClosed) s = ClockState.CLOSED;
         } else {
             if (h.navInvalid || h.issuerFrozen) return ClockState.HALTED;
@@ -513,6 +537,7 @@ contract AssetClock is IAssetClock {
         if (opened) {
             d.reopenPending = true;
             d.openPrint = 0;
+            d.closureType = last.closureTypeAfter;
             (d.refPrice,) = _fetchRef(assetId, cfg.kind, orc, last.open);
         } else if (
             d.reopenPending && d.openPrint == 0 && d.refTime < d.closeAt && cfg.kind == MarketKind.EQUITY
@@ -523,7 +548,15 @@ contract AssetClock is IAssetClock {
             if (ref != 0) d.refPrice = ref;
         }
 
-        ClockState target = _target(assetId, cfg.kind, orc, d.reopenPending, d.refPrice, d.corporateAction, calState);
+        ClockState target = _target(
+            assetId,
+            cfg.kind,
+            orc,
+            d.reopenPending && _scheduled(d.closureType),
+            d.refPrice,
+            d.corporateAction,
+            calState
+        );
         if (!d.reopenPending && target.rank() >= ClockState.CLOSED.rank()) {
             d.reopenPending = true;
             d.openPrint = 0;
@@ -558,7 +591,11 @@ contract AssetClock is IAssetClock {
     }
 
     /// @inheritdoc IAssetClock
-    function closureWindow(bytes32 assetId) public view returns (uint40 closeAt, uint40 reopenAt, ClosureType t) {
+    function closureWindow(bytes32 assetId)
+        public
+        view
+        returns (uint40 closeAt, uint40 reopenAt, ClosureType t)
+    {
         AssetConfig memory cfg = _cfgOf(assetId);
         uint40 nowTs = uint40(block.timestamp);
         return _closureWindow(_loadCal(cfg.venue, _data[assetId].sessionCursor, nowTs), nowTs);
@@ -567,7 +604,7 @@ contract AssetClock is IAssetClock {
     /// @inheritdoc IAssetClock
     function closureDays(bytes32 assetId) external view returns (uint256) {
         (uint40 closeAt, uint40 reopenAt,) = closureWindow(assetId);
-        if (reopenAt == 0 || reopenAt <= closeAt) revert ClosureOpenEnded(assetId);
+        if (closeAt == 0 || reopenAt <= closeAt) revert ClosureOpenEnded(assetId); // also covers reopenAt == 0
         return (uint256(reopenAt - closeAt) + 1 days - 1) / 1 days;
     }
 

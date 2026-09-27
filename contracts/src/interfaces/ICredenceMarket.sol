@@ -26,7 +26,9 @@ interface ICredenceMarket is ICredenceMarketEvents, ICredenceErrors {
     function borrowWithCover(bytes32 id, uint256 assets, address to, uint256 maxPremium) external;
     function buyCover(bytes32 id, uint256 maxPremium, bool addToDebt) external;
     /// @custom:state any (no oracle or engine call)
-    function repay(bytes32 id, address onBehalf, uint256 assets, uint256 shares) external returns (uint256 repaid);
+    function repay(bytes32 id, address onBehalf, uint256 assets, uint256 shares)
+        external
+        returns (uint256 repaid);
     function setAutoCover(bytes32 id, bool enabled) external;
 
     // ── keepers (permissionless, tipped) ──

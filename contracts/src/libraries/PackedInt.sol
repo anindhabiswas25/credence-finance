@@ -57,7 +57,11 @@ library PackedInt {
     }
 
     /// @notice Element-wise a + b over the first `n` lanes; reverts on uint64 overflow.
-    function addU64(uint256[] memory a, uint256[] memory b, uint256 n) internal pure returns (uint256[] memory out) {
+    function addU64(uint256[] memory a, uint256[] memory b, uint256 n)
+        internal
+        pure
+        returns (uint256[] memory out)
+    {
         uint256 words = wordsForU64(n);
         if (words > a.length || words > b.length) revert PackedIndexOutOfRange(n, a.length * 4);
         out = new uint256[](words);

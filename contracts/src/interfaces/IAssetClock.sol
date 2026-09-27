@@ -1,7 +1,14 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity 0.8.30;
 
-import {ClockState, ClockData, ClosureType, MarketKind, AssetConfig, Restriction} from "../libraries/Types.sol";
+import {
+    ClockState,
+    ClockData,
+    ClosureType,
+    MarketKind,
+    AssetConfig,
+    Restriction
+} from "../libraries/Types.sol";
 import {ICredenceErrors} from "../libraries/Errors.sol";
 import {IAssetClockEvents} from "../libraries/Events.sol";
 
@@ -27,8 +34,12 @@ interface IAssetClock is IAssetClockEvents, ICredenceErrors {
     function isAfterBellDeadline(bytes32 assetId) external view returns (bool);
     /// @notice The scheduled closure that is in progress or comes next: the one between the close of session j−1
     ///         and the open of session j, where j is the first session with `open > now`.
-    function closureWindow(bytes32 assetId) external view returns (uint40 closeAt, uint40 reopenAt, ClosureType t);
-    /// @notice ceil_days(reopenAt − closeAt) of `closureWindow` (R-07). Reverts `ClosureOpenEnded` past coverage.
+    function closureWindow(bytes32 assetId)
+        external
+        view
+        returns (uint40 closeAt, uint40 reopenAt, ClosureType t);
+    /// @notice ceil_days(reopenAt − closeAt) of `closureWindow` (R-07). Reverts `ClosureOpenEnded` when either end is
+    ///         unknown (before the first session or past coverage).
     function closureDays(bytes32 assetId) external view returns (uint256);
     /// @notice The most restrictive active guardian restriction ((REGULAR, 0) if none).
     function restriction(bytes32 assetId) external view returns (Restriction memory);

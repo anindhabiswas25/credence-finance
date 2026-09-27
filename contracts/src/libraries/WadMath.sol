@@ -36,7 +36,11 @@ library WadMath {
     /// @notice value(q, V) = q × V × 10^loanDec / (10^collDec × 1e18), rounded DOWN (§7.1).
     /// @param q Collateral in token base units.
     /// @param v Price, WAD USD per whole token.
-    function collateralValue(uint256 q, uint256 v, uint8 collDec, uint8 loanDec) internal pure returns (uint256) {
+    function collateralValue(uint256 q, uint256 v, uint8 collDec, uint8 loanDec)
+        internal
+        pure
+        returns (uint256)
+    {
         return FPM.fullMulDiv(q, v * 10 ** loanDec, 10 ** collDec * WAD);
     }
 

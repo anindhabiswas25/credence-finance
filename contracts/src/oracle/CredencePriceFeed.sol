@@ -60,7 +60,9 @@ contract CredencePriceFeed is ICredencePriceFeed, EIP712 {
     mapping(address => bool) public isSigner;
     uint8 public threshold;
 
-    constructor(address timelock_, address[] memory signers_, uint8 threshold_) EIP712("CredencePriceFeed", "1") {
+    constructor(address timelock_, address[] memory signers_, uint8 threshold_)
+        EIP712("CredencePriceFeed", "1")
+    {
         if (timelock_ == address(0)) revert ZeroAddress();
         timelock = timelock_;
         _setCommittee(signers_, threshold_);
@@ -137,7 +139,9 @@ contract CredencePriceFeed is ICredencePriceFeed, EIP712 {
     function _store(Report calldata r) internal {
         if (r.kind > ReportKind.STATUS) revert InvalidReportKind(r.kind);
         if (r.marketStatus > FeedMarketStatus.HALTED) revert InvalidMarketStatus(r.marketStatus);
-        if (r.observedAt > block.timestamp + MAX_FUTURE_SKEW) revert ReportFromFuture(r.observedAt, block.timestamp);
+        if (r.observedAt > block.timestamp + MAX_FUTURE_SKEW) {
+            revert ReportFromFuture(r.observedAt, block.timestamp);
+        }
         if (r.price == 0 && r.kind != ReportKind.STATUS) revert ZeroPrice();
 
         AssetFeed storage f = _feeds[r.assetId];
@@ -191,7 +195,11 @@ contract CredencePriceFeed is ICredencePriceFeed, EIP712 {
     // ───────────────────────────── IPriceSource ─────────────────────────────
 
     /// @inheritdoc IPriceSource
-    function latest(bytes32 assetId) external view returns (uint256 price, uint40 observedAt, uint8 marketStatus) {
+    function latest(bytes32 assetId)
+        external
+        view
+        returns (uint256 price, uint40 observedAt, uint8 marketStatus)
+    {
         AssetFeed storage f = _feeds[assetId];
         return (f.livePrice, f.liveAt, f.status);
     }

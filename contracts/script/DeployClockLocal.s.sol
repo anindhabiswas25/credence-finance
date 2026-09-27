@@ -83,7 +83,9 @@ contract DeployClockLocal is Script {
                 string.concat("Credence Test ", tickers[i]), string.concat("t", tickers[i]), me, address(0)
             );
             bytes32 assetId = keccak256(bytes(string.concat(tickers[i], ":XNAS")));
-            oracle.setAssetConfig(assetId, d.feedA, d.feedB, address(0), address(t), MarketKind.EQUITY, 250_000e18);
+            oracle.setAssetConfig(
+                assetId, d.feedA, d.feedB, address(0), address(t), MarketKind.EQUITY, 250_000e18
+            );
             clock.listAsset(assetId, XNYS, MarketKind.EQUITY);
             t.setMinter(address(faucet), type(uint128).max);
             faucet.configure(address(t), 50e18, false);
@@ -95,8 +97,9 @@ contract DeployClockLocal is Script {
         MockUSDC usdc = new MockUSDC();
         d.usdc = address(usdc);
         registry.setAllowed(me, true);
-        CredenceTreasuryFund fund =
-            new CredenceTreasuryFund("Credence Test T-Bill Fund", "tTBILL", me, address(registry), address(usdc), me, 1e18);
+        CredenceTreasuryFund fund = new CredenceTreasuryFund(
+            "Credence Test T-Bill Fund", "tTBILL", me, address(registry), address(usdc), me, 1e18
+        );
         d.fund = address(fund);
         bytes32 tbill = keccak256("TBILL:USBANK");
         oracle.setAssetConfig(tbill, d.navFeed, address(0), address(0), address(fund), MarketKind.NAV, 0);
@@ -120,7 +123,8 @@ contract DeployClockLocal is Script {
         vm.serializeAddress(json, "usdc", d.usdc);
         string memory out = vm.serializeAddress(json, "tTBILL", d.fund);
         string memory path = vm.envOr(
-            "OUT", string.concat(vm.projectRoot(), "/../deployments/", vm.toString(block.chainid), ".local.json")
+            "OUT",
+            string.concat(vm.projectRoot(), "/../deployments/", vm.toString(block.chainid), ".local.json")
         );
         vm.writeJson(out, path);
         console2.log("address book:", path);

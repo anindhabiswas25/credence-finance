@@ -18,9 +18,17 @@ interface INavFund is IERC20Metadata, INavFundEvents, ICredenceErrors {
     function asset() external view returns (address);
 
     // ERC-7540-style redemption
-    function requestRedeem(uint256 shares, address controller, address owner) external returns (uint256 requestId);
-    function pendingRedeemRequest(uint256 requestId, address controller) external view returns (uint256 shares);
-    function claimableRedeemRequest(uint256 requestId, address controller) external view returns (uint256 shares);
+    function requestRedeem(uint256 shares, address controller, address owner)
+        external
+        returns (uint256 requestId);
+    function pendingRedeemRequest(uint256 requestId, address controller)
+        external
+        view
+        returns (uint256 shares);
+    function claimableRedeemRequest(uint256 requestId, address controller)
+        external
+        view
+        returns (uint256 shares);
     /// @notice Claim a fulfilled request. `msg.sender` must be the controller.
     function redeem(uint256 requestId, address receiver, address controller) external returns (uint256 assets);
 

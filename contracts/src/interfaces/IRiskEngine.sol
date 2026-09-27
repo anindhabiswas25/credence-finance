@@ -38,10 +38,12 @@ interface IRiskEngine is IRiskEngineEvents {
         uint256 utilAfter
     ) external view returns (uint256 premium, uint256 expectedLoss, uint256 expectedShortfall);
     // capacity (R-13)
-    function coverLossVector(bytes32 assetId, uint8 closureType, uint256 collateralValue, uint256 debtProjected)
-        external
-        view
-        returns (uint256[] memory packed);
+    function coverLossVector(
+        bytes32 assetId,
+        uint8 closureType,
+        uint256 collateralValue,
+        uint256 debtProjected
+    ) external view returns (uint256[] memory packed);
     function poolCapacity(
         uint256[] calldata packedCurrent,
         uint256[] calldata packedAdd,
@@ -81,7 +83,8 @@ interface IRiskEngine is IRiskEngineEvents {
         uint256 reserve
     ) external pure returns (uint256 pStar, uint256[] memory fills, uint256 qPool);
     // writers
-    function setScenarioSet(bytes32 assetId, uint8 closureType, uint256[] calldata packedSortedZ, uint32 n) external; // onlyTimelock
+    function setScenarioSet(bytes32 assetId, uint8 closureType, uint256[] calldata packedSortedZ, uint32 n)
+        external; // onlyTimelock
     function setJointColumn(bytes32 assetId, uint256[] calldata packedZ) external; // onlyTimelock (K entries)
     function setParams(RiskParams calldata p) external; // onlyTimelock
     function setSigmaFloor(bytes32 assetId, uint8 closureType, uint256 floor) external; // onlyTimelock

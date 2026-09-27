@@ -58,7 +58,11 @@ contract CalendarStore is ICalendarStore {
     }
 
     /// @inheritdoc ICalendarStore
-    function sessions(bytes32 venue, uint256 from, uint256 count) external view returns (Session[] memory out) {
+    function sessions(bytes32 venue, uint256 from, uint256 count)
+        external
+        view
+        returns (Session[] memory out)
+    {
         Session[] storage arr = _sessions[venue];
         uint256 len = arr.length;
         if (from >= len) return new Session[](0);

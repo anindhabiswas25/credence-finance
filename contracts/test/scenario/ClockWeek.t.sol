@@ -39,7 +39,9 @@ contract ClockWeekScenarioTest is ClockFixture {
     function _tradeSession(uint256 i, uint256 openPx, uint256 closePx) internal {
         Session memory s = _s(i);
         // pre-market
-        assertEq(uint8(_at(s.open - 30 minutes, FeedMarketStatus.PRE)), uint8(ClockState.EXTENDED), "pre-market");
+        assertEq(
+            uint8(_at(s.open - 30 minutes, FeedMarketStatus.PRE)), uint8(ClockState.EXTENDED), "pre-market"
+        );
 
         // 09:30 open: both vendors publish the official opening print
         vm.warp(s.open);
@@ -64,9 +66,16 @@ contract ClockWeekScenarioTest is ClockFixture {
             assertFalse(_info().reopenPending);
         }
 
-        // intraday: REGULAR, valuation = live price, Bell window / deadline before the close
+        _intraday(s, closePx);
+        _closeSession(i, closePx);
+    }
+
+    /// @dev REGULAR, valuation = live price, Bell window / deadline before the close.
+    function _intraday(Session memory s, uint256 closePx) internal {
         price = closePx;
-        assertEq(uint8(_at(s.close - 3 hours, FeedMarketStatus.REGULAR)), uint8(ClockState.REGULAR), "intraday");
+        assertEq(
+            uint8(_at(s.close - 3 hours, FeedMarketStatus.REGULAR)), uint8(ClockState.REGULAR), "intraday"
+        );
         assertEq(oracle.valuationPrice(NVDA), closePx, "live valuation");
         assertFalse(clock.isBellWindow(NVDA));
         assertEq(_info().nextCloseAt, s.close, "next close");
@@ -78,8 +87,11 @@ contract ClockWeekScenarioTest is ClockFixture {
         assertFalse(clock.isAfterBellDeadline(NVDA));
         _at(s.close - 10 minutes, FeedMarketStatus.REGULAR);
         assertTrue(clock.isAfterBellDeadline(NVDA), "after bell deadline");
+    }
 
-        // close: official closing print lands 20 s after the close
+    /// @dev Close: the official closing print lands 20 s after the close; a closure of the calendar's type opens.
+    function _closeSession(uint256 i, uint256 closePx) internal {
+        Session memory s = _s(i);
         _at(s.close - 5, FeedMarketStatus.REGULAR);
         vm.warp(s.close + 20);
         _closePrint(feedA, NVDA, closePx, s.open, s.close);
@@ -102,18 +114,34 @@ contract ClockWeekScenarioTest is ClockFixture {
 
     // ───────────── Thanksgiving week 2026 ─────────────
 
-    function test_thanksgivingWeek() public {
-        uint256 fri = _idx("2026-11-20");
-        uint256 mon = _idx("2026-11-23");
-        uint256 wed = _idx("2026-11-25");
-        uint256 blackFri = _idx("2026-11-27");
-        uint256 nextMon = _idx("2026-11-30");
-        assertEq(blackFri, wed + 1, "Thursday is a holiday: no session");
-        assertEq(uint8(_s(wed).closureTypeAfter), uint8(ClosureType.HOLIDAY_WEEKEND), "mid-week holiday");
-        assertEq(_s(blackFri).close - _s(blackFri).open, 3.5 hours, "early close 13:00");
+    uint256 internal tgFri;
+    uint256 internal tgMon;
+    uint256 internal tgWed;
+    uint256 internal tgBlackFri;
+    uint256 internal tgNextMon;
 
+    function test_thanksgivingWeek() public {
+        tgFri = _idx("2026-11-20");
+        tgMon = _idx("2026-11-23");
+        tgWed = _idx("2026-11-25");
+        tgBlackFri = _idx("2026-11-27");
+        tgNextMon = _idx("2026-11-30");
+        assertEq(tgBlackFri, tgWed + 1, "Thursday is a holiday: no session");
+        assertEq(uint8(_s(tgWed).closureTypeAfter), uint8(ClosureType.HOLIDAY_WEEKEND), "mid-week holiday");
+        assertEq(_s(tgBlackFri).close - _s(tgBlackFri).open, 3.5 hours, "early close 13:00");
+
+        _tgFridayAndWeekend();
+        _tgMonToThanksgiving();
+        _tgBlackFridayToMonday();
+
+        assertEq(_info().closureId, expectedClosures, "INV-CLK-01: exactly one closure per scheduled close");
+        assertEq(expectedClosures, 6);
+        assertEq(reopens, 5, "Mon, Tue, Wed, Fri, Mon each reopened through REOPEN");
+    }
+
+    function _tgFridayAndWeekend() internal {
         // list during Friday 11-20's session, before the close
-        vm.warp(_s(fri).open + 1 hours);
+        vm.warp(_s(tgFri).open + 1 hours);
         _list();
         _tick(FeedMarketStatus.REGULAR);
         assertEq(uint8(_poke()), uint8(ClockState.REGULAR));
@@ -121,7 +149,7 @@ contract ClockWeekScenarioTest is ClockFixture {
 
         // Friday close → weekend
         price = 181e18;
-        Session memory f = _s(fri);
+        Session memory f = _s(tgFri);
         _at(f.close - 30, FeedMarketStatus.REGULAR);
         vm.warp(f.close + 20);
         _closePrint(feedA, NVDA, 181e18, f.open, f.close);
@@ -134,47 +162,64 @@ contract ClockWeekScenarioTest is ClockFixture {
 
         // Saturday: CLOSED; valuation = ref (no deep DEX)
         price = 170e18; // a weekend price can lower value, never raise it
-        assertEq(uint8(_at(f.extClose + 20 hours, FeedMarketStatus.CLOSED)), uint8(ClockState.CLOSED), "Saturday");
+        assertEq(
+            uint8(_at(f.extClose + 20 hours, FeedMarketStatus.CLOSED)), uint8(ClockState.CLOSED), "Saturday"
+        );
+        _weekendDexChecks();
+
+        // Sunday 20:00: the 24/5 overnight window of Monday's session
+        assertEq(
+            uint8(_at(_s(tgMon).extOpen + 1 hours, FeedMarketStatus.OVERNIGHT)), uint8(ClockState.EXTENDED)
+        );
+        assertLe(oracle.valuationPrice(NVDA), 181e18, "INV-ORA-01 overnight");
+    }
+
+    function _weekendDexChecks() internal {
         assertEq(oracle.valuationPrice(NVDA), 181e18);
         dex.set(175e18, true, 300_000e18); // deep pool below ref → min() lowers value
         assertEq(oracle.valuationPrice(NVDA), 175e18);
         dex.set(190e18, true, 300_000e18); // pumped weekend price never raises it
         assertEq(oracle.valuationPrice(NVDA), 181e18);
         dex.set(0, false, 0);
+    }
 
-        // Sunday 20:00: the 24/5 overnight window of Monday's session
-        assertEq(uint8(_at(_s(mon).extOpen + 1 hours, FeedMarketStatus.OVERNIGHT)), uint8(ClockState.EXTENDED));
-        assertLe(oracle.valuationPrice(NVDA), 181e18, "INV-ORA-01 overnight");
-
-        // Mon (REOPEN) .. Wed
-        _tradeSession(mon, 178e18, 182e18);
+    function _tgMonToThanksgiving() internal {
+        _tradeSession(tgMon, 178e18, 182e18);
         assertEq(clock.closureDays(NVDA), 1, "weeknight = 1 day");
-        _tradeSession(mon + 1, 182e18, 183e18);
-        _tradeSession(wed, 183e18, 184e18);
+        _tradeSession(tgMon + 1, 182e18, 183e18);
+        _tradeSession(tgWed, 183e18, 184e18);
         assertEq(uint8(_info().closureType), uint8(ClosureType.HOLIDAY_WEEKEND));
         assertEq(clock.closureDays(NVDA), 2, "Wed close -> Fri open = 2 days");
 
         // Thanksgiving Thursday: CLOSED all day until Friday's overnight window at Thu 20:00
-        assertEq(uint8(_at(_s(wed).extClose + 12 hours, FeedMarketStatus.CLOSED)), uint8(ClockState.CLOSED), "holiday");
+        assertEq(
+            uint8(_at(_s(tgWed).extClose + 12 hours, FeedMarketStatus.CLOSED)),
+            uint8(ClockState.CLOSED),
+            "holiday"
+        );
         assertEq(_info().closureId, expectedClosures, "no closure on a holiday");
-        assertEq(uint8(_at(_s(blackFri).extOpen + 1, FeedMarketStatus.OVERNIGHT)), uint8(ClockState.EXTENDED));
+        assertEq(
+            uint8(_at(_s(tgBlackFri).extOpen + 1, FeedMarketStatus.OVERNIGHT)), uint8(ClockState.EXTENDED)
+        );
+    }
 
+    function _tgBlackFridayToMonday() internal {
         // Black Friday: early close at 13:00, Bell window 11:00, deadline 12:45; post-market ends 17:00
-        _tradeSession(blackFri, 184e18, 185e18);
+        _tradeSession(tgBlackFri, 184e18, 185e18);
         assertEq(uint8(_info().closureType), uint8(ClosureType.WEEKEND));
-        assertEq(uint8(_at(_s(blackFri).extClose - 1, FeedMarketStatus.POST)), uint8(ClockState.EXTENDED));
-        assertEq(uint8(_at(_s(blackFri).extClose + 1, FeedMarketStatus.CLOSED)), uint8(ClockState.CLOSED), "17:00");
+        assertEq(uint8(_at(_s(tgBlackFri).extClose - 1, FeedMarketStatus.POST)), uint8(ClockState.EXTENDED));
+        assertEq(
+            uint8(_at(_s(tgBlackFri).extClose + 1, FeedMarketStatus.CLOSED)),
+            uint8(ClockState.CLOSED),
+            "17:00"
+        );
         assertEq(clock.closureDays(NVDA), 3);
 
         // Monday 11-30 REOPEN
-        vm.warp(_s(nextMon).extOpen + 2 hours);
+        vm.warp(_s(tgNextMon).extOpen + 2 hours);
         _tick(FeedMarketStatus.OVERNIGHT);
         _poke();
-        _tradeSession(nextMon, 186e18, 186e18);
-
-        assertEq(_info().closureId, expectedClosures, "INV-CLK-01: exactly one closure per scheduled close");
-        assertEq(expectedClosures, 6);
-        assertEq(reopens, 5, "Mon, Tue, Wed, Fri, Mon each reopened through REOPEN");
+        _tradeSession(tgNextMon, 186e18, 186e18);
     }
 
     // ───────────── Good Friday 2027: holiday Friday, 4-day closure ─────────────

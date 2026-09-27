@@ -118,15 +118,19 @@ contract CredenceTreasuryFund is INavFund, IssuerRoles, ERC20, ERC20Permit {
     // ───────────────────────────── ERC-7540-style redemption ─────────────────────────────
 
     /// @inheritdoc INavFund
-    function requestRedeem(uint256 shares, address controller, address owner) external returns (uint256 requestId) {
+    function requestRedeem(uint256 shares, address controller, address owner)
+        external
+        returns (uint256 requestId)
+    {
         if (redemptionsGated) revert RedemptionsGated();
         if (shares == 0 || shares > type(uint128).max) revert ZeroAmount();
         if (controller == address(0)) revert ZeroAddress();
         if (msg.sender != owner) _spendAllowance(owner, msg.sender, shares);
         _transfer(owner, address(this), shares); // escrow
         requestId = nextRequestId++;
-        requests[requestId] =
-            Request({controller: controller, status: RequestStatus.PENDING, shares: uint128(shares), assets: 0});
+        requests[requestId] = Request({
+            controller: controller, status: RequestStatus.PENDING, shares: uint128(shares), assets: 0
+        });
         emit RedeemRequest(controller, owner, requestId, msg.sender, shares);
     }
 
@@ -143,7 +147,10 @@ contract CredenceTreasuryFund is INavFund, IssuerRoles, ERC20, ERC20Permit {
     }
 
     /// @inheritdoc INavFund
-    function redeem(uint256 requestId, address receiver, address controller) external returns (uint256 assets) {
+    function redeem(uint256 requestId, address receiver, address controller)
+        external
+        returns (uint256 assets)
+    {
         Request storage r = requests[requestId];
         if (msg.sender != controller || r.controller != controller) revert NotRequestOwner(requestId);
         if (r.status != RequestStatus.CLAIMABLE) revert RequestNotClaimable(requestId);

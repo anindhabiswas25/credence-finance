@@ -32,9 +32,6 @@ ffi = true                      # tests that call crates/risk-cli for exact expe
 fuzz = { runs = 10_000 }
 invariant = { runs = 512, depth = 256, fail_on_revert = false }
 
-[profile.coverage]
-via_ir = false                  # forge coverage disables the optimizer; keep IR off so it compiles fast
-
 [rpc_endpoints]
 arbitrum_sepolia = "${ARB_SEPOLIA_RPC_URL}"
 devnode = "http://127.0.0.1:8547"

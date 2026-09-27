@@ -1,0 +1,66 @@
+# Risk math + Stylus CI (owner: BE-chain). Build Guide §5: fmt, clippy -D warnings, test, cargo stylus check,
+# size check (one Stylus code fragment), ABI parity with IRiskEngine.sol, differential run on a devnode.
+name: rust
+
+on:
+  push:
+    branches: [main]
+    paths: ["crates/risk-*/**", "stylus/**", "Cargo.toml", "Cargo.lock", "rust-toolchain.toml",
+            "deployments/abis/**", "mk/contracts.mk", ".github/workflows/rust.yml"]
+  pull_request:
+    paths: ["crates/risk-*/**", "stylus/**", "Cargo.toml", "Cargo.lock", "rust-toolchain.toml",
+            "deployments/abis/**", "mk/contracts.mk", ".github/workflows/rust.yml"]
+
+concurrency:
+  group: rust-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  lint-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - name: Toolchain from rust-toolchain.toml
+        run: rustup show
+      - uses: Swatinem/rust-cache@v2
+      - name: rustfmt + clippy -D warnings
+        run: make risk-lint
+      - name: risk-core golden vectors G-01..G-22, proptests, risk-cli
+        run: make risk-test
+      - name: Stylus engine (native TestVM)
+        run: make stylus-test
+      - name: Engine ABI == IRiskEngine.sol
+        run: make stylus-abi-check
+
+  stylus:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    needs: lint-test
+    steps:
+      - uses: actions/checkout@v4
+      - run: rustup show
+      - name: Pinned nightly for the on-chain build (ADR-0102)
+        run: rustup toolchain install nightly-2025-08-01 --profile minimal -c rust-src -t wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+      - uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: v1.8.3
+      - name: cargo-stylus
+        run: cargo install --locked cargo-stylus@0.10.9
+      - name: nitro-devnode (infra/docker-compose.yml, bootstrapped with the StylusDeployer)
+        run: docker compose -f infra/docker-compose.yml up -d --wait devnode devnode-init
+      - name: cargo stylus check (activation + single-fragment size)
+        run: make stylus-check
+      - name: Deploy + activate on the devnode
+        run: make devnode-deploy-engine
+      - name: Differential 10k per function, native vs on-chain (+ gas)
+        run: make stylus-diff DIFF_N=10000
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: stylus-diff-regressions
+          path: crates/risk-core/tests/regressions/

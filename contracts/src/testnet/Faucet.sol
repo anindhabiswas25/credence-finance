@@ -54,7 +54,9 @@ contract Faucet is IFaucet {
         if (amount == 0) revert FaucetTokenNotConfigured(token);
         uint40 next = _nextDripAt(msg.sender, token);
         if (block.timestamp < next) revert FaucetCooldown(msg.sender, next);
-        if (d.requiresAllowlist && !IMintableCollateral(token).canHold(msg.sender)) revert NotAllowlisted(msg.sender);
+        if (d.requiresAllowlist && !IMintableCollateral(token).canHold(msg.sender)) {
+            revert NotAllowlisted(msg.sender);
+        }
         lastDrip[msg.sender][token] = uint40(block.timestamp);
         IMintableCollateral(token).mint(msg.sender, amount);
         emit Dripped(msg.sender, token, amount);

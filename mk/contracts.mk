@@ -43,11 +43,11 @@ contracts-test: contracts-deps ## Run every Solidity test: unit, fuzz, invariant
 contracts-invariant: contracts-deps ## Run only the invariant suites
 	cd $(CONTRACTS_DIR) && forge test --match-path 'test/invariant/*'
 
-contracts-coverage: contracts-deps ## Line coverage; fails if src/clock or src/oracle is below 95%
+contracts-coverage: contracts-deps ## Line coverage (lcov); fails if src/clock or src/oracle is below 95%
 	@mkdir -p $(CONTRACTS_DIR)/coverage
-	cd $(CONTRACTS_DIR) && FOUNDRY_PROFILE=coverage forge coverage --report summary --report lcov \
+	cd $(CONTRACTS_DIR) && forge coverage --ir-minimum --skip script --report summary --report lcov \
 	  --no-match-coverage '(test|script|lib)/' | tee coverage/summary.txt
-	@python3 $(CONTRACTS_DIR)/script/check_coverage.py $(CONTRACTS_DIR)/lcov.info src/clock src/oracle 95
+	python3 $(CONTRACTS_DIR)/script/check_coverage.py $(CONTRACTS_DIR)/lcov.info src/clock src/oracle 95
 
 contracts-fmt: ## Format Solidity sources
 	cd $(CONTRACTS_DIR) && forge fmt

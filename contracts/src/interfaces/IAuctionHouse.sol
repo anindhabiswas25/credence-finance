@@ -23,8 +23,14 @@ interface IAuctionHouse is IAuctionHouseEvents, ICredenceErrors {
     // after clearing
     function claim(uint64 auctionId) external;
     // GDA resale of pool inventory
-    function startGda(bytes32 assetId, address token, uint256 qty, uint256 k, uint256 decay, uint256 emissionPerSec)
-        external; // onlyPool
+    function startGda(
+        bytes32 assetId,
+        address token,
+        uint256 qty,
+        uint256 k,
+        uint256 decay,
+        uint256 emissionPerSec
+    ) external; // onlyPool
     function gdaBuy(uint64 gdaId, uint256 qty, uint256 maxCost) external;
     function gdaPrice(uint64 gdaId, uint256 qty) external view returns (uint256);
     // views

@@ -50,7 +50,9 @@ contract UniV3TwapSource is ITwapSource, ICredenceErrors {
     uint8 internal immutable _quoteDec;
 
     constructor(address pool_, address baseToken_, address quoteToken_) {
-        if (pool_ == address(0) || baseToken_ == address(0) || quoteToken_ == address(0)) revert ZeroAddress();
+        if (pool_ == address(0) || baseToken_ == address(0) || quoteToken_ == address(0)) {
+            revert ZeroAddress();
+        }
         address t0 = IUniswapV3PoolMinimal(pool_).token0();
         address t1 = IUniswapV3PoolMinimal(pool_).token1();
         if (!((t0 == baseToken_ && t1 == quoteToken_) || (t0 == quoteToken_ && t1 == baseToken_))) {
