@@ -1,0 +1,355 @@
+{
+ "licence": {
+  "grade": "dev-unlicensed",
+  "terms": "Alpaca Basic market data: personal, non-professional use only. Not licensed for internal business model use. Development runs only (ADR-0201)."
+ },
+ "listed": [
+  "NVDA",
+  "AAPL",
+  "TSLA",
+  "COIN",
+  "MSFT",
+  "SPY"
+ ],
+ "pulledAt": "2026-09-27T21:00:18Z",
+ "symbols": {
+  "AAPL": {
+   "contentSha256": "718e80af9ba0dad64445ce762697dec755256b59cd111d22caec758f9be5fe43",
+   "dividends": 43,
+   "fileSha256": "f7f1dc8ee85179ef3c73ea36be90c5743a0bb6d19090f2d9d80485198a7b02e0",
+   "first": "2016-01-04",
+   "last": "2026-09-25",
+   "rows": 2698,
+   "splits": 1
+  },
+  "ADBE": {
+   "contentSha256": "67698c2220a561b124adb278f75b0da5cd6037c35bb7166c41c82c3deb1bd54b",
+   "dividends": 0,
+   "fileSha256": "18913081b850cf2b736c3382135a13033222de923f2b30fcf36e5cb817539b30",
+   "first": "2016-01-04",
+   "last": "2026-09-25",
+   "rows": 2698,
+   "splits": 0
+  },
+  "AMD": {
+   "contentSha256": "6a390c1807270a00990fc87883b602814617b2cdd4510edc195f93d1df2f7e01",
+   "dividends": 0,
+   "fileSha256": "e374fd3b7de85af3e2cab71d6d2748d96d3fbc44fa2e40c04feac748ff7e6247",
+   "first": "2016-01-04",
+   "last": "2026-09-25",
+   "rows": 2698,
+   "splits": 0
+  },
+  "AMZN": {
+   "contentSha256": "6db22c589e4d784624d7f8314a91c2b01dc4a265c83ac8dfeb64ba8d5e6fb5e1",
+   "dividends": 0,
+   "fileSha256": "264543bdaf982685dad8dee111497a47fa7ad5267de0229fda6e8fab084712fa",
+   "first": "2016-01-04",
+   "last": "2026-09-25",
+   "rows": 2698,
+   "splits": 1
+  },
+  "AVGO": {
+   "contentSha256": "f56c1173166af2d5ae3578ff6858cbacffc6118c7e917ad1118300cdaf87f8c6",
+   "dividends": 42,
+   "fileSha256": "282c599da189fb19d9c38a330e0fd199307e733b9d94143f769494b7b89c854b",
+   "first": "2016-01-04",
+   "last": "2026-09-25",
+   "rows": 2698,
+   "splits": 1
+  },
+  "COIN": {
+   "contentSha256": "a02c118fbe8c2bddc10413e24f379a1a8309b17043dda0293fcec17101729f0d",
+   "dividends": 0,
+   "fileSha256": "6d68d0c016661aa0501621294145674e4e36bd48da1ade56de1b99972d5fa922",
+   "first": "2021-04-14",
+   "last": "2026-09-25",
+   "rows": 1370,
+   "splits": 0
+  },
+  "CSCO": {
+   "contentSha256": "2ea9ba3f20ecc882127d730db87ac2b024ffaafcebaa7d51a94aa06d88b3555b",
+   "dividends": 43,
+   "fileSha256": "ddfea5195b4c81875ecd51521b33c34893ec76aee13b61dbdf4cea0e134bf69a",
+   "first": "2016-01-04",
+   "last": "2026-09-25",
+   "rows": 2698,
+   "splits": 0
+  },
+  "DIA": {
+   "contentSha256": "7b382f6aae3c2460b93ad0ac312953466ff61e40b4b5e97bdbcea4cbad37834d",
+   "dividends": 127,
+   "fileSha256": "c771f2cfb5784765f85e49b0c25ee6ce19733de47308103529f6448d3316f10d",
+   "first": "2016-01-04",
+   "last": "2026-09-25",
+   "rows": 2698,
+   "splits": 0
+  },
+  "GOOGL": {
+   "contentSha256": "a6bcc4af321719873dd292f723ece157105d8b9a64c949c01dde84d9ec2f95ab",
+   "dividends": 10,
+   "fileSha256": "d4ea09f0849449b61c33143ee5468ac2dcddbe025c09db7516d6d2ff61b2fe2c",
+   "first": "2016-01-04",
+   "last": "2026-09-25",
+   "rows": 2698,
+   "splits": 1
+  },
+  "HOOD": {
+   "contentSha256": "7a18646c9c127f125910ab66fc277513f618e78d767817597366f2b33120969c",
+   "dividends": 0,
+   "fileSha256": "8af31664c8e383e493771451b4a6207a244fb25a9db2281a8a480af370ff3537",
+   "first": "2021-07-29",
+   "last": "2026-09-25",
+   "rows": 1296,
+   "splits": 0
+  },
+  "INTC": {
+   "contentSha256": "55204cb3792459d69a57ec1fdfc117cce2c981d5ca34048d50228f4a60bbb588",
+   "dividends": 35,
+   "fileSha256": "e12b740f13f1150797be371feee90f96e2abe1c8445eec0b2251b72626cd1201",
+   "first": "2016-01-04",
+   "last": "2026-09-25",
+   "rows": 2698,
+   "splits": 0
+  },
+  "IWM": {
+   "contentSha256": "4d7ef7250cde21efa3a287cefa8c0bcc34050a254a9207f4958f634f4074e944",
+   "dividends": 43,
+   "fileSha256": "6e29dec6a5251176341f277da18f624796ba7921905a505132db6e26d974fc12",
+   "first": "2016-01-04",
+   "last": "2026-09-25",
+   "rows": 2698,
+   "splits": 0
+  },
+  "MARA": {
+   "contentSha256": "8c538d58d7aef6351804c34f4c2270be09269cc60fc41d558f462c2dd7d94e97",
+   "dividends": 0,
+   "fileSha256": "e89487a3725d1f4d65797453f2f927fba6f1194276dc9aa0c95bbf2e00f65403",
+   "first": "2017-10-30",
+   "last": "2026-09-25",
+   "rows": 2238,
+   "splits": 2
+  },
+  "META": {
+   "contentSha256": "02f3c8bba526609b0337956e735833b5f5cce9d36b52d58ff2fedd2a7a751a6d",
+   "dividends": 10,
+   "fileSha256": "6fbd85534d7194588c4b6ec57fc08db06d36209e5a61c06cc1c30c657d80e82c",
+   "first": "2016-01-04",
+   "last": "2026-09-25",
+   "rows": 2698,
+   "splits": 0
+  },
+  "MSFT": {
+   "contentSha256": "5fcef1752ead56d4b4fc10c29c32c3af591810da5ee04dcdcf4937625dda8663",
+   "dividends": 43,
+   "fileSha256": "f28c29cc295732f2f62edad90c639b196f6ef3b51b713f48860a20d7904dcdad",
+   "first": "2016-01-04",
+   "last": "2026-09-25",
+   "rows": 2698,
+   "splits": 0
+  },
+  "MSTR": {
+   "contentSha256": "3632dbd70a960c63725391f39f110793decdb0b7d58362127a084298d7f1eaf0",
+   "dividends": 1,
+   "fileSha256": "40f8c5e98c056847bd6838fecf47badb264993dca35bd3595761798c7f03a559",
+   "first": "2016-01-04",
+   "last": "2026-09-25",
+   "rows": 2698,
+   "splits": 1
+  },
+  "MU": {
+   "contentSha256": "0432ea5795361b137f8b46f2697e7698afe34dd3738d096cf11fb3453d33f5bd",
+   "dividends": 20,
+   "fileSha256": "214c14ec6d92ef781154732b4fa1f944e799c77fdd2826eea86df44737f7f47e",
+   "first": "2016-01-04",
+   "last": "2026-09-25",
+   "rows": 2698,
+   "splits": 0
+  },
+  "NFLX": {
+   "contentSha256": "9664b7eb407141bb33c46d90acf95f3f0edbdd731ba7fca5fd9fb7301bd222eb",
+   "dividends": 0,
+   "fileSha256": "d2a0b79a5a53a67d03386d4a8aeff6745ae767d7dc2d7d871cd93f69bdc9a274",
+   "first": "2016-01-04",
+   "last": "2026-09-25",
+   "rows": 2698,
+   "splits": 1
+  },
+  "NVDA": {
+   "contentSha256": "ae9324e96482b8562d3db5a8b6c971dff689d4bc76a52b42b08bfd511e08703f",
+   "dividends": 42,
+   "fileSha256": "0783e7296f8401d3d6908b41d316dd6a72bd5840ac417dd5ad3b8b58edc171e1",
+   "first": "2016-01-04",
+   "last": "2026-09-25",
+   "rows": 2698,
+   "splits": 2
+  },
+  "ORCL": {
+   "contentSha256": "58b86dc2b51ee6fd277af063f14f863dd2b75bea465235f3b0e47cf0b404a6d7",
+   "dividends": 43,
+   "fileSha256": "ff0ec32c4c2acd2c58c5517b831c3787f82ce88a8422c568a6fa0b3b1372fcbc",
+   "first": "2016-01-04",
+   "last": "2026-09-25",
+   "rows": 2698,
+   "splits": 0
+  },
+  "PLTR": {
+   "contentSha256": "eac1092e596b54f6b9c16ff72f26c15719ac61c92bf7d6207e951754bf6e4252",
+   "dividends": 0,
+   "fileSha256": "49c42439c5ab0e2c677b43c780ee70a69e64e2da6497a9e7027b706d09e03314",
+   "first": "2020-09-30",
+   "last": "2026-09-25",
+   "rows": 1504,
+   "splits": 0
+  },
+  "QCOM": {
+   "contentSha256": "5c98cc2acdeb561b679518195bd0c4c5710b7c6735c0fc9b2ecdf14ff9ea79fb",
+   "dividends": 44,
+   "fileSha256": "3754f4bbea194ac8a71db5f4fc17a2183c26b814dee8e418baf9a189886cb460",
+   "first": "2016-01-04",
+   "last": "2026-09-25",
+   "rows": 2698,
+   "splits": 0
+  },
+  "QQQ": {
+   "contentSha256": "1b0fe17593113af9354b2c774d20865ada7aee94c2b0630433a087f3d59b4a41",
+   "dividends": 43,
+   "fileSha256": "5a98397839d6b7f95692fe6952cc5d19160a6ee915e45ac8901e63f6280ea195",
+   "first": "2016-01-04",
+   "last": "2026-09-25",
+   "rows": 2698,
+   "splits": 0
+  },
+  "RIOT": {
+   "contentSha256": "8b1b59e877fe9533004d3ba4ab306483f794d2b4c49f47e1a6820f565f4aa7fe",
+   "dividends": 0,
+   "fileSha256": "d781d640f4b47da48dcca7846492b64ceb4bf2c3503908ca24447b9a81aa91c5",
+   "first": "2016-01-04",
+   "last": "2026-09-25",
+   "rows": 2698,
+   "splits": 0
+  },
+  "ROKU": {
+   "contentSha256": "affc9dfcb7cdda3b3aa7c827b7f3cd2f04151ef054bb75e8d9ae6111a0414006",
+   "dividends": 0,
+   "fileSha256": "347f6d36756f0670766d9e23baff0044a7fd524213eab0c3ed4b3cac58db8912",
+   "first": "2017-09-28",
+   "last": "2026-09-25",
+   "rows": 2260,
+   "splits": 0
+  },
+  "SHOP": {
+   "contentSha256": "8870d9c4ee3992f47aeb3902a9410fcd3b281198db64da4749535fe5dced44f5",
+   "dividends": 0,
+   "fileSha256": "d3066e9272d9500974c22785ed47987f27bb1ef34ffff9432cd08590f77c75c6",
+   "first": "2016-01-04",
+   "last": "2026-09-25",
+   "rows": 2698,
+   "splits": 1
+  },
+  "SPY": {
+   "contentSha256": "423fb47a45870e2cb25b4793e35e92e3eff9bb4c1521082823935fec6d5e0567",
+   "dividends": 40,
+   "fileSha256": "616827972f537bec876a7e7237ad28ea8bb94cd355adec4813403e580b62afef",
+   "first": "2016-01-04",
+   "last": "2026-09-25",
+   "rows": 2698,
+   "splits": 0
+  },
+  "TSLA": {
+   "contentSha256": "7acfb8045d91787dfeea136233e38060bc33b7c4045047a2cd39f23c4503fac0",
+   "dividends": 0,
+   "fileSha256": "36ee12729ecea4e3ec1cf8fc4f071b88a7c1fb0d2e46f6ce40577b9431a83430",
+   "first": "2016-01-04",
+   "last": "2026-09-25",
+   "rows": 2698,
+   "splits": 2
+  },
+  "TXN": {
+   "contentSha256": "93288399485c279990bfd6dfe51ef8ac56812585874feba15b5789e859be8886",
+   "dividends": 43,
+   "fileSha256": "42ae8e001197b2d64cf6fcea81e2b84ab46c809fa3d6d82069224e3a7af96b48",
+   "first": "2016-01-04",
+   "last": "2026-09-25",
+   "rows": 2698,
+   "splits": 0
+  },
+  "XLE": {
+   "contentSha256": "c9e4f27f81621e9d8574926ef046cf5917089078191b18c6a5df924c181a4610",
+   "dividends": 43,
+   "fileSha256": "db102012f2ded224afab9443b4804e964e974d548e35472eeb134107d352a1ea",
+   "first": "2016-01-04",
+   "last": "2026-09-25",
+   "rows": 2698,
+   "splits": 1
+  },
+  "XLF": {
+   "contentSha256": "cfe9759a2e61e1dac69a0d1afe1055b4af2f6774fb9fba3ef4752b6ced09658f",
+   "dividends": 44,
+   "fileSha256": "630fc3ba398dfc143d08aa5a2840da357acf6268635a76f2a48d5997c4a74bf7",
+   "first": "2016-01-04",
+   "last": "2026-09-25",
+   "rows": 2698,
+   "splits": 0
+  },
+  "XLI": {
+   "contentSha256": "ea6054fd9a0c896cab1c7505798d7ae51e806b88191a3b5c8bfe9dce945e9e44",
+   "dividends": 42,
+   "fileSha256": "41f00b6101928acd9a6079cc881b216faa730088f0fb2c28b51df3f48f30909c",
+   "first": "2016-01-04",
+   "last": "2026-09-25",
+   "rows": 2698,
+   "splits": 0
+  },
+  "XLK": {
+   "contentSha256": "6ea2e6be2580abae8c51e5c77640839301057ca75a5b827ade85d994c60bb726",
+   "dividends": 42,
+   "fileSha256": "918b78b51b8e163d37cc22b76de8dd6b71be191e18c56c806656d67b8789b76a",
+   "first": "2016-01-04",
+   "last": "2026-09-25",
+   "rows": 2698,
+   "splits": 1
+  },
+  "XLP": {
+   "contentSha256": "0b809957d39c615f592aa5597b1d19165476579679ba99e9a0bb94d4764b28c2",
+   "dividends": 42,
+   "fileSha256": "31e76e42881013ac79c06612f136361ef13f3efc8cf75faf57c54d4c8df839a4",
+   "first": "2016-01-04",
+   "last": "2026-09-25",
+   "rows": 2698,
+   "splits": 0
+  },
+  "XLU": {
+   "contentSha256": "ff72feea3da4a47f3de3f971fad1e53cb1ba98ec7b3d657772ca31daadc0e681",
+   "dividends": 42,
+   "fileSha256": "ee9cd4bc9fbb2f71e137ae1ab402c1445c4b12f4f9e247bd839d31ecbf6066ef",
+   "first": "2016-01-04",
+   "last": "2026-09-25",
+   "rows": 2698,
+   "splits": 1
+  },
+  "XLV": {
+   "contentSha256": "f70da56db829dd080efe689ba959d1ed2e1c566d93526cd8cb8404d015385099",
+   "dividends": 43,
+   "fileSha256": "00fc9dabd1ba92edc38be6e940af823d5684d8e98bd3ec2b638b449e8f060721",
+   "first": "2016-01-04",
+   "last": "2026-09-25",
+   "rows": 2698,
+   "splits": 0
+  },
+  "XLY": {
+   "contentSha256": "8bff8c2a485018dbb2746c801f738061381654e9d56d7f9d772fddf800d213d0",
+   "dividends": 42,
+   "fileSha256": "b0c7dfbb7a974b336cde1354473a193ca3d02758f74b4b71fec7b30fcdd6e907",
+   "first": "2016-01-04",
+   "last": "2026-09-25",
+   "rows": 2698,
+   "splits": 1
+  }
+ },
+ "vendor": "alpaca",
+ "window": {
+  "end": "2026-09-25",
+  "start": "2016-01-01"
+ }
+}

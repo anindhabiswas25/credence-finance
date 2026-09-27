@@ -5,7 +5,12 @@ description = "Credence Finance calibration pipeline. Sprint 1 ships only the ex
 requires-python = ">=3.13"
 dependencies = [
   "exchange-calendars>=4.10",   # XNYS sessions, holidays, early closes
+  "httpx>=0.28",
+  "numpy>=2.2",
   "pandas>=2.2",                # holiday rules for the USBANK (Fed) calendar
+  "pyarrow>=20",
+  "pycryptodome>=3.23.0",
+  "scipy>=1.15",
 ]
 # The rest of §6.5 (polars, numpy, scipy, credence-risk-py, …) is added by the Quant in S2.
 
@@ -13,7 +18,10 @@ dependencies = [
 credence-cal = "credence_cal.calendar:main"
 
 [dependency-groups]
-dev = ["pytest>=8"]
+dev = [
+    "hypothesis>=6",
+    "pytest>=8",
+]
 
 [build-system]
 requires = ["hatchling"]
