@@ -1,0 +1,36 @@
+[
+  {
+    "type": "function",
+    "name": "latestNav",
+    "inputs": [
+      {
+        "name": "assetId",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "nav",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "at",
+        "type": "uint40",
+        "internalType": "uint40"
+      },
+      {
+        "name": "prevNav",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "prevAt",
+        "type": "uint40",
+        "internalType": "uint40"
+      }
+    ],
+    "stateMutability": "view"
+  }
+]

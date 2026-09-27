@@ -1,0 +1,898 @@
+[
+  {
+    "type": "function",
+    "name": "bellStatus",
+    "inputs": [
+      {
+        "name": "assetId",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "closureType",
+        "type": "uint8",
+        "internalType": "uint8"
+      },
+      {
+        "name": "collateralValue",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "debtProjected",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "maxLtv",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "dividend",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "covered",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "status",
+        "type": "uint8",
+        "internalType": "uint8"
+      },
+      {
+        "name": "cureRepay",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "cureCollateralValue",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "clear",
+    "inputs": [
+      {
+        "name": "qtys",
+        "type": "uint256[]",
+        "internalType": "uint256[]"
+      },
+      {
+        "name": "prices",
+        "type": "uint256[]",
+        "internalType": "uint256[]"
+      },
+      {
+        "name": "tieKeys",
+        "type": "bytes32[]",
+        "internalType": "bytes32[]"
+      },
+      {
+        "name": "lot",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "reserve",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "pStar",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "fills",
+        "type": "uint256[]",
+        "internalType": "uint256[]"
+      },
+      {
+        "name": "qPool",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "pure"
+  },
+  {
+    "type": "function",
+    "name": "coverLossVector",
+    "inputs": [
+      {
+        "name": "assetId",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "closureType",
+        "type": "uint8",
+        "internalType": "uint8"
+      },
+      {
+        "name": "collateralValue",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "debtProjected",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "packed",
+        "type": "uint256[]",
+        "internalType": "uint256[]"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "liquidationLot",
+    "inputs": [
+      {
+        "name": "debt",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "qty",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "sizingPrice",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "hfPrice",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "lt",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "hStar",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "lambda",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "collDec",
+        "type": "uint8",
+        "internalType": "uint8"
+      },
+      {
+        "name": "loanDec",
+        "type": "uint8",
+        "internalType": "uint8"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "x",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "pure"
+  },
+  {
+    "type": "function",
+    "name": "params",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "tuple",
+        "internalType": "struct RiskParams",
+        "components": [
+          {
+            "name": "alpha",
+            "type": "uint64",
+            "internalType": "uint64"
+          },
+          {
+            "name": "kappa",
+            "type": "uint64",
+            "internalType": "uint64"
+          },
+          {
+            "name": "theta",
+            "type": "uint64",
+            "internalType": "uint64"
+          },
+          {
+            "name": "costOfCap",
+            "type": "uint64",
+            "internalType": "uint64"
+          },
+          {
+            "name": "eta",
+            "type": "uint64",
+            "internalType": "uint64"
+          },
+          {
+            "name": "beta",
+            "type": "uint64",
+            "internalType": "uint64"
+          },
+          {
+            "name": "uMax",
+            "type": "uint64",
+            "internalType": "uint64"
+          },
+          {
+            "name": "minPremium",
+            "type": "uint64",
+            "internalType": "uint64"
+          },
+          {
+            "name": "kStress",
+            "type": "uint32",
+            "internalType": "uint32"
+          }
+        ]
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "poolCapacity",
+    "inputs": [
+      {
+        "name": "packedCurrent",
+        "type": "uint256[]",
+        "internalType": "uint256[]"
+      },
+      {
+        "name": "packedAdd",
+        "type": "uint256[]",
+        "internalType": "uint256[]"
+      },
+      {
+        "name": "uncAssets",
+        "type": "bytes32[]",
+        "internalType": "bytes32[]"
+      },
+      {
+        "name": "uncClosureTypes",
+        "type": "uint8[]",
+        "internalType": "uint8[]"
+      },
+      {
+        "name": "uncCollateralValue",
+        "type": "uint256[]",
+        "internalType": "uint256[]"
+      },
+      {
+        "name": "uncSafeLtv",
+        "type": "uint256[]",
+        "internalType": "uint256[]"
+      },
+      {
+        "name": "equity",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "ok",
+        "type": "bool",
+        "internalType": "bool"
+      },
+      {
+        "name": "utilAfter",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "worstLoss",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "precloseLot",
+    "inputs": [
+      {
+        "name": "debt",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "qty",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "valuation",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "reserve",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "targetLtv",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "lambdaPre",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "collDec",
+        "type": "uint8",
+        "internalType": "uint8"
+      },
+      {
+        "name": "loanDec",
+        "type": "uint8",
+        "internalType": "uint8"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "x",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "pure"
+  },
+  {
+    "type": "function",
+    "name": "quoteCover",
+    "inputs": [
+      {
+        "name": "assetId",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "closureType",
+        "type": "uint8",
+        "internalType": "uint8"
+      },
+      {
+        "name": "closureDays",
+        "type": "uint16",
+        "internalType": "uint16"
+      },
+      {
+        "name": "collateralValue",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "debtProjected",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "utilAfter",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "premium",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "expectedLoss",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "expectedShortfall",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "safeLtv",
+    "inputs": [
+      {
+        "name": "assetId",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "closureType",
+        "type": "uint8",
+        "internalType": "uint8"
+      },
+      {
+        "name": "maxLtv",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "dividend",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "scenarioHash",
+    "inputs": [
+      {
+        "name": "assetId",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "closureType",
+        "type": "uint8",
+        "internalType": "uint8"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "setJointColumn",
+    "inputs": [
+      {
+        "name": "assetId",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "packedZ",
+        "type": "uint256[]",
+        "internalType": "uint256[]"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "setParams",
+    "inputs": [
+      {
+        "name": "p",
+        "type": "tuple",
+        "internalType": "struct RiskParams",
+        "components": [
+          {
+            "name": "alpha",
+            "type": "uint64",
+            "internalType": "uint64"
+          },
+          {
+            "name": "kappa",
+            "type": "uint64",
+            "internalType": "uint64"
+          },
+          {
+            "name": "theta",
+            "type": "uint64",
+            "internalType": "uint64"
+          },
+          {
+            "name": "costOfCap",
+            "type": "uint64",
+            "internalType": "uint64"
+          },
+          {
+            "name": "eta",
+            "type": "uint64",
+            "internalType": "uint64"
+          },
+          {
+            "name": "beta",
+            "type": "uint64",
+            "internalType": "uint64"
+          },
+          {
+            "name": "uMax",
+            "type": "uint64",
+            "internalType": "uint64"
+          },
+          {
+            "name": "minPremium",
+            "type": "uint64",
+            "internalType": "uint64"
+          },
+          {
+            "name": "kStress",
+            "type": "uint32",
+            "internalType": "uint32"
+          }
+        ]
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "setScenarioSet",
+    "inputs": [
+      {
+        "name": "assetId",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "closureType",
+        "type": "uint8",
+        "internalType": "uint8"
+      },
+      {
+        "name": "packedSortedZ",
+        "type": "uint256[]",
+        "internalType": "uint256[]"
+      },
+      {
+        "name": "n",
+        "type": "uint32",
+        "internalType": "uint32"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "setSigmaFloor",
+    "inputs": [
+      {
+        "name": "assetId",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "closureType",
+        "type": "uint8",
+        "internalType": "uint8"
+      },
+      {
+        "name": "floor",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "sigma",
+    "inputs": [
+      {
+        "name": "assetId",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "closureType",
+        "type": "uint8",
+        "internalType": "uint8"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "updateSigma",
+    "inputs": [
+      {
+        "name": "assetId",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "closureType",
+        "type": "uint8",
+        "internalType": "uint8"
+      },
+      {
+        "name": "sigma",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "event",
+    "name": "JointColumnUpdated",
+    "inputs": [
+      {
+        "name": "asset",
+        "type": "bytes32",
+        "indexed": false,
+        "internalType": "bytes32"
+      },
+      {
+        "name": "hash",
+        "type": "bytes32",
+        "indexed": false,
+        "internalType": "bytes32"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "ParamsUpdated",
+    "inputs": [
+      {
+        "name": "p",
+        "type": "tuple",
+        "indexed": false,
+        "internalType": "struct RiskParams",
+        "components": [
+          {
+            "name": "alpha",
+            "type": "uint64",
+            "internalType": "uint64"
+          },
+          {
+            "name": "kappa",
+            "type": "uint64",
+            "internalType": "uint64"
+          },
+          {
+            "name": "theta",
+            "type": "uint64",
+            "internalType": "uint64"
+          },
+          {
+            "name": "costOfCap",
+            "type": "uint64",
+            "internalType": "uint64"
+          },
+          {
+            "name": "eta",
+            "type": "uint64",
+            "internalType": "uint64"
+          },
+          {
+            "name": "beta",
+            "type": "uint64",
+            "internalType": "uint64"
+          },
+          {
+            "name": "uMax",
+            "type": "uint64",
+            "internalType": "uint64"
+          },
+          {
+            "name": "minPremium",
+            "type": "uint64",
+            "internalType": "uint64"
+          },
+          {
+            "name": "kStress",
+            "type": "uint32",
+            "internalType": "uint32"
+          }
+        ]
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "ScenarioSetUpdated",
+    "inputs": [
+      {
+        "name": "asset",
+        "type": "bytes32",
+        "indexed": false,
+        "internalType": "bytes32"
+      },
+      {
+        "name": "closureType",
+        "type": "uint8",
+        "indexed": false,
+        "internalType": "uint8"
+      },
+      {
+        "name": "hash",
+        "type": "bytes32",
+        "indexed": false,
+        "internalType": "bytes32"
+      },
+      {
+        "name": "n",
+        "type": "uint32",
+        "indexed": false,
+        "internalType": "uint32"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "SigmaFloorSet",
+    "inputs": [
+      {
+        "name": "asset",
+        "type": "bytes32",
+        "indexed": false,
+        "internalType": "bytes32"
+      },
+      {
+        "name": "closureType",
+        "type": "uint8",
+        "indexed": false,
+        "internalType": "uint8"
+      },
+      {
+        "name": "floor",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "SigmaUpdated",
+    "inputs": [
+      {
+        "name": "asset",
+        "type": "bytes32",
+        "indexed": false,
+        "internalType": "bytes32"
+      },
+      {
+        "name": "closureType",
+        "type": "uint8",
+        "indexed": false,
+        "internalType": "uint8"
+      },
+      {
+        "name": "sigma",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "error",
+    "name": "MathError",
+    "inputs": [
+      {
+        "name": "code",
+        "type": "uint8",
+        "internalType": "uint8"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "NotSorted",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "SigmaBelowFloor",
+    "inputs": [
+      {
+        "name": "floor",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "proposed",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "SigmaDropTooFast",
+    "inputs": [
+      {
+        "name": "current",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "proposed",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "minAllowed",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "Unauthorized",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "UnknownSet",
+    "inputs": [
+      {
+        "name": "assetId",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "closureType",
+        "type": "uint8",
+        "internalType": "uint8"
+      }
+    ]
+  }
+]

@@ -1,0 +1,6 @@
+# dependencies are installed at pinned tags by `make contracts-deps` (see mk/contracts.mk)
+lib/
+out/
+cache/
+coverage/
+lcov.info

@@ -20,3 +20,12 @@ Format: one JSON object per venue. `.sessions` is the `Session[]`, with keys in 
 Invariants checked at generation time: `extOpen < open < close < extClose` (strict), `s[i].open > s[i-1].close`, and `s[i].extOpen ≥ s[i-1].extClose`. On a weeknight, `extClose` equals the next session's `extOpen` (20:00 ET, the 24/5 overnight window). Friday's `extClose` is 20:00, and Monday's `extOpen` is Sunday 20:00.
 
 Decisions (ADR-0003-backend-calendar-windows): on an early-close day (13:00), post-market ends at **17:00 ET**, not 20:00. USBANK sessions are `extOpen 08:00, open 09:00, close 17:00, extClose 18:00` ET, because the struct needs strictly increasing times and there is no extended window for a fund.
+
+## 2026-09-27 21:50 · BE-chain · READY
+**Interfaces v0 frozen + ABIs.** Solidity: `contracts/src/interfaces/*.sol` (27 interfaces, every §8 component) and `contracts/src/libraries/{Types,Errors,Events}.sol`. ABIs: `deployments/abis/v0/<Name>.json` (for example `ICredencePriceFeed.json`, `IAssetClock.json`, `ICalendarStore.json`, `IOracleAdapter.json`, `ICredenceErrors.json`). Each interface ABI includes its events and the full Credence error set. Build: `make contracts-build`; re-export: `make abis-export`.
+Things the relayer / SDK / indexer need (details in `docs/adr/ADR-0101-chain-interfaces-v0.md`):
+- **EIP-712:** domain `("CredencePriceFeed", "1", chainId, verifyingContract)`. `REPORTS_TYPEHASH = keccak256("Reports(bytes32 reportsHash)")`, where `reportsHash = keccak256(abi.encode(Report[]))` (offset word, length, 7 words per report). This is a plain EIP-712 struct, so viem's `signTypedData` with `Reports{reportsHash: bytes32}` produces the digest. On-chain `hashReports(reports)` returns the digest for cross-checks. Signatures are 65-byte r‖s‖v, sorted by ascending recovered signer, low-s only.
+- `Report.sessionDate = floor(regularOpenUtc / 86400)`. One bad report reverts the whole batch (`StaleReport`, `ZeroPrice`, `ReportFromFuture` with a 5 s skew, …). `seq` is strictly increasing per (feed, asset) across all kinds. STATUS reports may have `price = 0`.
+- **Venue ids** are `bytes32("XNYS")` / `bytes32("USBANK")` (ASCII, right-padded). Asset ids are `keccak256("NVDA:XNAS")`.
+- The guardian event is renamed `BorrowPausedByGuardian`, because it clashes with the error `BorrowPaused`.
+- Implementations (CalendarStore, AssetClock, CredencePriceFeed, OracleAdapter, …) are next. Their ABIs and a devnode deploy script will get their own READY. BE-chain ADRs are numbered from 0101 to avoid collisions.

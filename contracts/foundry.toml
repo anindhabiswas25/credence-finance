@@ -1,0 +1,47 @@
+[profile.default]
+src = "src"
+out = "out"
+libs = ["lib"]
+test = "test"
+script = "script"
+solc = "0.8.30"
+evm_version = "cancun"
+optimizer = true
+optimizer_runs = 10_000
+via_ir = true
+bytecode_hash = "none"
+fs_permissions = [
+  { access = "read", path = "../calibration/out" },
+  { access = "read", path = "./test/fixtures" },
+  { access = "read-write", path = "../deployments" },
+]
+ffi = false                     # enabled only in profile.ffi
+
+[profile.default.fuzz]
+runs = 1_000
+
+[profile.default.invariant]
+runs = 256
+depth = 128
+fail_on_revert = false
+
+[profile.ffi]
+ffi = true                      # tests that call crates/risk-cli for exact expected values
+
+[profile.ci]
+fuzz = { runs = 10_000 }
+invariant = { runs = 512, depth = 256, fail_on_revert = false }
+
+[profile.coverage]
+via_ir = false                  # forge coverage disables the optimizer; keep IR off so it compiles fast
+
+[rpc_endpoints]
+arbitrum_sepolia = "${ARB_SEPOLIA_RPC_URL}"
+devnode = "http://127.0.0.1:8547"
+
+[etherscan]
+arbitrum_sepolia = { key = "${ARBISCAN_API_KEY}", url = "https://api-sepolia.arbiscan.io/api", chain = 421614 }
+
+[fmt]
+line_length = 110
+int_types = "long"

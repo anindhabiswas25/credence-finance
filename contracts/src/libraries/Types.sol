@@ -1,0 +1,297 @@
+// SPDX-License-Identifier: BUSL-1.1
+pragma solidity 0.8.30;
+
+/// @title Credence shared types (Build Guide §8.1). Interfaces v0.
+/// @dev Every struct and enum that crosses a contract boundary lives here. Enum values are part of the ABI:
+///      append only, never reorder.
+
+// ─────────────────────────────── enums ───────────────────────────────
+
+/// @dev Restrictiveness (AssetClock): CORP_ACTION > HALTED > CLOSED > REOPEN > EXTENDED > REGULAR.
+///      The numeric enum order is NOT the restrictiveness order; use `ClockLib.rank`.
+enum ClockState {
+    REGULAR,
+    EXTENDED,
+    CLOSED,
+    REOPEN,
+    HALTED,
+    CORP_ACTION
+}
+
+/// @dev A mid-week holiday closure (e.g. Tue close → Thu open) uses HOLIDAY_WEEKEND.
+enum ClosureType {
+    NONE,
+    OVERNIGHT,
+    WEEKEND,
+    HOLIDAY_WEEKEND,
+    HALT,
+    CORP_ACTION
+}
+
+enum MarketKind {
+    EQUITY,
+    NAV
+}
+
+enum AuctionKind {
+    REOPEN,
+    INTRADAY,
+    EMERGENCY,
+    PRECLOSE
+}
+
+enum AuctionPhase {
+    NONE,
+    QUEUE,
+    COMMIT,
+    REVEAL,
+    OPEN_BIDDING,
+    CLEARED,
+    CANCELLED
+}
+
+enum BellStatus {
+    SAFE,
+    NEEDS_ACTION,
+    COVERED
+}
+
+/// @dev `Report.kind` values (CredencePriceFeed). Kept as uint8 in the signed struct.
+library ReportKind {
+    uint8 internal constant LIVE = 0;
+    uint8 internal constant OPEN = 1;
+    uint8 internal constant CLOSE = 2;
+    uint8 internal constant NAV = 3;
+    uint8 internal constant STATUS = 4;
+}
+
+/// @dev `Report.marketStatus` / `IPriceSource.latest().marketStatus` values.
+library FeedMarketStatus {
+    uint8 internal constant CLOSED = 0;
+    uint8 internal constant PRE = 1;
+    uint8 internal constant REGULAR = 2;
+    uint8 internal constant POST = 3;
+    uint8 internal constant OVERNIGHT = 4;
+    uint8 internal constant HALTED = 5;
+}
+
+/// @dev `KeeperTips` job ids (§8.10).
+library KeeperJob {
+    uint8 internal constant ENFORCE_BELL = 0;
+    uint8 internal constant FLAG = 1;
+    uint8 internal constant FIX_LOTS = 2;
+    uint8 internal constant CLEAR = 3;
+    uint8 internal constant SETTLE = 4;
+    uint8 internal constant OPEN_SETTLEMENT = 5;
+    uint8 internal constant FINALIZE_SETTLEMENT = 6;
+    uint8 internal constant EPOCH = 7;
+}
+
+// ─────────────────────────────── markets ───────────────────────────────
+
+struct RateParams {
+    uint64 r0; // WAD per year
+    uint64 s1; // WAD per year
+    uint64 s2; // WAD per year
+    uint64 uKink; // WAD
+}
+
+struct MarketParams {
+    address loanToken; // USDC
+    address collateralToken; // tNVDA, tTBILL, …
+    bytes32 assetId; // keccak256("NVDA:XNAS")
+    MarketKind kind;
+    uint64 maxLtv; // WAD, e.g. 0.75e18
+    uint64 lt; // liquidation threshold, WAD
+    uint64 penalty; // λ, WAD
+    uint64 precloseKappa; // κ_preclose, WAD (R-06)
+    uint64 precloseLambda; // λ_preclose, WAD (1%)
+    uint128 supplyCap; // loan units
+    uint128 borrowCap; // loan units
+    RateParams rate; // kinked IRM
+}
+
+struct MarketState {
+    uint128 totalSupplyAssets; // owed to the SeniorVault (senior share of interest included)
+    uint128 totalBorrowAssets;
+    uint128 totalBorrowShares;
+    uint128 poolFeeAccrued; // receivable of the UnderwriterPool (R-09)
+    uint128 treasuryFeeAccrued; // receivable of the Treasury (R-09)
+    uint128 totalCollateral; // collateral token units held for positions
+    uint40 lastAccrual;
+    uint16 feePoolBps; // ρ_J
+    uint16 feeTreasuryBps; // ρ_p
+}
+
+struct Position {
+    uint128 collateral; // token units
+    uint128 borrowShares;
+    uint64 coverClosureId; // closureId this position is covered for (0 = none)
+    uint64 lastBellClosureId; // closureId whose Bell it passed (SAFE or COVERED)
+    uint64 auctionId; // non-zero while queued / in a lot
+    bool autoCoverOptOut; // default false → auto-cover ON
+}
+
+struct GuardianOverlay {
+    uint64 haircut; // WAD subtracted from maxLtv
+    uint40 haircutUntil;
+    bool borrowPaused;
+    bool coverPaused;
+}
+
+// ─────────────────────────────── clock ───────────────────────────────
+
+/// @notice One exchange session, precomputed off-chain in UTC unix seconds (§8.2.1).
+/// @dev extOpen < open < close < extClose. For a weeknight, extClose == next session's extOpen.
+struct Session {
+    uint40 extOpen; // start of the extended window before `open` (overnight 24/5 or pre-market)
+    uint40 open; // regular-session open
+    uint40 close; // regular-session close (early-close days included)
+    uint40 extClose; // end of post-market (or next extOpen if 24/5 runs through)
+    ClosureType closureTypeAfter; // type of the closure that starts at `close`
+}
+
+struct AssetConfig {
+    bytes32 venue;
+    MarketKind kind;
+    bool listed;
+}
+
+/// @notice Per-asset clock bookkeeping, returned by `IAssetClock.closureInfo`.
+/// @dev "current closure" = the most recent closure (scheduled, halt or corporate action).
+///      "next*" fields describe the next scheduled close of the calendar.
+struct ClockData {
+    ClockState state;
+    ClosureType closureType; // of the current / most recent closure
+    uint64 closureId; // ++ at every close, halt or corporate action (per asset)
+    uint64 venueEpoch; // session index of the close that opened this closure (R-10)
+    uint128 refPrice; // last regular close (WAD per token), frozen at close
+    uint40 refTime;
+    uint40 bellWindowAt; // nextCloseAt − 2h
+    uint40 bellAt; // nextCloseAt − 15m
+    uint40 closeAt; // start of the current / most recent closure
+    uint40 reopenAt; // scheduled open that ends the current closure (0 = unknown)
+    uint128 openPrint; // written once per closure at REOPEN
+    uint40 openPrintAt;
+    uint40 phaseExtension; // seconds added by sequencer-gap detection (R-20)
+    uint32 sessionCursor; // calendar session index the clock is in
+    uint32 closedSessions; // number of calendar sessions whose close has been processed
+    uint40 nextCloseAt; // next scheduled regular close (0 = beyond calendar coverage)
+    bool reopenPending; // a closure has started and its REOPEN is not complete
+    bool corporateAction; // a corporate action is active (begin → confirm)
+}
+
+/// @notice A guardian restriction as seen by readers (the most restrictive active one).
+struct Restriction {
+    ClockState state;
+    uint40 until;
+}
+
+// ─────────────────────────────── price layer ───────────────────────────────
+
+/// @notice A signed price report (§8.3.1). The EIP-712 digest is defined in `ICredencePriceFeed`.
+struct Report {
+    bytes32 assetId;
+    uint8 kind; // ReportKind: 0 LIVE, 1 OPEN, 2 CLOSE, 3 NAV, 4 STATUS
+    uint128 price; // WAD per SHARE (the adapter applies sharesPerToken)
+    uint40 observedAt; // exchange timestamp of the print (UTC seconds)
+    uint40 sessionDate; // floor(sessionRegularOpenUtc / 86400): UTC day index of the session's regular open
+    uint8 marketStatus; // FeedMarketStatus: 0 closed, 1 pre, 2 regular, 3 post, 4 overnight, 5 halted
+    uint64 seq; // strictly increasing per (feed, asset)
+}
+
+struct FeedHealth {
+    bool stale; // primary older than 60 s (REGULAR) / 300 s (EXTENDED); NAV: older than 26 h
+    bool disagreement; // |p1 − p2| / min(p1, p2) > 1.5%, or the secondary is missing / stale
+    bool severeDisagreement; // > 5% (both fresh)
+    bool statusClosed; // primary marketStatus says closed while the calendar says open
+    bool statusHalted; // either feed reports a single-stock halt
+    bool issuerFrozen; // collateral token frozen / redemptions gated (or the probe failed)
+    bool navInvalid; // NAV kind: age > 50 h, or a one-step drop > 0.5%
+}
+
+/// @notice Per-asset price wiring of the OracleAdapter.
+struct OracleConfig {
+    address primary; // IPriceSource
+    address secondary; // IPriceSource
+    address dex; // ITwapSource, address(0) = none
+    address token; // collateral token (frozen / redemptionsGated / sharesPerToken)
+    MarketKind kind;
+    uint128 sharesPerToken; // WAD, cached; changed only via CORP_ACTION
+    uint128 minDepth; // WAD USD, ±2% DEX depth below which the TWAP is ignored
+    bool listed;
+}
+
+// ─────────────────────────────── risk ───────────────────────────────
+
+struct RiskParams {
+    uint64 alpha; // 0.001e18
+    uint64 kappa; // 0.03e18
+    uint64 theta; // 1.00e18
+    uint64 costOfCap; // 0.15e18 per year
+    uint64 eta; // 4e18
+    uint64 beta; // 0.975e18
+    uint64 uMax; // 0.50e18
+    uint64 minPremium; // loan units
+    uint32 kStress; // 256
+}
+
+struct SigmaUpdate {
+    bytes32 assetId;
+    uint8 closureType;
+    uint256 sigma; // WAD
+    uint32 asOfDay; // UTC day index; strictly increasing per (asset, closureType)
+    uint64 nonce;
+}
+
+// ─────────────────────────────── pool ───────────────────────────────
+
+struct CoverRequest {
+    bytes32 marketId;
+    bytes32 assetId;
+    address borrower;
+    uint8 closureType;
+    uint16 closureDays;
+    uint64 closureId;
+    uint64 epochId;
+    uint256 collateralValue; // loan units at V_live
+    uint256 debtProjected; // loan units, D × (1 + r_b × τ) (R-08)
+}
+
+struct Epoch {
+    uint64 epochId;
+    uint40 bellWindowAt;
+    uint40 closeAt;
+    uint40 reopenAt;
+    uint128 premiums;
+    uint128 lossesPaid;
+    uint128 pendingLossReserve; // R-11
+    uint128 equityAtRisk; // J snapshot at the Bell deadline
+    uint128 sharePriceAfter; // WAD
+    uint128 withdrawSharesQueued;
+    uint128 depositAssetsQueued;
+    uint64 lossVectorSlot; // pointer to the packed K-vector (R-13)
+    bool settled;
+}
+
+// ─────────────────────────────── auctions ───────────────────────────────
+
+/// @dev deadlines = [lotFixAt, biddingStartAt, commitEndOrBidEnd, clearAt]. For REOPEN:
+///      [openPrintAt+2:00, openPrintAt+2:00, openPrintAt+5:00 (commit end), openPrintAt+7:00], all + ext.
+struct Auction {
+    AuctionKind kind;
+    AuctionPhase phase;
+    bytes32 marketId;
+    bytes32 assetId;
+    uint64 closureId;
+    uint32 tranche;
+    uint40[4] deadlines;
+    uint128 lot; // Q, collateral units
+    uint128 reserve; // R, WAD per token
+    uint128 pStar; // WAD per token
+    uint128 filled; // collateral units sold to bidders
+    uint128 qPool; // collateral units bought by the pool
+    uint128 proceeds; // loan units
+    uint16 bidCount;
+    uint16 positionCount;
+}
