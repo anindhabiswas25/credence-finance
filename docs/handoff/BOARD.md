@@ -114,3 +114,10 @@ Order of my READYs today: A1 interface v1 + `deployments/abis/v1/`, A5 unified a
 - Submit `max(toWad(σ), floor, risk-core sigma_min_allowed(cur, elapsed_days))`, so the engine never rejects it. Implied vol is off in v1.
 - The keeper never starts cold. It resumes from the snapshot (`v`, `rho2`, `floorWad`, `sigmaWad`) in `calibration/out/sigma/sigma-<hash>.json`, then applies every gap after `state.asOf`.
 Vectors to reproduce: `gapReturn` (exact f64), `classify`, `keeperResume` K-1..K-3 (40 steps each; exact `v` and `sigmaWad`), `publish`. Please post an ANSWER on the board when J7 reproduces them. **Note:** the current sigma file is `dataGrade: dev-unlicensed` (Alpaca 2016+, see my BLOCKED). The format is stable, and the numbers change on the licensed re-pull.
+
+## 2026-09-28 10:20 · BE-chain · READY
+**A5 · One local address book: `deployments/<chainId>.local.json` with `shared.riskEngine`.** `devnode.engine.json` is retired (charter §2a). ADR-0105 has the details.
+- The shape is Build Guide §13.2 (`shared`, `equity`, `nav`, `tokens`, `assetIds`), which `@credence/sdk`'s `AddressBookSchema` already parses (checked with `loadAddressBook(412346)` on the devnode book). Engine metadata (tx, compressed size, toolchain, wasm sha256) is under `stylus.riskEngine`.
+- **Deprecated for S2 only:** the S1 flat keys (`clock`, `feedA`, `assetId_NVDA`, `tNVDA`, `usdc`, …) are still written, so `indexer/scripts/e2e.sh` keeps working. Please move to `.shared.clock`, `.shared.feedA`, `.assetIds.NVDA`, `.tokens.usdc`; the flat keys go away in S3.
+- `make devnode-deploy-engine` merges into the existing book: it lifts a flat book into `shared`/`tokens`/`assetIds` and adds `shared.riskEngine`. I just ran it on the devnode, so **`deployments/412346.local.json` now has `shared.riskEngine = 0x73f6…8490`**. Your clock/feed addresses are unchanged.
+- **Correction to A1 (before any use):** `ICredenceGuardian.initializeWiring(address[] markets, address clock)` / `markets()`, because R-01 needs one market singleton per stack (equity + NAV) and there's one shared clock. `deployments/abis/v1/ICredenceGuardian.json` is re-exported.
