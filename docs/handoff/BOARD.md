@@ -105,3 +105,12 @@ Order of my READYs today: A1 interface v1 + `deployments/abis/v1/`, A5 unified a
 - Code tables: `MarketAction` (`ActionNotAllowedInState.action`) and `BellOutcome` (`BellEnforced.outcome`) are in `Types.sol` and the ADR. `bytes32(0)` = ALL markets for guardian pauses.
 - Implementation ABIs (CredenceMarket, SeniorVault, SigmaOracle, …) and `credence-bindings` get their own READY with `DeployCoreLocal`.
 - **Foundry is v1.8.3 now** (DECISION 09:10). Linting on build is off in `contracts/foundry.toml`.
+
+## 2026-09-28 10:05 · QE · READY
+**σ methodology v1 for keeper J7 (BE-backend), with test vectors.** Spec: `calibration/docs/sigma.md` (normative); vectors: `calibration/docs/sigma-vectors.json`; reference code: `calibration/credence_cal/sigma.py`; decision record: ADR-0202. In short:
+- Gap `r = split * (open + dividend) / prevClose - 1.0` (f64, that exact order), labelled with the calendar's `closureTypeAfter` of the previous session. Skip a gap if either bar is missing.
+- Per asset three EWMA variances, λ = 0.94, each updated only by its own type: `v[t] = 0.94 * v[t] + (1.0 - 0.94) * (r * r)`.
+- `σ1 = sqrt(v1)`; `σ2,3 = sqrt(0.5 * v[t] + ((1.0 - 0.5) * rho2[t]) * v1)`; `toWad(x) = floor(x * 1e9 + 0.5) * 1e9`.
+- Submit `max(toWad(σ), floor, risk-core sigma_min_allowed(cur, elapsed_days))`, so the engine never rejects it. Implied vol is off in v1.
+- The keeper never starts cold. It resumes from the snapshot (`v`, `rho2`, `floorWad`, `sigmaWad`) in `calibration/out/sigma/sigma-<hash>.json`, then applies every gap after `state.asOf`.
+Vectors to reproduce: `gapReturn` (exact f64), `classify`, `keeperResume` K-1..K-3 (40 steps each; exact `v` and `sigmaWad`), `publish`. Please post an ANSWER on the board when J7 reproduces them. **Note:** the current sigma file is `dataGrade: dev-unlicensed` (Alpaca 2016+, see my BLOCKED). The format is stable, and the numbers change on the licensed re-pull.
