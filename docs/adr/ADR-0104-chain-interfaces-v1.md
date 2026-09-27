@@ -34,8 +34,8 @@ history in `deployments/abis/v0/` and is never re-exported.
    - **`ISeniorVault`**: `setAllocator`, `allocator`, `timelock`, `market`, `cap`, `supplyQueue`,
      `withdrawQueue`, `redeemRequest(id) → RedeemRequest`, `queueHead`, `nextRequestId`, `pendingRedeemShares`,
      `claimableAssets`; event `AllocatorSet`.
-   - **`ICredenceGuardian`**: `initializeWiring(market, clock)`, the constants `UNPAUSE_DELAY` (6 h),
-     `MAX_HALT` (7 d), `HAIRCUT_TTL` (7 d), `MAX_HAIRCUT_BPS` (1000), views `safe`, `timelock`, `market`, `clock`,
+   - **`ICredenceGuardian`**: `initializeWiring(address[] markets, address clock)` (one market singleton per stack, R-01), the constants `UNPAUSE_DELAY` (6 h),
+     `MAX_HALT` (7 d), `HAIRCUT_TTL` (7 d), `MAX_HAIRCUT_BPS` (1000), views `safe`, `timelock`, `markets`, `clock`,
      `unpauseBorrowAt`, `unpauseCoverAt`; events `CoverUnpauseScheduled`, `GuardianWired`.
    - **`IKeeperTips`**: `initializeWiring(address[] payers)` (once), `setPayer` (timelock), `isPayer`, `timelock`.
    - **`IProtocolReserve`**: `initializeWiring(market)`, `setTargetBps` / `targetBps` (target = max(floor,
@@ -55,6 +55,12 @@ history in `deployments/abis/v0/` and is never re-exported.
      board READY. They only add constructors and admin functions to these interfaces.
 5. **`IRiskEngine` is unchanged in v1.** If the engine is split for size (R-24), the split sits behind this same
    interface (see ADR-0106).
+
+## Correction (same day, before any consumer)
+
+`ICredenceGuardian.initializeWiring(address market, address clock)` / `market()` became
+`initializeWiring(address[] markets, address clock)` / `markets()`: R-01 needs two stacks (equity, NAV), each with
+its own `CredenceMarket`, and the shared `AssetClock` has one guardian. `GuardianWired(address[] markets, address clock)`.
 
 ## Consequences
 

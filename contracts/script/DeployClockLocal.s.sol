@@ -12,6 +12,7 @@ import {CredenceStockToken} from "../src/testnet/CredenceStockToken.sol";
 import {CredenceTreasuryFund} from "../src/testnet/CredenceTreasuryFund.sol";
 import {ComplianceRegistry} from "../src/testnet/ComplianceRegistry.sol";
 import {Faucet} from "../src/testnet/Faucet.sol";
+import {LocalBook} from "./utils/LocalBook.sol";
 
 /// @title Local (anvil / nitro-devnode) deployment of the S1 clock + price stack and the test assets.
 /// @notice LOCAL ONLY. The deployer acts as timelock, guardian and issuer so that a dev loop can list assets and
@@ -24,110 +25,143 @@ import {Faucet} from "../src/testnet/Faucet.sol";
 ///      XNYS_CALENDAR            path to BE-backend's XNYS calendar JSON (relative to contracts/)
 ///      USBANK_CALENDAR          path to the USBANK calendar JSON
 ///      ASSETS                   comma-separated tickers listed on XNYS as "<TICKER>:XNAS" (default NVDA)
-///      OUT                      output address book (default ../deployments/<chainid>.local.json)
+///      OUT                      output address book (default ../deployments/<chainid>.local.json, ADR-0105)
+///      START_BLOCK              indexer start block (default: the block number the script runs at)
 contract DeployClockLocal is Script {
     bytes32 internal constant XNYS = bytes32("XNYS");
     bytes32 internal constant USBANK = bytes32("USBANK");
 
-    struct Deployed {
-        address calendar;
-        address sequencerHealth;
-        address clock;
-        address feedA;
-        address feedB;
-        address navFeed;
-        address oracle;
-        address registry;
-        address faucet;
-        address usdc;
-        address fund;
+    /// @notice Handles of the clock + price stack (for scripts that build on it, e.g. DeployCoreLocal).
+    struct ClockStack {
+        CalendarStore calendar;
+        SequencerHealth sequencerHealth;
+        AssetClock clock;
+        CredencePriceFeed feedA;
+        CredencePriceFeed feedB;
+        CredencePriceFeed navFeed;
+        OracleAdapter oracle;
+        ComplianceRegistry registry;
+        Faucet faucet;
+        MockUSDC usdc;
+        CredenceTreasuryFund fund;
+        CredenceStockToken[] stocks;
+        string[] tickers;
+        bytes32[] assetIds; // stocks, in `tickers` order
+        bytes32 tbill;
     }
 
-    function run() external {
-        require(block.chainid != 421614 && block.chainid != 42161, "local only");
+    function run() external virtual {
+        _requireLocal();
         uint256 pk = vm.envUint("PRIVATE_KEY");
         address me = vm.addr(pk);
+        vm.startBroadcast(pk);
+        ClockStack memory c = _deployClockStack(me, me);
+        vm.stopBroadcast();
+        string memory path = vm.envOr("OUT", LocalBook.defaultPath());
+        LocalBook.Book memory b = _book(c, me, me);
+        LocalBook.carryEngine(b, path);
+        LocalBook.write(b, path);
+        console2.log("address book:", path);
+    }
+
+    function _requireLocal() internal view {
+        require(block.chainid != 421614 && block.chainid != 42161, "local only");
+    }
+
+    /// @dev Deploys the S1 stack. `guardian` is the AssetClock guardian (the deployer, or a CredenceGuardian).
+    function _deployClockStack(address me, address guardian) internal returns (ClockStack memory c) {
         uint8 threshold = uint8(vm.envOr("RELAYER_THRESHOLD", uint256(2)));
         address[] memory signersA = _sorted(vm.envAddress("RELAYER_A_SIGNERS", ","));
         address[] memory signersB = _sorted(vm.envAddress("RELAYER_B_SIGNERS", ","));
-        string[] memory tickers = vm.envOr("ASSETS", ",", _defaultTickers());
+        c.tickers = vm.envOr("ASSETS", ",", _defaultTickers());
 
-        vm.startBroadcast(pk);
-        Deployed memory d;
-        CalendarStore cal = new CalendarStore(me);
-        d.calendar = address(cal);
-        SequencerHealth seq = new SequencerHealth();
-        d.sequencerHealth = address(seq);
-        AssetClock clock = new AssetClock(me, me, address(cal), address(seq));
-        d.clock = address(clock);
-        seq.setClock(address(clock));
-        d.feedA = address(new CredencePriceFeed(me, signersA, threshold));
-        d.feedB = address(new CredencePriceFeed(me, signersB, threshold));
-        d.navFeed = address(new CredencePriceFeed(me, signersA, threshold));
-        OracleAdapter oracle = new OracleAdapter(me);
-        d.oracle = address(oracle);
-        oracle.setClock(address(clock));
-        clock.initializeWiring(address(oracle), address(0), address(0));
+        c.calendar = new CalendarStore(me);
+        c.sequencerHealth = new SequencerHealth();
+        c.clock = new AssetClock(me, guardian, address(c.calendar), address(c.sequencerHealth));
+        c.sequencerHealth.setClock(address(c.clock));
+        c.feedA = new CredencePriceFeed(me, signersA, threshold);
+        c.feedB = new CredencePriceFeed(me, signersB, threshold);
+        c.navFeed = new CredencePriceFeed(me, signersA, threshold);
+        c.oracle = new OracleAdapter(me);
+        c.oracle.setClock(address(c.clock));
 
-        _loadCalendar(cal, XNYS, vm.envString("XNYS_CALENDAR"));
-        _loadCalendar(cal, USBANK, vm.envString("USBANK_CALENDAR"));
+        _loadCalendar(c.calendar, XNYS, vm.envString("XNYS_CALENDAR"));
+        _loadCalendar(c.calendar, USBANK, vm.envString("USBANK_CALENDAR"));
 
-        ComplianceRegistry registry = new ComplianceRegistry(me);
-        d.registry = address(registry);
-        Faucet faucet = new Faucet(me);
-        d.faucet = address(faucet);
-
-        string memory json = "deployment";
-        for (uint256 i; i < tickers.length; ++i) {
+        c.registry = new ComplianceRegistry(me);
+        c.faucet = new Faucet(me);
+        c.stocks = new CredenceStockToken[](c.tickers.length);
+        c.assetIds = new bytes32[](c.tickers.length);
+        for (uint256 i; i < c.tickers.length; ++i) {
             CredenceStockToken t = new CredenceStockToken(
-                string.concat("Credence Test ", tickers[i]), string.concat("t", tickers[i]), me, address(0)
+                string.concat("Credence Test ", c.tickers[i]), string.concat("t", c.tickers[i]), me, address(0)
             );
-            bytes32 assetId = keccak256(bytes(string.concat(tickers[i], ":XNAS")));
-            oracle.setAssetConfig(
-                assetId, d.feedA, d.feedB, address(0), address(t), MarketKind.EQUITY, 250_000e18
+            bytes32 assetId = keccak256(bytes(string.concat(c.tickers[i], ":XNAS")));
+            c.oracle.setAssetConfig(
+                assetId, address(c.feedA), address(c.feedB), address(0), address(t), MarketKind.EQUITY, 250_000e18
             );
-            clock.listAsset(assetId, XNYS, MarketKind.EQUITY);
-            t.setMinter(address(faucet), type(uint128).max);
-            faucet.configure(address(t), 50e18, false);
-            vm.serializeAddress(json, string.concat("t", tickers[i]), address(t));
-            vm.serializeBytes32(json, string.concat("assetId_", tickers[i]), assetId);
+            c.clock.listAsset(assetId, XNYS, MarketKind.EQUITY);
+            t.setMinter(address(c.faucet), type(uint128).max);
+            c.faucet.configure(address(t), 50e18, false);
+            c.stocks[i] = t;
+            c.assetIds[i] = assetId;
         }
 
         // NAV stack test asset: tTBILL on USBANK, priced by the NAV feed
-        MockUSDC usdc = new MockUSDC();
-        d.usdc = address(usdc);
-        registry.setAllowed(me, true);
-        CredenceTreasuryFund fund = new CredenceTreasuryFund(
-            "Credence Test T-Bill Fund", "tTBILL", me, address(registry), address(usdc), me, 1e18
+        c.usdc = new MockUSDC();
+        c.registry.setAllowed(me, true);
+        c.fund = new CredenceTreasuryFund(
+            "Credence Test T-Bill Fund", "tTBILL", me, address(c.registry), address(c.usdc), me, 1e18
         );
-        d.fund = address(fund);
-        bytes32 tbill = keccak256("TBILL:USBANK");
-        oracle.setAssetConfig(tbill, d.navFeed, address(0), address(0), address(fund), MarketKind.NAV, 0);
-        clock.listAsset(tbill, USBANK, MarketKind.NAV);
-        fund.setMinter(address(faucet), type(uint128).max);
-        faucet.configure(address(fund), 100_000e18, true);
-        vm.stopBroadcast();
+        c.tbill = keccak256("TBILL:USBANK");
+        c.oracle.setAssetConfig(
+            c.tbill, address(c.navFeed), address(0), address(0), address(c.fund), MarketKind.NAV, 0
+        );
+        c.clock.listAsset(c.tbill, USBANK, MarketKind.NAV);
+        c.fund.setMinter(address(c.faucet), type(uint128).max);
+        c.faucet.configure(address(c.fund), 100_000e18, true);
+    }
 
-        vm.serializeBytes32(json, "assetId_TBILL", tbill);
-        vm.serializeUint(json, "chainId", block.chainid);
-        vm.serializeUint(json, "startBlock", block.number);
-        vm.serializeAddress(json, "calendar", d.calendar);
-        vm.serializeAddress(json, "sequencerHealth", d.sequencerHealth);
-        vm.serializeAddress(json, "clock", d.clock);
-        vm.serializeAddress(json, "feedA", d.feedA);
-        vm.serializeAddress(json, "feedB", d.feedB);
-        vm.serializeAddress(json, "navFeed", d.navFeed);
-        vm.serializeAddress(json, "oracle", d.oracle);
-        vm.serializeAddress(json, "registry", d.registry);
-        vm.serializeAddress(json, "faucet", d.faucet);
-        vm.serializeAddress(json, "usdc", d.usdc);
-        string memory out = vm.serializeAddress(json, "tTBILL", d.fund);
-        string memory path = vm.envOr(
-            "OUT",
-            string.concat(vm.projectRoot(), "/../deployments/", vm.toString(block.chainid), ".local.json")
-        );
-        vm.writeJson(out, path);
-        console2.log("address book:", path);
+    /// @dev The book of the clock stack; scripts that deploy more fill in the rest.
+    function _book(ClockStack memory c, address timelock, address guardian)
+        internal
+        view
+        returns (LocalBook.Book memory b)
+    {
+        b.chainId = block.chainid;
+        b.startBlock = vm.envOr("START_BLOCK", vm.getBlockNumber());
+        b.shared = LocalBook.Shared({
+            timelock: timelock,
+            guardian: guardian,
+            calendar: address(c.calendar),
+            clock: address(c.clock),
+            oracle: address(c.oracle),
+            feedA: address(c.feedA),
+            feedB: address(c.feedB),
+            feedNav: address(c.navFeed),
+            riskEngine: address(0),
+            sigmaOracle: address(0),
+            sequencerHealth: address(c.sequencerHealth),
+            registry: address(c.registry),
+            faucet: address(c.faucet)
+        });
+        uint256 n = c.tickers.length;
+        b.tokenNames = new string[](n + 2);
+        b.tokenAddrs = new address[](n + 2);
+        b.assetNames = new string[](n + 1);
+        b.assetIds = new bytes32[](n + 1);
+        for (uint256 i; i < n; ++i) {
+            b.tokenNames[i] = string.concat("t", c.tickers[i]);
+            b.tokenAddrs[i] = address(c.stocks[i]);
+            b.assetNames[i] = c.tickers[i];
+            b.assetIds[i] = c.assetIds[i];
+        }
+        b.tokenNames[n] = "tTBILL";
+        b.tokenAddrs[n] = address(c.fund);
+        b.tokenNames[n + 1] = "usdc";
+        b.tokenAddrs[n + 1] = address(c.usdc);
+        b.assetNames[n] = "TBILL";
+        b.assetIds[n] = c.tbill;
     }
 
     function _loadCalendar(CalendarStore cal, bytes32 venue, string memory path) internal {
@@ -154,7 +188,7 @@ contract DeployClockLocal is Script {
         return a;
     }
 
-    function _defaultTickers() internal pure returns (string[] memory t) {
+    function _defaultTickers() internal pure virtual returns (string[] memory t) {
         t = new string[](1);
         t[0] = "NVDA";
     }

@@ -1,7 +1,7 @@
 //! stylus-diff: native `credence-risk-core` vs the deployed Stylus Risk Engine, bit for bit (Build Guide §14.3).
 //!
 //! ```text
-//! credence-risk-engine-diff --rpc http://127.0.0.1:8547 --n 10000 --deployment deployments/devnode.engine.json \
+//! credence-risk-engine-diff --rpc http://127.0.0.1:8547 --n 10000 [--book deployments/<chainId>.local.json | --engine 0x…] \
 //!     [--seed 42] [--gas]
 //! ```
 //! For each function in the S1 spike (`safeLtv`, `liquidationLot`, `clear`) it draws `n` random inputs inside the
@@ -567,15 +567,6 @@ async fn main() -> Result<()> {
     let seed: u64 = arg(&args, "--seed")
         .unwrap_or_else(|| "20260927".into())
         .parse()?;
-    let deployment =
-        arg(&args, "--deployment").unwrap_or_else(|| "deployments/devnode.engine.json".into());
-    let dep: serde_json::Value = serde_json::from_str(
-        &std::fs::read_to_string(&deployment).with_context(|| format!("read {deployment}"))?,
-    )?;
-    let engine: Address = dep["address"]
-        .as_str()
-        .ok_or_else(|| anyhow!("no address in {deployment}"))?
-        .parse()?;
     let key = std::env::var("PRIVATE_KEY")
         .context("PRIVATE_KEY (the engine's timelock / sigma oracle)")?;
     let signer: PrivateKeySigner = key.parse()?;
@@ -584,6 +575,23 @@ async fn main() -> Result<()> {
             .wallet(EthereumWallet::from(signer))
             .connect_http(rpc.parse()?),
     );
+    // The engine comes from THE local address book (charter §2a, ADR-0105): `--engine` overrides,
+    // else `.shared.riskEngine` of `--book` (default deployments/<chainId>.local.json).
+    let engine: Address = match arg(&args, "--engine") {
+        Some(a) => a.parse()?,
+        None => {
+            let chain_id = provider.get_chain_id().await?;
+            let book = arg(&args, "--book")
+                .unwrap_or_else(|| format!("deployments/{chain_id}.local.json"));
+            let v: serde_json::Value = serde_json::from_str(
+                &std::fs::read_to_string(&book).with_context(|| format!("read {book}"))?,
+            )?;
+            v.pointer("/shared/riskEngine")
+                .and_then(|x| x.as_str())
+                .ok_or_else(|| anyhow!("no .shared.riskEngine in {book}: run make devnode-deploy-engine"))?
+                .parse()?
+        }
+    };
 
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     let mut d = Diff {

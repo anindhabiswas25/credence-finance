@@ -248,7 +248,7 @@ interface IGuardianEvents {
     event ClosedExtended(bytes32 asset, uint40 until);
     // v1 additions (S2)
     event CoverUnpauseScheduled(address target, uint40 executableAt);
-    event GuardianWired(address market, address clock);
+    event GuardianWired(address[] markets, address clock);
 }
 
 interface ICollateralTokenEvents {

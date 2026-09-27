@@ -19,11 +19,12 @@ interface ICredenceGuardian is IGuardianEvents, ICredenceErrors {
     function executeUnpauseCover(address poolOrMarket) external;
 
     // ── v1 additions ──
-    /// @notice Once, by the deployer. The clock is wired at construction of the clock (guardian = this).
-    function initializeWiring(address market, address clock) external;
+    /// @notice Once, by the deployer: the market singletons of every stack (equity, NAV; R-01) and the shared clock.
+    ///         A market id is applied on the market contract that lists it; bytes32(0) applies to all of them.
+    function initializeWiring(address[] calldata markets, address clock) external;
     function safe() external view returns (address);
     function timelock() external view returns (address);
-    function market() external view returns (address);
+    function markets() external view returns (address[] memory);
     function clock() external view returns (address);
     function UNPAUSE_DELAY() external view returns (uint40);
     function MAX_HALT() external view returns (uint40);

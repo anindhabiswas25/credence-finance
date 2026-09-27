@@ -118,9 +118,9 @@ devnode-up: ## Ensure a local nitro-devnode answers on :8547 (delegates to `make
 devnode-down: ## Stop the local nitro-devnode container
 	@bash $(STYLUS_DIR)/scripts/devnode.sh down
 
-devnode-deploy-engine: ## Deploy + activate the Stylus Risk Engine on the devnode; writes deployments/devnode.engine.json
+devnode-deploy-engine: ## Deploy + activate the Stylus Risk Engine on the devnode; records it in deployments/<chainId>.local.json
 	DEVNODE_RPC=$(DEVNODE_RPC) DEVNODE_KEY=$(DEVNODE_KEY) bash $(STYLUS_DIR)/scripts/deploy.sh
 
 stylus-diff: ## Differential test: $(DIFF_N) random inputs per function, native risk-core vs the deployed engine (+ gas)
 	PRIVATE_KEY=$(DEVNODE_KEY) cargo run --release -p credence-risk-engine-diff -- --rpc $(DEVNODE_RPC) \
-	  --n $(DIFF_N) --deployment deployments/devnode.engine.json --gas
+	  --n $(DIFF_N) --gas

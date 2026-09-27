@@ -131,9 +131,9 @@
     "name": "initializeWiring",
     "inputs": [
       {
-        "name": "market",
-        "type": "address",
-        "internalType": "address"
+        "name": "markets",
+        "type": "address[]",
+        "internalType": "address[]"
       },
       {
         "name": "clock",
@@ -146,13 +146,13 @@
   },
   {
     "type": "function",
-    "name": "market",
+    "name": "markets",
     "inputs": [],
     "outputs": [
       {
         "name": "",
-        "type": "address",
-        "internalType": "address"
+        "type": "address[]",
+        "internalType": "address[]"
       }
     ],
     "stateMutability": "view"
@@ -405,10 +405,10 @@
     "name": "GuardianWired",
     "inputs": [
       {
-        "name": "market",
-        "type": "address",
+        "name": "markets",
+        "type": "address[]",
         "indexed": false,
-        "internalType": "address"
+        "internalType": "address[]"
       },
       {
         "name": "clock",
