@@ -60,7 +60,9 @@ struct Input(Map<String, Value>);
 
 impl Input {
     fn get(&self, k: &str) -> R<&Value> {
-        self.0.get(k).ok_or_else(|| bad(format!("missing field `{k}`")))
+        self.0
+            .get(k)
+            .ok_or_else(|| bad(format!("missing field `{k}`")))
     }
     fn u(&self, k: &str) -> R<U256> {
         parse_u256(self.get(k)?).map_err(|e| bad(format!("`{k}`: {}", e.0)))
@@ -88,7 +90,9 @@ impl Input {
         parse_i16(self.get(k)?)
     }
     fn bool(&self, k: &str) -> R<bool> {
-        self.get(k)?.as_bool().ok_or_else(|| bad(format!("`{k}` must be a boolean")))
+        self.get(k)?
+            .as_bool()
+            .ok_or_else(|| bad(format!("`{k}` must be a boolean")))
     }
     fn u_vec(&self, k: &str) -> R<Vec<U256>> {
         self.arr(k)?.iter().map(parse_u256).collect()
@@ -100,19 +104,26 @@ impl Input {
         self.arr(k)?
             .iter()
             .map(|v| {
-                let s = v.as_str().ok_or_else(|| bad("tie key must be a 0x string"))?;
+                let s = v
+                    .as_str()
+                    .ok_or_else(|| bad("tie key must be a 0x string"))?;
                 s.parse::<B256>().map_err(|e| bad(format!("tie key: {e}")))
             })
             .collect()
     }
     fn arr(&self, k: &str) -> R<&Vec<Value>> {
-        self.get(k)?.as_array().ok_or_else(|| bad(format!("`{k}` must be an array")))
+        self.get(k)?
+            .as_array()
+            .ok_or_else(|| bad(format!("`{k}` must be an array")))
     }
 }
 
 fn parse_u256(v: &Value) -> R<U256> {
     match v {
-        Value::Number(n) => n.as_u64().map(U256::from).ok_or_else(|| bad("numbers must be non-negative integers")),
+        Value::Number(n) => n
+            .as_u64()
+            .map(U256::from)
+            .ok_or_else(|| bad("numbers must be non-negative integers")),
         Value::String(s) => {
             let s = s.replace('_', "");
             if let Some(h) = s.strip_prefix("0x") {
@@ -219,7 +230,13 @@ fn run(cmd: &str, i: &Input) -> R<Vec<(&'static str, Out)>> {
     Ok(match cmd {
         "safe-ltv" => vec![(
             "safeLtv",
-            U(core::safe_ltv(i.i16("z")?, i.u("sigma")?, i.u_or("dividend", zero)?, i.u("kappa")?, i.u("maxLtv")?)?),
+            U(core::safe_ltv(
+                i.i16("z")?,
+                i.u("sigma")?,
+                i.u_or("dividend", zero)?,
+                i.u("kappa")?,
+                i.u("maxLtv")?,
+            )?),
         )],
         "safe-ltv-from-set" => {
             let set = sorted_set(i, "set")?;
@@ -233,7 +250,13 @@ fn run(cmd: &str, i: &Input) -> R<Vec<(&'static str, Out)>> {
             )?;
             vec![("safeLtv", U(v))]
         }
-        "quantile-index" => vec![("index", U(U256::from(core::quantile_index(i.small("n")?, i.u("alpha")?)?)))],
+        "quantile-index" => vec![(
+            "index",
+            U(U256::from(core::quantile_index(
+                i.small("n")?,
+                i.u("alpha")?,
+            )?)),
+        )],
         "cures" => {
             let c = core::cure_amounts(
                 i.u("debtProjected")?,
@@ -281,7 +304,10 @@ fn run(cmd: &str, i: &Input) -> R<Vec<(&'static str, Out)>> {
                 i.u_or("dividend", zero)?,
                 i.u("kappa")?,
             )?;
-            vec![("losses", V(lv.iter().map(|x| U256::from(*x)).collect())), ("packed", V(pack_u64(&lv)))]
+            vec![
+                ("losses", V(lv.iter().map(|x| U256::from(*x)).collect())),
+                ("packed", V(pack_u64(&lv))),
+            ]
         }
         "pool-capacity" => {
             let k: u32 = i.small("k")?;
@@ -290,9 +316,18 @@ fn run(cmd: &str, i: &Input) -> R<Vec<(&'static str, Out)>> {
             let mut joints = Vec::new();
             let mut params = Vec::new();
             for m in i.arr("uncovered")? {
-                let mi = Input(m.as_object().ok_or_else(|| bad("uncovered[] entries must be objects"))?.clone());
+                let mi = Input(
+                    m.as_object()
+                        .ok_or_else(|| bad("uncovered[] entries must be objects"))?
+                        .clone(),
+                );
                 joints.push(mi.z_vec("joint")?);
-                params.push((mi.u("sigma")?, mi.u_or("dividend", zero)?, mi.u("collateralValue")?, mi.u("safeLtv")?));
+                params.push((
+                    mi.u("sigma")?,
+                    mi.u_or("dividend", zero)?,
+                    mi.u("collateralValue")?,
+                    mi.u("safeLtv")?,
+                ));
             }
             let slices: Vec<core::SliceZ<'_>> = joints.iter().map(|j| core::SliceZ(j)).collect();
             let unc: Vec<core::UncoveredMarket<'_, core::SliceZ<'_>>> = slices
@@ -306,8 +341,20 @@ fn run(cmd: &str, i: &Input) -> R<Vec<(&'static str, Out)>> {
                     safe_ltv: p.3,
                 })
                 .collect();
-            let r = core::pool_capacity(&cur, &add, k, &unc, i.u("kappa")?, i.u("equity")?, i.u("uMax")?)?;
-            vec![("ok", B(r.ok)), ("utilAfter", U(r.util_after)), ("worstLoss", U(r.worst_loss))]
+            let r = core::pool_capacity(
+                &cur,
+                &add,
+                k,
+                &unc,
+                i.u("kappa")?,
+                i.u("equity")?,
+                i.u("uMax")?,
+            )?;
+            vec![
+                ("ok", B(r.ok)),
+                ("utilAfter", U(r.util_after)),
+                ("worstLoss", U(r.worst_loss)),
+            ]
         }
         "liquidation-lot" => vec![(
             "x",
@@ -364,29 +411,69 @@ fn run(cmd: &str, i: &Input) -> R<Vec<(&'static str, Out)>> {
                 i.u("lot")?,
                 i.u("reserve")?,
             )?;
-            vec![("pStar", U(r.p_star)), ("fills", V(r.fills)), ("qPool", U(r.q_pool))]
+            vec![
+                ("pStar", U(r.p_star)),
+                ("fills", V(r.fills)),
+                ("qPool", U(r.q_pool)),
+            ]
         }
         "blended-price" => vec![(
             "blendedPrice",
-            U(core::blended_price(i.u("lot")?, i.u("pStar")?, i.u("qPool")?, i.u("reserve")?)?),
+            U(core::blended_price(
+                i.u("lot")?,
+                i.u("pStar")?,
+                i.u("qPool")?,
+                i.u("reserve")?,
+            )?),
         )],
         "kinked-rate" => vec![(
             "rate",
-            U(core::kinked_rate(i.u("utilization")?, i.u("r0")?, i.u("s1")?, i.u("s2")?, i.u("uKink")?)?),
+            U(core::kinked_rate(
+                i.u("utilization")?,
+                i.u("r0")?,
+                i.u("s1")?,
+                i.u("s2")?,
+                i.u("uKink")?,
+            )?),
         )],
         "senior-rate" => vec![(
             "rate",
-            U(core::senior_rate(i.u("borrowRate")?, i.u("utilization")?, i.u("rhoPool")?, i.u("rhoTreasury")?)?),
+            U(core::senior_rate(
+                i.u("borrowRate")?,
+                i.u("utilization")?,
+                i.u("rhoPool")?,
+                i.u("rhoTreasury")?,
+            )?),
         )],
-        "utilization" => vec![("utilization", U(core::utilization(i.u("borrowed")?, i.u("supplied")?)?))],
+        "utilization" => vec![(
+            "utilization",
+            U(core::utilization(i.u("borrowed")?, i.u("supplied")?)?),
+        )],
         "accrue-interest" => {
-            vec![("interest", U(core::accrue_interest(i.u("borrowed")?, i.u("rate")?, i.small("dt")?)?))]
+            vec![(
+                "interest",
+                U(core::accrue_interest(
+                    i.u("borrowed")?,
+                    i.u("rate")?,
+                    i.small("dt")?,
+                )?),
+            )]
         }
         "projected-debt" => {
-            vec![("debtProjected", U(core::projected_debt(i.u("debt")?, i.u("rate")?, i.small("days")?)?))]
+            vec![(
+                "debtProjected",
+                U(core::projected_debt(
+                    i.u("debt")?,
+                    i.u("rate")?,
+                    i.small("days")?,
+                )?),
+            )]
         }
         "sigma-min-allowed" => {
-            vec![("minAllowed", U(core::sigma_min_allowed(i.u("current")?, i.small("days")?)?))]
+            vec![(
+                "minAllowed",
+                U(core::sigma_min_allowed(i.u("current")?, i.small("days")?)?),
+            )]
         }
         "value" => {
             let (cd, ld) = (i.small_or("collDec", 18u8)?, i.small_or("loanDec", 6u8)?);
@@ -395,14 +482,25 @@ fn run(cmd: &str, i: &Input) -> R<Vec<(&'static str, Out)>> {
             vec![
                 ("collateralValue", U(c)),
                 ("ltv", U(ltv_up(d, c)?)),
-                ("healthFactor", U(health_factor_down(c, i.u_or("lt", zero)?, d)?)),
+                (
+                    "healthFactor",
+                    U(health_factor_down(c, i.u_or("lt", zero)?, d)?),
+                ),
             ]
         }
         "pack-z" => {
             let set = i.z_vec("set")?;
-            vec![("n", U(U256::from(set.len()))), ("packed", V(pack_i16(&set)))]
+            vec![
+                ("n", U(U256::from(set.len()))),
+                ("packed", V(pack_i16(&set))),
+            ]
         }
-        _ => return Err(bad(format!("unknown command `{cmd}`; one of: {}", COMMANDS.join(", ")))),
+        _ => {
+            return Err(bad(format!(
+                "unknown command `{cmd}`; one of: {}",
+                COMMANDS.join(", ")
+            )))
+        }
     })
 }
 
@@ -411,7 +509,10 @@ fn main() -> ExitCode {
     let abi = args.iter().any(|a| a == "--abi");
     let pos: Vec<&String> = args.iter().filter(|a| !a.starts_with("--")).collect();
     let Some(cmd) = pos.first() else {
-        eprintln!("usage: risk-cli <command> [json|-] [--abi]\ncommands: {}", COMMANDS.join(", "));
+        eprintln!(
+            "usage: risk-cli <command> [json|-] [--abi]\ncommands: {}",
+            COMMANDS.join(", ")
+        );
         return ExitCode::from(2);
     };
     let raw = match pos.get(1) {
@@ -428,12 +529,18 @@ fn main() -> ExitCode {
     let parsed: Value = match serde_json::from_str(&raw) {
         Ok(v) => v,
         Err(e) => {
-            println!("{}", json!({"error": format!("invalid JSON: {e}"), "code": 0}));
+            println!(
+                "{}",
+                json!({"error": format!("invalid JSON: {e}"), "code": 0})
+            );
             return ExitCode::from(1);
         }
     };
     let Some(obj) = parsed.as_object() else {
-        println!("{}", json!({"error": "input must be a JSON object", "code": 0}));
+        println!(
+            "{}",
+            json!({"error": "input must be a JSON object", "code": 0})
+        );
         return ExitCode::from(1);
     };
     match run(cmd, &Input(obj.clone())) {
@@ -453,7 +560,10 @@ mod tests {
     use super::*;
 
     fn call(cmd: &str, j: Value) -> Value {
-        let out = render(run(cmd, &Input(j.as_object().unwrap().clone())).unwrap(), false);
+        let out = render(
+            run(cmd, &Input(j.as_object().unwrap().clone())).unwrap(),
+            false,
+        );
         serde_json::from_str(&out).unwrap()
     }
 
@@ -507,14 +617,21 @@ mod tests {
         );
         assert_eq!(r["ok"], true);
         assert_eq!(r["worstLoss"], "5");
-        let r = call("value", json!({"qty": "100000000000000000000", "price": "180000000000000000000"}));
+        let r = call(
+            "value",
+            json!({"qty": "100000000000000000000", "price": "180000000000000000000"}),
+        );
         assert_eq!(r["collateralValue"], "18000000000");
     }
 
     #[test]
     fn abi_encoding_layout() {
         let out = render(
-            vec![("a", Out::U(U256::from(1u8))), ("v", Out::V(vec![U256::from(7u8)])), ("b", Out::B(true))],
+            vec![
+                ("a", Out::U(U256::from(1u8))),
+                ("v", Out::V(vec![U256::from(7u8)])),
+                ("b", Out::B(true)),
+            ],
             true,
         );
         let word = |k: usize| U256::from_str_radix(&out[2 + 64 * k..2 + 64 * (k + 1)], 16).unwrap();
@@ -528,10 +645,16 @@ mod tests {
     #[test]
     fn errors_are_reported() {
         let inp = |j: Value| Input(j.as_object().unwrap().clone());
-        let e = run("kinked-rate", &inp(json!({"utilization": 1, "r0": 0, "s1": 0, "s2": 0, "uKink": 0})));
+        let e = run(
+            "kinked-rate",
+            &inp(json!({"utilization": 1, "r0": 0, "s1": 0, "s2": 0, "uKink": 0})),
+        );
         assert!(matches!(e, Err(CliError(_, 3))));
         assert!(run("nope", &inp(json!({}))).is_err());
         assert!(run("safe-ltv", &inp(json!({}))).is_err());
-        assert!(matches!(run("quote-cover", &inp(json!({"set": [1, 0]}))), Err(CliError(_, 5))));
+        assert!(matches!(
+            run("quote-cover", &inp(json!({"set": [1, 0]}))),
+            Err(CliError(_, 5))
+        ));
     }
 }

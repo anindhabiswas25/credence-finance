@@ -51,7 +51,8 @@ pub struct PremiumQuote {
 /// Loss in one scenario: max(0, D − C × g(z)), with C × g rounded down (the loss rounds UP).
 pub fn scenario_loss(z: i16, p: &PremiumParams) -> MathResult<U256> {
     let g = gap_factor(z, p.sigma, p.dividend, p.kappa)?;
-    Ok(p.debt_projected.saturating_sub(mul_wad_down(p.collateral_value, g)?))
+    Ok(p.debt_projected
+        .saturating_sub(mul_wad_down(p.collateral_value, g)?))
 }
 
 /// π = max(minPremium, m(u) × [(1 + θ) E[L] + c τ ES_β]), m(u) = 1 + η u² (F-4.3).
@@ -86,12 +87,19 @@ pub fn quote_cover<S: ZSource + ?Sized>(set: &S, p: &PremiumParams) -> MathResul
 
     // τ = days / 365 in WAD (rounded up)
     let tau = mul_div_up(U256::from(p.closure_days), WAD, U256::from(365u16))?;
-    let loaded = mul_wad_up(WAD.checked_add(p.theta).ok_or(MathError::Overflow)?, expected_loss)?;
+    let loaded = mul_wad_up(
+        WAD.checked_add(p.theta).ok_or(MathError::Overflow)?,
+        expected_loss,
+    )?;
     let capital = mul_wad_up(mul_wad_up(p.cost_of_cap, tau)?, expected_shortfall)?;
     let base = loaded.checked_add(capital).ok_or(MathError::Overflow)?;
     let mult = WAD
         .checked_add(mul_wad_up(p.eta, mul_wad_up(p.util_after, p.util_after)?)?)
         .ok_or(MathError::Overflow)?;
     let premium = mul_wad_up(mult, base)?.max(p.min_premium);
-    Ok(PremiumQuote { premium, expected_loss, expected_shortfall })
+    Ok(PremiumQuote {
+        premium,
+        expected_loss,
+        expected_shortfall,
+    })
 }

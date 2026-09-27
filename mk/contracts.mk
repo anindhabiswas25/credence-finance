@@ -7,8 +7,6 @@ ABI_OUT         := deployments/abis/$(ABI_VERSION)
 DEVNODE_RPC     ?= http://127.0.0.1:8547
 # Pre-funded dev key of nitro-devnode (public, local only; never used on a real network).
 DEVNODE_KEY     ?= 0xb6b15c8cb491557369f3c7d2c287b053eb229daa9c22138887752191c9520659
-DEVNODE_IMAGE   ?= offchainlabs/nitro-node:v3.9.4-7f582c3
-DEVNODE_NAME    ?= credence-devnode
 STYLUS_DIR      := stylus/risk-engine
 DIFF_N          ?= 10000
 
@@ -27,7 +25,7 @@ ABI_IMPLS ?= CalendarStore AssetClock CredencePriceFeed OracleAdapter SequencerH
   CredenceStockToken CredenceTreasuryFund ComplianceRegistry Faucet
 
 .PHONY: local-deploy-clock contracts-deps contracts-build contracts-test contracts-invariant contracts-coverage contracts-fmt \
-  contracts-fmt-check contracts-snapshot contracts-clean abis-export risk-build risk-test risk-lint risk-fmt \
+  contracts-fmt-check contracts-snapshot contracts-clean abis-export risk-build risk-test risk-lint risk-fmt stylus-test stylus-abi-check \
   stylus-check stylus-export-abi devnode-up devnode-down devnode-deploy-engine stylus-diff
 
 contracts-deps: ## Install pinned Solidity deps into contracts/lib (OZ, forge-std, solady) if missing
@@ -76,19 +74,27 @@ risk-build: ## Build risk-core and risk-cli (native, release)
 risk-test: ## Run risk-core golden vectors G-01..G-22, proptests, and risk-cli tests
 	cargo test -p credence-risk-core -p credence-risk-cli
 
+RISK_CRATES := -p credence-risk-core -p credence-risk-cli -p credence-risk-engine -p credence-risk-engine-diff
+
 risk-lint: ## rustfmt check + clippy -D warnings on the blockchain crates
-	cargo fmt -p credence-risk-core -p credence-risk-cli -p credence-risk-engine -- --check
-	cargo clippy -p credence-risk-core -p credence-risk-cli --all-targets -- -D warnings
-	cd $(STYLUS_DIR) && cargo clippy --target wasm32-unknown-unknown --lib -- -D warnings
+	cargo fmt $(RISK_CRATES) -- --check
+	cargo clippy $(RISK_CRATES) --all-targets -- -D warnings
 
 risk-fmt: ## Format the blockchain Rust crates
-	cargo fmt -p credence-risk-core -p credence-risk-cli -p credence-risk-engine
+	cargo fmt $(RISK_CRATES)
 
-stylus-check: ## cargo stylus check of the Risk Engine against the devnode (size + activation check)
-	cd $(STYLUS_DIR) && cargo stylus check --endpoint $(DEVNODE_RPC)
+stylus-test: ## Native unit tests of the Stylus Risk Engine (TestVM)
+	cargo test -p credence-risk-engine
+
+stylus-check: ## cargo stylus check of the Risk Engine against the devnode (size ≤ 1 fragment + activation)
+	WS=$$(bash $(STYLUS_DIR)/scripts/stylus-ws.sh) && cd $$WS && \
+	  cargo stylus check --endpoint $(DEVNODE_RPC) --contract credence-risk-engine
 
 stylus-export-abi: ## Print the Stylus Risk Engine Solidity ABI
-	cd $(STYLUS_DIR) && cargo stylus export-abi
+	cargo run -q -p credence-risk-engine --features export-abi --bin credence-risk-engine
+
+stylus-abi-check: ## Every engine function / error exists with the same selector in deployments/abis/v0/IRiskEngine.json
+	bash $(STYLUS_DIR)/scripts/abi-check.sh
 
 XNYS_CALENDAR   ?= $(firstword $(wildcard calibration/out/calendars/XNYS-*.json))
 USBANK_CALENDAR ?= $(firstword $(wildcard calibration/out/calendars/USBANK-*.json))
@@ -102,15 +108,15 @@ local-deploy-clock: contracts-build ## Deploy the clock + price stack and test a
 	  RELAYER_B_SIGNERS=$(RELAYER_B_SIGNERS) XNYS_CALENDAR=../$(XNYS_CALENDAR) USBANK_CALENDAR=../$(USBANK_CALENDAR) \
 	  forge script script/DeployClockLocal.s.sol:DeployClockLocal --rpc-url $(LOCAL_RPC) --broadcast --slow
 
-devnode-up: ## Start a local nitro-devnode (Stylus-capable) on :8547 via docker (until infra/ compose exists)
+devnode-up: ## Ensure a local nitro-devnode answers on :8547 (delegates to `make infra-up`)
 	@bash $(STYLUS_DIR)/scripts/devnode.sh up
 
 devnode-down: ## Stop the local nitro-devnode container
 	@bash $(STYLUS_DIR)/scripts/devnode.sh down
 
 devnode-deploy-engine: ## Deploy + activate the Stylus Risk Engine on the devnode; writes deployments/devnode.engine.json
-	@bash $(STYLUS_DIR)/scripts/deploy.sh
+	DEVNODE_RPC=$(DEVNODE_RPC) DEVNODE_KEY=$(DEVNODE_KEY) bash $(STYLUS_DIR)/scripts/deploy.sh
 
-stylus-diff: ## Differential test: $(DIFF_N) random inputs, native risk-core vs the deployed Stylus engine
-	cargo run --release -p credence-risk-engine-diff -- --rpc $(DEVNODE_RPC) --n $(DIFF_N) \
-	  --deployment deployments/devnode.engine.json
+stylus-diff: ## Differential test: $(DIFF_N) random inputs per function, native risk-core vs the deployed engine (+ gas)
+	PRIVATE_KEY=$(DEVNODE_KEY) cargo run --release -p credence-risk-engine-diff -- --rpc $(DEVNODE_RPC) \
+	  --n $(DIFF_N) --deployment deployments/devnode.engine.json --gas

@@ -1,0 +1,55 @@
+[workspace]
+resolver = "2"
+# Only crates that exist. BE-backend appends its crates to this list (TEAM_CHARTER §2).
+members = [
+  "crates/risk-core",
+  "crates/risk-cli",
+  "stylus/risk-engine",
+  "stylus/risk-engine-diff",
+  "crates/credence-common",
+  "services/relayer",
+  "services/keeper",
+]
+
+[workspace.package]
+edition = "2021"
+license = "BUSL-1.1"
+version = "0.1.0"
+
+[workspace.dependencies]
+# on-chain / shared math
+alloy-primitives = { version = "1.7.3", default-features = false }
+alloy-sol-types  = { version = "1.7.3", default-features = false }
+stylus-sdk       = "0.10.9"
+# services
+alloy            = { version = "2.5.0", features = ["full", "signer-aws"] }
+tokio            = { version = "1.53", features = ["full"] }
+axum             = "0.8.9"
+sqlx             = { version = "0.9.0", features = ["runtime-tokio", "postgres", "chrono", "uuid", "json"] }
+serde            = { version = "1", features = ["derive"] }
+serde_json       = "1"
+anyhow           = "1"
+thiserror        = "2"
+tracing          = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+prometheus       = "0.14"
+reqwest          = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+tokio-tungstenite = { version = "0.27", features = ["rustls-tls-webpki-roots"] }
+chrono           = { version = "0.4", features = ["serde"] }
+config           = "0.15"
+# test
+proptest         = "1.11"
+pyo3             = { version = "0.29.2", features = ["extension-module"] }
+
+[profile.release]
+codegen-units = 1
+lto = true
+panic = "abort"
+opt-level = 3
+
+# Stylus size profile: the contract must stay under the Stylus compressed-size limit
+[profile.stylus]
+inherits = "release"
+opt-level = "z"
+strip = true
+debug = false

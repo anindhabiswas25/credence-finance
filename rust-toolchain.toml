@@ -1,4 +1,4 @@
 [toolchain]
-channel = "1.91.0"          # pin; bump deliberately (Build Guide §6.1)
+channel = "1.95.0"          # pin; bump deliberately (Guide §6.1 says "stable 1.9x"; alloy 2.5 needs ≥ 1.94.1, ADR-0102)
 components = ["rustfmt", "clippy"]
 targets = ["wasm32-unknown-unknown"]

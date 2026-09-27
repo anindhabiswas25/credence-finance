@@ -1,8 +1,8 @@
 //! F-4.2: safe LTV, cures and the Bell status (§9.3), plus the σ rate limit (R-15).
 
 use crate::fixed::{
-    collateral_value, div_wad_up, loan_to_wad, ltv_up, mul_div_down, mul_div_up, mul_wad_down, pow10,
-    pow_wad_up, MathError, MathResult, DAY_SECONDS, WAD,
+    collateral_value, div_wad_up, loan_to_wad, ltv_up, mul_div_down, mul_div_up, mul_wad_down,
+    pow10, pow_wad_up, MathError, MathResult, DAY_SECONDS, WAD,
 };
 use crate::scenarios::{quantile_index, ZSource};
 use alloy_primitives::U256;
@@ -33,7 +33,13 @@ pub fn gap_factor(z: i16, sigma: U256, dividend: U256, kappa: U256) -> MathResul
 }
 
 /// LTV_safe = min(LTV_max_eff, g(z_{i*})) for the quantile scenario z (F-4.2), rounded down.
-pub fn safe_ltv(z: i16, sigma: U256, dividend: U256, kappa: U256, max_ltv: U256) -> MathResult<U256> {
+pub fn safe_ltv(
+    z: i16,
+    sigma: U256,
+    dividend: U256,
+    kappa: U256,
+    max_ltv: U256,
+) -> MathResult<U256> {
     Ok(gap_factor(z, sigma, dividend, kappa)?.min(max_ltv))
 }
 
@@ -75,12 +81,22 @@ pub fn cure_amounts(
     let allowed = mul_wad_down(ltv_safe, c)?;
     let repay = debt_projected.saturating_sub(allowed);
     if ltv_safe.is_zero() || v.is_zero() {
-        let inf = if debt_projected.is_zero() { U256::ZERO } else { U256::MAX };
-        return Ok(Cures { repay, add_collateral: inf, add_collateral_value: inf });
+        let inf = if debt_projected.is_zero() {
+            U256::ZERO
+        } else {
+            U256::MAX
+        };
+        return Ok(Cures {
+            repay,
+            add_collateral: inf,
+            add_collateral_value: inf,
+        });
     }
     // q* = D_usd × 10^collDec / (LTV_safe × V / 1e18), rounded up
     let d_usd = loan_to_wad(debt_projected, loan_dec)?;
-    let scale = pow10(coll_dec)?.checked_mul(WAD).ok_or(MathError::Overflow)?;
+    let scale = pow10(coll_dec)?
+        .checked_mul(WAD)
+        .ok_or(MathError::Overflow)?;
     let den = ltv_safe.checked_mul(v).ok_or(MathError::Overflow)?;
     let q_star = mul_div_up(d_usd, scale, den)?;
     let add = q_star.saturating_sub(q);
@@ -89,7 +105,11 @@ pub fn cure_amounts(
         v.checked_mul(pow10(loan_dec)?).ok_or(MathError::Overflow)?,
         scale,
     )?;
-    Ok(Cures { repay, add_collateral: add, add_collateral_value: add_value })
+    Ok(Cures {
+        repay,
+        add_collateral: add,
+        add_collateral_value: add_value,
+    })
 }
 
 /// Bell status codes (== `BellStatus` in Types.sol).
@@ -111,12 +131,25 @@ pub struct BellResult {
 }
 
 /// Bell status of a position in value terms (C, D_proj at the closure's safe LTV).
-pub fn bell_status(collateral_value: U256, debt_projected: U256, ltv_safe: U256, covered: bool) -> MathResult<BellResult> {
+pub fn bell_status(
+    collateral_value: U256,
+    debt_projected: U256,
+    ltv_safe: U256,
+    covered: bool,
+) -> MathResult<BellResult> {
     if covered {
-        return Ok(BellResult { status: COVERED, cure_repay: U256::ZERO, cure_collateral_value: U256::ZERO });
+        return Ok(BellResult {
+            status: COVERED,
+            cure_repay: U256::ZERO,
+            cure_collateral_value: U256::ZERO,
+        });
     }
     if ltv_up(debt_projected, collateral_value)? <= ltv_safe {
-        return Ok(BellResult { status: SAFE, cure_repay: U256::ZERO, cure_collateral_value: U256::ZERO });
+        return Ok(BellResult {
+            status: SAFE,
+            cure_repay: U256::ZERO,
+            cure_collateral_value: U256::ZERO,
+        });
     }
     let cure_repay = debt_projected.saturating_sub(mul_wad_down(ltv_safe, collateral_value)?);
     let cure_collateral_value = if ltv_safe.is_zero() {
@@ -124,7 +157,11 @@ pub fn bell_status(collateral_value: U256, debt_projected: U256, ltv_safe: U256,
     } else {
         div_wad_up(debt_projected, ltv_safe)?.saturating_sub(collateral_value)
     };
-    Ok(BellResult { status: NEEDS_ACTION, cure_repay, cure_collateral_value })
+    Ok(BellResult {
+        status: NEEDS_ACTION,
+        cure_repay,
+        cure_collateral_value,
+    })
 }
 
 /// Whole days elapsed between two unix timestamps (floored); 0 if `now < from`.

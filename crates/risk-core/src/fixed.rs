@@ -1,8 +1,8 @@
 //! Fixed-point primitives: WAD mul/div with explicit rounding over a 512-bit intermediate, powers, and the
 //! packed-integer layouts shared with `contracts/src/libraries/PackedInt.sol`.
 
-use alloy_primitives::{aliases::U512, U256};
 use alloy_primitives::ruint::UintTryFrom;
+use alloy_primitives::{aliases::U512, U256};
 
 /// 1e18.
 pub const WAD: U256 = U256::from_limbs([1_000_000_000_000_000_000, 0, 0, 0]);
@@ -135,7 +135,9 @@ pub fn pow_wad_up(base: U256, mut n: u64) -> MathResult<U256> {
 /// value(q, V) = q × V × 10^loanDec / (10^collDec × 1e18), rounded DOWN (§7.1, F-4.1).
 pub fn collateral_value(q: U256, v: U256, coll_dec: u8, loan_dec: u8) -> MathResult<U256> {
     let num_scale = pow10(loan_dec)?;
-    let den = pow10(coll_dec)?.checked_mul(WAD).ok_or(MathError::Overflow)?;
+    let den = pow10(coll_dec)?
+        .checked_mul(WAD)
+        .ok_or(MathError::Overflow)?;
     mul_div_down(q, v.checked_mul(num_scale).ok_or(MathError::Overflow)?, den)
 }
 
@@ -163,7 +165,9 @@ pub fn loan_to_wad(amount: U256, loan_dec: u8) -> MathResult<U256> {
     if loan_dec > 18 {
         return Err(MathError::InvalidInput);
     }
-    amount.checked_mul(pow10(18 - loan_dec)?).ok_or(MathError::Overflow)
+    amount
+        .checked_mul(pow10(18 - loan_dec)?)
+        .ok_or(MathError::Overflow)
 }
 
 // ───────────────────────────── packed layouts (== PackedInt.sol) ─────────────────────────────
@@ -221,12 +225,24 @@ mod tests {
         assert_eq!(mul_div_down(u(7), u(3), u(2)).unwrap(), u(10));
         assert_eq!(mul_div_up(u(7), u(3), u(2)).unwrap(), u(11));
         assert_eq!(mul_div_up(u(6), u(3), u(2)).unwrap(), u(9));
-        assert_eq!(mul_div_down(u(1), u(1), U256::ZERO), Err(MathError::DivisionByZero));
-        assert_eq!(mul_div_up(u(1), u(1), U256::ZERO), Err(MathError::DivisionByZero));
+        assert_eq!(
+            mul_div_down(u(1), u(1), U256::ZERO),
+            Err(MathError::DivisionByZero)
+        );
+        assert_eq!(
+            mul_div_up(u(1), u(1), U256::ZERO),
+            Err(MathError::DivisionByZero)
+        );
         // 512-bit intermediate: (2^255)·4/8 = 2^254
         let big = U256::from(1u8) << 255;
-        assert_eq!(mul_div_down(big, u(4), u(8)).unwrap(), U256::from(1u8) << 254);
-        assert_eq!(mul_div_down(U256::MAX, U256::MAX, u(1)), Err(MathError::Overflow));
+        assert_eq!(
+            mul_div_down(big, u(4), u(8)).unwrap(),
+            U256::from(1u8) << 254
+        );
+        assert_eq!(
+            mul_div_down(U256::MAX, U256::MAX, u(1)),
+            Err(MathError::Overflow)
+        );
     }
 
     #[test]
@@ -250,7 +266,10 @@ mod tests {
         // 100 tokens × $180 = $18,000 in 6-dec USDC
         let c = collateral_value(u(100) * WAD, u(180) * WAD, 18, 6).unwrap();
         assert_eq!(c, u(18_000_000_000));
-        assert_eq!(ltv_up(u(13_500_000_000), c).unwrap(), u(750_000_000_000_000_000));
+        assert_eq!(
+            ltv_up(u(13_500_000_000), c).unwrap(),
+            u(750_000_000_000_000_000)
+        );
         assert_eq!(ltv_up(U256::ZERO, c).unwrap(), U256::ZERO);
         assert_eq!(ltv_up(u(1), U256::ZERO).unwrap(), U256::MAX);
         // HF = 18,000 × 0.8 / 13,500 = 1.0666…

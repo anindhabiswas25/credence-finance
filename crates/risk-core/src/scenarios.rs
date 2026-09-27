@@ -89,7 +89,10 @@ mod tests {
         assert_eq!(quantile_index(10, a).unwrap(), 0);
         assert_eq!(quantile_index(0, a), Err(MathError::EmptySet));
         assert_eq!(quantile_index(10, U256::ZERO), Err(MathError::InvalidInput));
-        assert_eq!(quantile_index(10, WAD + U256::from(1u8)), Err(MathError::InvalidInput));
+        assert_eq!(
+            quantile_index(10, WAD + U256::from(1u8)),
+            Err(MathError::InvalidInput)
+        );
         assert_eq!(quantile_index(10, WAD).unwrap(), 9);
     }
 

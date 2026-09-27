@@ -1,6 +1,9 @@
 //! F-4.5a/b/d: liquidation lots and per-position settlement (§9.6).
 
-use crate::fixed::{collateral_value, loan_to_wad, mul_div_down, mul_div_up, mul_wad_down, pow10, MathError, MathResult, WAD};
+use crate::fixed::{
+    collateral_value, loan_to_wad, mul_div_down, mul_div_up, mul_wad_down, pow10, MathError,
+    MathResult, WAD,
+};
 use alloy_primitives::U256;
 
 /// F-4.5a. Lot for REOPEN, INTRADAY, EMERGENCY and NAV, sized at the reserve price R (`sizing_price`) with
@@ -30,13 +33,22 @@ pub fn liquidation_lot(
     // numerator in WAD² USD: H*·D_usd − LT·(q·P/10^collDec), the subtracted term rounded down
     let d_usd = loan_to_wad(debt, loan_dec)?;
     let lhs = h_star.checked_mul(d_usd).ok_or(MathError::Overflow)?;
-    let rhs = mul_div_down(qty, hf_price.checked_mul(lt).ok_or(MathError::Overflow)?, scale)?;
+    let rhs = mul_div_down(
+        qty,
+        hf_price.checked_mul(lt).ok_or(MathError::Overflow)?,
+        scale,
+    )?;
     if lhs <= rhs {
         return Ok(U256::ZERO); // already at or above H*
     }
     let num = lhs - rhs;
     // denominator in WAD² per token: H*·R·(1 − λ) − P·LT, rounded down
-    let hr = mul_wad_down(h_star.checked_mul(sizing_price).ok_or(MathError::Overflow)?, WAD - lambda)?;
+    let hr = mul_wad_down(
+        h_star
+            .checked_mul(sizing_price)
+            .ok_or(MathError::Overflow)?,
+        WAD - lambda,
+    )?;
     let pl = hf_price.checked_mul(lt).ok_or(MathError::Overflow)?;
     if hr <= pl {
         return Ok(qty);
@@ -68,13 +80,23 @@ pub fn preclose_lot(
     let scale = pow10(coll_dec)?;
     let d_usd = loan_to_wad(debt, loan_dec)?;
     let lhs = d_usd.checked_mul(WAD).ok_or(MathError::Overflow)?;
-    let rhs = mul_div_down(qty, target_ltv.checked_mul(valuation).ok_or(MathError::Overflow)?, scale)?;
+    let rhs = mul_div_down(
+        qty,
+        target_ltv
+            .checked_mul(valuation)
+            .ok_or(MathError::Overflow)?,
+        scale,
+    )?;
     if lhs <= rhs {
         return Ok(U256::ZERO);
     }
     let num = lhs - rhs;
-    let sell = (WAD - lambda_pre).checked_mul(reserve).ok_or(MathError::Overflow)?;
-    let keep = target_ltv.checked_mul(valuation).ok_or(MathError::Overflow)?;
+    let sell = (WAD - lambda_pre)
+        .checked_mul(reserve)
+        .ok_or(MathError::Overflow)?;
+    let keep = target_ltv
+        .checked_mul(valuation)
+        .ok_or(MathError::Overflow)?;
     if sell <= keep {
         return Ok(qty);
     }
@@ -118,7 +140,11 @@ pub fn settle_position(
     }
     let p = collateral_value(x, blended_price, coll_dec, loan_dec)?;
     let pen_full = mul_wad_down(lambda, p)?;
-    let mut s = Settlement { proceeds: p, full_close: x == q_before, ..Settlement::default() };
+    let mut s = Settlement {
+        proceeds: p,
+        full_close: x == q_before,
+        ..Settlement::default()
+    };
     if !s.full_close {
         let net = p - pen_full;
         s.penalty = pen_full;

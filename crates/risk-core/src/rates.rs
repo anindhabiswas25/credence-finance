@@ -1,6 +1,8 @@
 //! F-4.6: the kinked borrow rate, senior rate and interest accrual (§9.7).
 
-use crate::fixed::{mul_div_down, mul_div_up, mul_wad_down, mul_wad_up, MathError, MathResult, WAD, YEAR_SECONDS};
+use crate::fixed::{
+    mul_div_down, mul_div_up, mul_wad_down, mul_wad_up, MathError, MathResult, WAD, YEAR_SECONDS,
+};
 use alloy_primitives::U256;
 
 /// U = borrowed / supplied, WAD, rounded DOWN. S = 0 → 0.
@@ -17,16 +19,22 @@ pub fn kinked_rate(u: U256, r0: U256, s1: U256, s2: U256, u_kink: U256) -> MathR
         return Err(MathError::InvalidInput);
     }
     if u <= u_kink {
-        return r0.checked_add(mul_div_down(s1, u, u_kink)?).ok_or(MathError::Overflow);
+        return r0
+            .checked_add(mul_div_down(s1, u, u_kink)?)
+            .ok_or(MathError::Overflow);
     }
     let excess = u - u_kink;
     let slope = mul_div_down(s2, excess, WAD - u_kink)?;
-    r0.checked_add(s1).and_then(|x| x.checked_add(slope)).ok_or(MathError::Overflow)
+    r0.checked_add(s1)
+        .and_then(|x| x.checked_add(slope))
+        .ok_or(MathError::Overflow)
 }
 
 /// r_senior = r_b × U × (1 − ρ_J − ρ_p), WAD per year, rounded DOWN.
 pub fn senior_rate(r_b: U256, u: U256, rho_pool: U256, rho_treasury: U256) -> MathResult<U256> {
-    let fees = rho_pool.checked_add(rho_treasury).ok_or(MathError::Overflow)?;
+    let fees = rho_pool
+        .checked_add(rho_treasury)
+        .ok_or(MathError::Overflow)?;
     if fees > WAD {
         return Err(MathError::InvalidInput);
     }

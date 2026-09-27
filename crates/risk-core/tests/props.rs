@@ -4,8 +4,9 @@
 use alloy_primitives::B256;
 use credence_risk_core::fixed::{collateral_value, ltv_up, pack_i16, pack_u64};
 use credence_risk_core::{
-    blended_price, clear, cure_amounts, kinked_rate, liquidation_lot, loss_vector, pool_capacity, preclose_lot,
-    quote_cover, safe_ltv, settle_position, PackedZ, PremiumParams, SliceZ, UncoveredMarket, U256, WAD,
+    blended_price, clear, cure_amounts, kinked_rate, liquidation_lot, loss_vector, pool_capacity,
+    preclose_lot, quote_cover, safe_ltv, settle_position, PackedZ, PremiumParams, SliceZ,
+    UncoveredMarket, U256, WAD,
 };
 use proptest::prelude::*;
 

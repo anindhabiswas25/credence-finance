@@ -1,0 +1,15 @@
+[package]
+name = "credence-risk-engine-diff"
+description = "Differential harness: native credence-risk-core vs the deployed Stylus Risk Engine (Build Guide §14.3)"
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+publish = false
+
+[dependencies]
+credence-risk-core = { path = "../../crates/risk-core", features = ["std"] }
+alloy = { version = "2.5.0", default-features = false, features = ["std", "providers", "provider-http", "network", "rpc-types", "sol-types", "contract", "signers", "signer-local", "reqwest-rustls-tls"] }
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+anyhow = { workspace = true }

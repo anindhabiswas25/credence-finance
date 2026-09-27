@@ -21,15 +21,27 @@ pub struct ClearResult {
 }
 
 /// Clear a batch (F-4.5c).
-pub fn clear(qtys: &[U256], prices: &[U256], tie_keys: &[B256], lot: U256, reserve: U256) -> MathResult<ClearResult> {
+pub fn clear(
+    qtys: &[U256],
+    prices: &[U256],
+    tie_keys: &[B256],
+    lot: U256,
+    reserve: U256,
+) -> MathResult<ClearResult> {
     let n = qtys.len();
     if prices.len() != n || tie_keys.len() != n {
         return Err(MathError::InvalidInput);
     }
     let mut fills = alloc::vec![U256::ZERO; n];
     // eligible bids: price ≥ R, qty > 0; ordered by price desc, then tie key asc (determinism only)
-    let mut idx: Vec<usize> = (0..n).filter(|&i| prices[i] >= reserve && !qtys[i].is_zero()).collect();
-    idx.sort_unstable_by(|&a, &b| prices[b].cmp(&prices[a]).then(tie_keys[a].cmp(&tie_keys[b])));
+    let mut idx: Vec<usize> = (0..n)
+        .filter(|&i| prices[i] >= reserve && !qtys[i].is_zero())
+        .collect();
+    idx.sort_unstable_by(|&a, &b| {
+        prices[b]
+            .cmp(&prices[a])
+            .then(tie_keys[a].cmp(&tie_keys[b]))
+    });
 
     let mut remaining = lot;
     let mut p_star = U256::ZERO;
@@ -40,7 +52,9 @@ pub fn clear(qtys: &[U256], prices: &[U256], tie_keys: &[B256], lot: U256, reser
         let mut end = g;
         let mut total = U256::ZERO;
         while end < idx.len() && prices[idx[end]] == price {
-            total = total.checked_add(qtys[idx[end]]).ok_or(MathError::Overflow)?;
+            total = total
+                .checked_add(qtys[idx[end]])
+                .ok_or(MathError::Overflow)?;
             end += 1;
         }
         p_star = price;
@@ -71,7 +85,11 @@ pub fn clear(qtys: &[U256], prices: &[U256], tie_keys: &[B256], lot: U256, reser
         }
         g = end;
     }
-    Ok(ClearResult { p_star, fills, q_pool: remaining })
+    Ok(ClearResult {
+        p_star,
+        fills,
+        q_pool: remaining,
+    })
 }
 
 /// p̄ = ((Q − Q_pool) p* + Q_pool R) / Q, rounded DOWN (0 if Q = 0).
@@ -82,7 +100,13 @@ pub fn blended_price(lot: U256, p_star: U256, q_pool: U256, reserve: U256) -> Ma
     if q_pool > lot {
         return Err(MathError::InvalidInput);
     }
-    let sold = (lot - q_pool).checked_mul(p_star).ok_or(MathError::Overflow)?;
+    let sold = (lot - q_pool)
+        .checked_mul(p_star)
+        .ok_or(MathError::Overflow)?;
     let pool = q_pool.checked_mul(reserve).ok_or(MathError::Overflow)?;
-    mul_div_down(sold.checked_add(pool).ok_or(MathError::Overflow)?, U256::from(1u8), lot)
+    mul_div_down(
+        sold.checked_add(pool).ok_or(MathError::Overflow)?,
+        U256::from(1u8),
+        lot,
+    )
 }

@@ -3,12 +3,12 @@
 //! value derived by hand from the stated inputs, and that it sits within a documented tolerance of the doc
 //! (see the sprint report, "Spec issues").
 
-use credence_risk_core::{
-    blended_price, clear, cure_amounts, kinked_rate, liquidation_lot, preclose_lot, quote_cover, safe_ltv,
-    senior_rate, settle_position, utilization, PremiumParams, SliceZ, U256, WAD,
-};
-use credence_risk_core::fixed::{collateral_value, health_factor_down};
 use alloy_primitives::B256;
+use credence_risk_core::fixed::{collateral_value, health_factor_down};
+use credence_risk_core::{
+    blended_price, clear, cure_amounts, kinked_rate, liquidation_lot, preclose_lot, quote_cover,
+    safe_ltv, senior_rate, settle_position, utilization, PremiumParams, SliceZ, U256, WAD,
+};
 
 // ───────────── helpers ─────────────
 
@@ -21,7 +21,11 @@ fn fx(s: &str, dec: u32) -> U256 {
     while (frac_s.len() as u32) < dec {
         frac_s.push('0');
     }
-    let frac_v: U256 = if frac_s.is_empty() { U256::ZERO } else { frac_s.parse().unwrap() };
+    let frac_v: U256 = if frac_s.is_empty() {
+        U256::ZERO
+    } else {
+        frac_s.parse().unwrap()
+    };
     int * U256::from(10u8).pow(U256::from(dec)) + frac_v
 }
 fn wad(s: &str) -> U256 {
@@ -35,7 +39,10 @@ fn tok(s: &str) -> U256 {
 }
 fn assert_close(got: U256, want: U256, tol: U256, what: &str) {
     let diff = if got > want { got - want } else { want - got };
-    assert!(diff <= tol, "{what}: got {got}, want {want} ± {tol} (diff {diff})");
+    assert!(
+        diff <= tol,
+        "{what}: got {got}, want {want} ± {tol} (diff {diff})"
+    );
 }
 
 const LT: &str = "0.8";
@@ -52,25 +59,41 @@ fn rate_equity(u: U256) -> U256 {
 #[test]
 fn g01_kinked_rate_u85() {
     // 0.02 + 0.06 × 0.85 / 0.90 = 0.07666…  (exact, rounded down)
-    assert_eq!(rate_equity(wad("0.85")), U256::from(76_666_666_666_666_666u128));
+    assert_eq!(
+        rate_equity(wad("0.85")),
+        U256::from(76_666_666_666_666_666u128)
+    );
 }
 
 #[test]
 fn g02_kinked_rate_u80() {
-    assert_eq!(rate_equity(wad("0.80")), U256::from(73_333_333_333_333_333u128));
+    assert_eq!(
+        rate_equity(wad("0.80")),
+        U256::from(73_333_333_333_333_333u128)
+    );
 }
 
 #[test]
 fn g03_kinked_rate_scenario_b() {
     let u = utilization(usdc("182500"), usdc("230000")).unwrap();
-    assert_close(rate_equity(u), wad("0.0728986"), U256::from(1_000_000_000_000u64), "G-03");
+    assert_close(
+        rate_equity(u),
+        wad("0.0728986"),
+        U256::from(1_000_000_000_000u64),
+        "G-03",
+    );
 }
 
 #[test]
 fn g04_senior_rate() {
     let r = rate_equity(wad("0.85"));
     let s = senior_rate(r, wad("0.85"), wad("0.10"), wad("0.10")).unwrap();
-    assert_close(s, wad("0.0521333"), U256::from(1_000_000_000_000u64), "G-04");
+    assert_close(
+        s,
+        wad("0.0521333"),
+        U256::from(1_000_000_000_000u64),
+        "G-04",
+    );
 }
 
 // ───────────── G-05 … G-08: safe LTV (F-4.2) ─────────────
@@ -84,29 +107,57 @@ fn g05_safe_ltv_sigma3_capped() {
     assert_eq!(g_safe("0.03"), wad("0.75"));
     // uncapped g = 0.79839 (±1e14)
     let g = safe_ltv(-5897, wad("0.03"), U256::ZERO, wad(KAPPA), WAD).unwrap();
-    assert_close(g, wad("0.79839"), U256::from(100_000_000_000_000u64), "G-05 g");
+    assert_close(
+        g,
+        wad("0.79839"),
+        U256::from(100_000_000_000_000u64),
+        "G-05 g",
+    );
 }
 
 #[test]
 fn g06_safe_ltv_sigma4() {
-    assert_close(g_safe("0.04"), wad("0.741182"), U256::from(100_000_000_000_000u64), "G-06");
+    assert_close(
+        g_safe("0.04"),
+        wad("0.741182"),
+        U256::from(100_000_000_000_000u64),
+        "G-06",
+    );
 }
 
 #[test]
 fn g07_safe_ltv_sigma45() {
-    assert_close(g_safe("0.045"), wad("0.712580"), U256::from(100_000_000_000_000u64), "G-07");
+    assert_close(
+        g_safe("0.045"),
+        wad("0.712580"),
+        U256::from(100_000_000_000_000u64),
+        "G-07",
+    );
 }
 
 #[test]
 fn g08_safe_ltv_sigma6() {
-    assert_close(g_safe("0.06"), wad("0.626773"), U256::from(100_000_000_000_000u64), "G-08");
+    assert_close(
+        g_safe("0.06"),
+        wad("0.626773"),
+        U256::from(100_000_000_000_000u64),
+        "G-08",
+    );
 }
 
 // ───────────── G-09 … G-11: cures (F-4.2) ─────────────
 
 #[test]
 fn g09_cures() {
-    let c = cure_amounts(usdc("13500"), tok("100"), wad("180"), wad("0.741182"), 18, 6).unwrap();
+    let c = cure_amounts(
+        usdc("13500"),
+        tok("100"),
+        wad("180"),
+        wad("0.741182"),
+        18,
+        6,
+    )
+    .unwrap();
     // exact: 13,500 − 0.741182 × 18,000 = 158.724
     assert_eq!(c.repay, usdc("158.724"));
     assert_close(c.repay, usdc("158.72"), usdc("0.01"), "G-09 repay");
@@ -115,7 +166,15 @@ fn g09_cures() {
 
 #[test]
 fn g10_cures() {
-    let c = cure_amounts(usdc("67028.99"), tok("500"), wad("180"), wad("0.712580"), 18, 6).unwrap();
+    let c = cure_amounts(
+        usdc("67028.99"),
+        tok("500"),
+        wad("180"),
+        wad("0.712580"),
+        18,
+        6,
+    )
+    .unwrap();
     // exact from the stated inputs: 67,028.99 − 0.712580 × 90,000 = 2,896.79 (doc: 2,896.78, from an unrounded LTV)
     assert_eq!(c.repay, usdc("2896.79"));
     assert_close(c.repay, usdc("2896.78"), usdc("0.01"), "G-10 repay");
@@ -124,7 +183,15 @@ fn g10_cures() {
 
 #[test]
 fn g11_cures() {
-    let c = cure_amounts(usdc("55535.10"), tok("300"), wad("250"), wad("0.626773"), 18, 6).unwrap();
+    let c = cure_amounts(
+        usdc("55535.10"),
+        tok("300"),
+        wad("250"),
+        wad("0.626773"),
+        18,
+        6,
+    )
+    .unwrap();
     // exact from the stated inputs: 55,535.10 − 0.626773 × 75,000 = 8,527.125 (doc: 8,527.09, from LTV 0.62677347…)
     assert_eq!(c.repay, usdc("8527.125"));
     assert_close(c.repay, usdc("8527.09"), usdc("0.05"), "G-11 repay");
@@ -134,22 +201,48 @@ fn g11_cures() {
 // ───────────── G-12 … G-16: liquidation lot (F-4.5a) ─────────────
 
 fn lot(d: &str, q: &str, p: &str, r: &str) -> U256 {
-    liquidation_lot(usdc(d), tok(q), wad(r), wad(p), wad(LT), wad(H_STAR), wad(LAMBDA), 18, 6).unwrap()
+    liquidation_lot(
+        usdc(d),
+        tok(q),
+        wad(r),
+        wad(p),
+        wad(LT),
+        wad(H_STAR),
+        wad(LAMBDA),
+        18,
+        6,
+    )
+    .unwrap()
 }
 
 #[test]
 fn g12_lot_priya_architecture() {
-    assert_close(lot("13500", "100", "158.40", "153.648"), tok("58.5131"), tok("0.0001"), "G-12");
+    assert_close(
+        lot("13500", "100", "158.40", "153.648"),
+        tok("58.5131"),
+        tok("0.0001"),
+        "G-12",
+    );
 }
 
 #[test]
 fn g13_lot_ben() {
-    assert_close(lot("14809.35", "50", "364", "353.08"), tok("20.2286"), tok("0.0001"), "G-13");
+    assert_close(
+        lot("14809.35", "50", "364", "353.08"),
+        tok("20.2286"),
+        tok("0.0001"),
+        "G-13",
+    );
 }
 
 #[test]
 fn g14_lot_priya_scenario_b() {
-    assert_close(lot("13519.02", "100", "158.40", "153.648"), tok("59.0752"), tok("0.0001"), "G-14");
+    assert_close(
+        lot("13519.02", "100", "158.40", "153.648"),
+        tok("59.0752"),
+        tok("0.0001"),
+        "G-14",
+    );
 }
 
 #[test]
@@ -172,7 +265,17 @@ fn g16_lot_priya_scenario_a_full_close() {
 #[test]
 fn g17_preclose_lot_maya() {
     let d = usdc("55536.02");
-    let x = preclose_lot(d, tok("300"), wad("250"), wad("247.50"), wad("0.626773"), wad("0.01"), 18, 6).unwrap();
+    let x = preclose_lot(
+        d,
+        tok("300"),
+        wad("250"),
+        wad("247.50"),
+        wad("0.626773"),
+        wad("0.01"),
+        18,
+        6,
+    )
+    .unwrap();
     // exact from the stated inputs: 8,528.045 / 88.33175 = 96.545636… (doc: 96.5454, from an unrounded LTV_s)
     assert_close(x, tok("96.545636"), tok("0.000001"), "G-17 exact");
     assert_close(x, tok("96.5454"), tok("0.0005"), "G-17 doc");
@@ -203,18 +306,37 @@ fn g18_clear_two_bids() {
 
 #[test]
 fn g19_clear_pool_backstop() {
-    let r = clear(&[tok("60")], &[wad("219")], &[B256::ZERO], tok("100"), wad("218.25")).unwrap();
+    let r = clear(
+        &[tok("60")],
+        &[wad("219")],
+        &[B256::ZERO],
+        tok("100"),
+        wad("218.25"),
+    )
+    .unwrap();
     assert_eq!(r.p_star, wad("219"));
     assert_eq!(r.fills, vec![tok("60")]);
     assert_eq!(r.q_pool, tok("40"));
-    assert_eq!(blended_price(tok("100"), r.p_star, r.q_pool, wad("218.25")).unwrap(), wad("218.70"));
+    assert_eq!(
+        blended_price(tok("100"), r.p_star, r.q_pool, wad("218.25")).unwrap(),
+        wad("218.70")
+    );
 }
 
 // ───────────── G-20 … G-21: settlement (F-4.5d) ─────────────
 
 #[test]
 fn g20_settle_partial() {
-    let s = settle_position(tok("58.5131"), tok("100"), wad("156.024"), usdc("13500"), wad(LAMBDA), 18, 6).unwrap();
+    let s = settle_position(
+        tok("58.5131"),
+        tok("100"),
+        wad("156.024"),
+        usdc("13500"),
+        wad(LAMBDA),
+        18,
+        6,
+    )
+    .unwrap();
     assert!(!s.full_close);
     assert_close(s.proceeds, usdc("9129.45"), usdc("0.01"), "G-20 proceeds");
     assert_close(s.penalty, usdc("273.88"), usdc("0.01"), "G-20 penalty");
@@ -229,7 +351,16 @@ fn g20_settle_partial() {
 #[test]
 fn g21_settle_short() {
     // full close of 100 tokens at p̄ = 218.70 → proceeds 21,870.00
-    let s = settle_position(tok("100"), tok("100"), wad("218.70"), usdc("22542.59"), wad(LAMBDA), 18, 6).unwrap();
+    let s = settle_position(
+        tok("100"),
+        tok("100"),
+        wad("218.70"),
+        usdc("22542.59"),
+        wad(LAMBDA),
+        18,
+        6,
+    )
+    .unwrap();
     assert!(s.full_close);
     assert_eq!(s.proceeds, usdc("21870"));
     assert_eq!(s.penalty, U256::ZERO);
@@ -269,10 +400,13 @@ fn g22_reference() -> (f64, f64, f64) {
     let z0 = (d / (c * (1.0 - kappa)) - 1.0) / sigma;
     let (a, n) = (-3000.0f64, 2_000_000usize);
     let h = (z0 - a) / n as f64;
-    let el: f64 = (0..n).map(|i| {
-        let z = a + (i as f64 + 0.5) * h;
-        loss(z) * pdf(z)
-    }).sum::<f64>() * h;
+    let el: f64 = (0..n)
+        .map(|i| {
+            let z = a + (i as f64 + 0.5) * h;
+            loss(z) * pdf(z)
+        })
+        .sum::<f64>()
+        * h;
     let es = el / 0.025; // every loss sits inside the worst 2.5%
     let premium = 2.0 * el + 0.15 * 3.0 / 365.0 * es;
     (el, es, premium)
@@ -307,8 +441,13 @@ fn g22_premium_t3_closed_form() {
     )
     .unwrap();
     let (el, es, prem) = g22_reference();
-    println!("G-22 engine: E[L] {} ES {} premium {}", q.expected_loss, q.expected_shortfall, q.premium);
-    println!("G-22 closed form: E[L] {el:.4} ES {es:.4} premium {prem:.4}; doc: 2.26 / 90.51 / 4.64");
+    println!(
+        "G-22 engine: E[L] {} ES {} premium {}",
+        q.expected_loss, q.expected_shortfall, q.premium
+    );
+    println!(
+        "G-22 closed form: E[L] {el:.4} ES {es:.4} premium {prem:.4}; doc: 2.26 / 90.51 / 4.64"
+    );
     let to_usdc = |x: f64| U256::from((x * 1e6).round() as u64);
     // The engine equals the closed form of the stated model to ±$0.01 (Appendix A precision).
     assert_close(q.expected_loss, to_usdc(el), usdc("0.01"), "G-22 E[L]");
@@ -316,7 +455,17 @@ fn g22_premium_t3_closed_form() {
     assert_close(q.premium, to_usdc(prem), usdc("0.01"), "G-22 premium");
     // Pinned values of the stated model. The doc's 2.26 / 90.51 / 4.64 do not follow from its inputs
     // (ADR-0102, sprint report "Spec issues").
-    assert_close(q.expected_loss, usdc("2.14"), usdc("0.01"), "G-22 E[L] pinned");
-    assert_close(q.expected_shortfall, usdc("85.77"), usdc("0.01"), "G-22 ES pinned");
+    assert_close(
+        q.expected_loss,
+        usdc("2.14"),
+        usdc("0.01"),
+        "G-22 E[L] pinned",
+    );
+    assert_close(
+        q.expected_shortfall,
+        usdc("85.77"),
+        usdc("0.01"),
+        "G-22 ES pinned",
+    );
     assert_close(q.premium, usdc("4.39"), usdc("0.01"), "G-22 premium pinned");
 }

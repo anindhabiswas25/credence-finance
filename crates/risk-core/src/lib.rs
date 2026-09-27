@@ -33,7 +33,7 @@ pub use liquidation::{liquidation_lot, preclose_lot, settle_position, Settlement
 pub use premium::{quote_cover, PremiumParams, PremiumQuote};
 pub use rates::{accrue_interest, kinked_rate, projected_debt, senior_rate, utilization};
 pub use safe_ltv::{
-    bell_status, cure_amounts, elapsed_days, gap_factor, safe_ltv, safe_ltv_from_set, sigma_min_allowed,
-    BellResult, Cures,
+    bell_status, cure_amounts, elapsed_days, gap_factor, safe_ltv, safe_ltv_from_set,
+    sigma_min_allowed, BellResult, Cures,
 };
 pub use scenarios::{is_sorted, quantile_index, PackedZ, SliceZ, ZSource};

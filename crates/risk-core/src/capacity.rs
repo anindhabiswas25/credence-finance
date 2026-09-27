@@ -97,7 +97,14 @@ pub fn pool_capacity<S: ZSource + ?Sized>(
         let mut lambda = U256::from(unpack_u64(packed_current[j / 4], j % 4))
             + U256::from(unpack_u64(packed_add[j / 4], j % 4));
         for m in uncovered {
-            let b = uncovered_bound(m.collateral_value, m.safe_ltv, m.sigma, m.dividend, kappa, m.joint.z(j as u32))?;
+            let b = uncovered_bound(
+                m.collateral_value,
+                m.safe_ltv,
+                m.sigma,
+                m.dividend,
+                kappa,
+                m.joint.z(j as u32),
+            )?;
             lambda = lambda.checked_add(b).ok_or(MathError::Overflow)?;
         }
         if lambda > worst {
@@ -114,5 +121,9 @@ pub fn pool_capacity<S: ZSource + ?Sized>(
     if u_max > WAD {
         return Err(MathError::InvalidInput);
     }
-    Ok(CapacityResult { ok: util_after <= u_max, util_after, worst_loss: worst })
+    Ok(CapacityResult {
+        ok: util_after <= u_max,
+        util_after,
+        worst_loss: worst,
+    })
 }
