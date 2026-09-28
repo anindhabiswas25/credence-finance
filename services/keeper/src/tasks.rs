@@ -61,6 +61,11 @@ pub struct TickReport {
 }
 
 impl Keeper {
+    /// Page ops (severity `page`).
+    pub(crate) async fn page(&self, check: &str, message: String, rep: &mut TickReport) {
+        self.alert(check, "page", message, rep).await
+    }
+
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         instance: String,
@@ -97,6 +102,9 @@ impl Keeper {
     /// One scheduler pass. `conn` is the leader's fenced connection.
     pub async fn tick(&self, conn: &mut PgConnection) -> Result<TickReport> {
         let mut rep = TickReport::default();
+        if let Err(e) = self.reconcile_submitted(conn, &mut rep).await {
+            tracing::warn!(error = %e, "reconciling submitted jobs failed");
+        }
         self.j1(conn, &mut rep).await?;
         if let Err(e) = self.j12(conn, &mut rep).await {
             tracing::warn!(error = %e, "J12 housekeeping failed");
@@ -197,6 +205,10 @@ impl Keeper {
                         .jobs
                         .with_label_values(&["J1", "reverted"])
                         .inc();
+                    self.metrics
+                        .failed_txs
+                        .with_label_values(&["J1", "reverted"])
+                        .inc();
                 }
                 Err(e) => {
                     // a tx that timed out stays `submitted` and is reconciled next tick
@@ -219,7 +231,13 @@ impl Keeper {
         Ok(())
     }
 
-    async fn alert(&self, check: &str, severity: &str, message: String, rep: &mut TickReport) {
+    pub(crate) async fn alert(
+        &self,
+        check: &str,
+        severity: &str,
+        message: String,
+        rep: &mut TickReport,
+    ) {
         self.metrics
             .alerts
             .with_label_values(&[check, severity])

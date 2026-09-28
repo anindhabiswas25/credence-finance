@@ -14,6 +14,9 @@ pub struct Metrics {
     pub wallet_balance_gwei: IntGaugeVec,
     pub program_time_left: IntGaugeVec,
     pub alerts: IntCounterVec,
+    /// Mined-but-reverted txs (every job pre-checks natively, so any is a bug) and sends refused by
+    /// the node's gas estimate.
+    pub failed_txs: IntCounterVec,
 }
 
 impl Metrics {
@@ -68,8 +71,16 @@ impl Metrics {
                 Opts::new("keeper_alerts_total", "alerts raised"),
                 &["check", "severity"],
             )?,
+            failed_txs: IntCounterVec::new(
+                Opts::new(
+                    "keeper_failed_txs_total",
+                    "keeper txs that reverted on chain (reason=reverted) or were refused at estimation (reason=estimate)",
+                ),
+                &["job", "reason"],
+            )?,
         };
         r.register(Box::new(m.is_leader.clone()))?;
+        r.register(Box::new(m.failed_txs.clone()))?;
         r.register(Box::new(m.jobs.clone()))?;
         r.register(Box::new(m.pokes.clone()))?;
         r.register(Box::new(m.txs.clone()))?;

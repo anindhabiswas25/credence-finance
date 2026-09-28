@@ -33,11 +33,14 @@ use crate::{
     },
     jobs::{self, Claim},
     tasks::{Keeper, TickReport},
+    txjob::TxJob,
 };
 
 pub const HEADSUP_EARLY_S: u64 = 26 * 3600;
 pub const HEADSUP_LATE_S: u64 = 2 * 3600;
 pub const BELL_BATCH: usize = 50;
+/// J3 pages ops if NEEDS_ACTION positions remain this long after bellAt (§10.2).
+pub const BELL_PAGE_AFTER_S: u64 = 10 * 60;
 /// 0.92 (§10.2 J4, EXTENDED uncovered).
 pub const EXTENDED_HF_FLOOR: u128 = 920_000_000_000_000_000;
 const WAD: u128 = 1_000_000_000_000_000_000;
@@ -62,6 +65,8 @@ pub struct CoreJobs {
     pub j4_live: bool,
     pub registry: Option<Address>,
     pub j4_every_s: u64,
+    /// J3 batch size: BE-chain's largest `enforceBell` batch within 24M gas (all auto-covered).
+    pub j3_batch: usize,
     last_j4: Mutex<HashMap<B256, u64>>,
 }
 
@@ -86,6 +91,7 @@ impl CoreJobs {
             j4_live: false,
             registry: None,
             j4_every_s: 10,
+            j3_batch: BELL_BATCH,
             last_j4: Mutex::new(HashMap::new()),
         }
     }
@@ -100,6 +106,14 @@ pub fn headsup_stage(now: u64, close_at: u64, bell_at: u64) -> Option<&'static s
         return (now < bell_at).then_some("T-2h");
     }
     (now + HEADSUP_EARLY_S >= close_at).then_some("T-26h")
+}
+
+/// Short content key of a batch of borrowers (order-independent).
+pub fn batch_hash(borrowers: &[Address]) -> String {
+    let mut v = borrowers.to_vec();
+    v.sort();
+    let h = alloy::primitives::keccak256(v.concat());
+    alloy::hex::encode(&h[..8])
 }
 
 fn s(v: U256) -> String {
@@ -337,6 +351,9 @@ impl Keeper {
         {
             return Ok(());
         }
+        if ctx.safe_ltv.is_some() && core.j3_live {
+            return self.j3_live(conn, core, m, ctx, now, rep).await;
+        }
         let key = format!("J3:{}:{}", m.id, ctx.upcoming_closure_id);
         if !matches!(
             jobs::claim(
@@ -361,6 +378,104 @@ impl Keeper {
             .await?;
             return Ok(());
         }
+        let plan = self.j3_plan(conn, core, m, ctx).await?;
+        let batches: Vec<Vec<Address>> = plan
+            .chunks(core.j3_batch)
+            .map(|c| c.iter().map(|x| x.0).collect())
+            .collect();
+        let body = json!({
+            "block": ctx.block,
+            "calls": batches.iter().map(|b| json!({ "fn": "enforceBell", "id": m.id.to_string(), "borrowers": b })).collect::<Vec<_>>(),
+            "expected": plan.iter().map(|(o, outcome, b)| json!({ "borrower": o, "outcome": outcome, "cureRepay": s(b.cure_repay), "safeLtv": s(b.safe_ltv) })).collect::<Vec<_>>(),
+        });
+        jobs::set_payload(conn, &key, &json!({ "plan": body })).await?;
+        tracing::info!(asset = %m.asset, closure = ctx.upcoming_closure_id, borrowers = plan.len(), plan = %body, "J3 enforceBell (dry-run)");
+        jobs::mark(conn, &key, "done", None).await?;
+        self.metrics
+            .jobs
+            .with_label_values(&["J3", "dry_run"])
+            .inc();
+        Ok(())
+    }
+
+    /// J3 live: every tick in [bellAt, close) until no NEEDS_ACTION position is left. Batches are keyed
+    /// by their borrowers (`J3:<market>:<closure>:<hash>`), so a restart that re-plans never skips a
+    /// borrower or re-sends a batch; batches a previous run left `submitted` are reconciled first.
+    async fn j3_live(
+        &self,
+        conn: &mut PgConnection,
+        core: &CoreJobs,
+        m: &CoreMarket,
+        ctx: &RiskCtx,
+        now: u64,
+        rep: &mut TickReport,
+    ) -> Result<()> {
+        let prefix = format!("J3:{}:{}", m.id, ctx.upcoming_closure_id);
+        let pending: Vec<String> = sqlx::query_scalar(
+            "select key from ops.keeper_job where key like $1 and status = 'submitted'",
+        )
+        .bind(format!("{prefix}:%"))
+        .fetch_all(&mut *conn)
+        .await?;
+        for k in &pending {
+            if self.reconcile_key(conn, k, rep).await? == TxJob::Pending {
+                return Ok(()); // wait for it before re-planning
+            }
+        }
+        let plan = self.j3_plan(conn, core, m, ctx).await?;
+        if plan.is_empty() {
+            return Ok(());
+        }
+        if now >= ctx.bell_at + BELL_PAGE_AFTER_S {
+            let k = format!("{prefix}:page");
+            if !jobs::exists(conn, &k).await? {
+                jobs::mark_covered(conn, &[k], "J3", "page", &self.instance).await?;
+                self.page(
+                    "J3",
+                    format!(
+                        "{} NEEDS_ACTION position(s) left in {} at bellAt + 10 min",
+                        plan.len(),
+                        m.asset
+                    ),
+                    rep,
+                )
+                .await;
+            }
+        }
+        for batch in plan.chunks(core.j3_batch) {
+            let borrowers: Vec<Address> = batch.iter().map(|x| x.0).collect();
+            let k = format!("{prefix}:{}", batch_hash(&borrowers));
+            let r = self
+                .tx_job(
+                    conn,
+                    &k,
+                    &json!({ "borrowers": borrowers, "block": ctx.block }),
+                    m.market,
+                    || {
+                        Ok(Bytes::from(
+                            abi::ICredenceMarket::enforceBellCall {
+                                id: m.id,
+                                borrowers: borrowers.clone(),
+                            }
+                            .abi_encode(),
+                        ))
+                    },
+                    rep,
+                )
+                .await?;
+            tracing::info!(asset = %m.asset, closure = ctx.upcoming_closure_id, n = borrowers.len(), result = ?r, "J3 enforceBell");
+        }
+        Ok(())
+    }
+
+    /// NEEDS_ACTION borrowers not yet enforced for the upcoming closure, with their expected outcomes.
+    async fn j3_plan(
+        &self,
+        conn: &mut PgConnection,
+        core: &CoreJobs,
+        m: &CoreMarket,
+        ctx: &RiskCtx,
+    ) -> Result<Vec<(Address, u8, crate::core::Bell)>> {
         let mut plan = Vec::new();
         for owner in self.borrowers(conn, core, m.id).await? {
             let (p, debt) = read_position(self.rpc.primary(), ctx, owner).await?;
@@ -375,44 +490,7 @@ impl Keeper {
                 credence_risk_core::fixed::ltv_up(debt, p.collateral_value).unwrap_or(U256::MAX);
             plan.push((owner, expected_outcome(ctx, &p, ltv_now), b));
         }
-        let batches: Vec<Vec<Address>> = plan
-            .chunks(BELL_BATCH)
-            .map(|c| c.iter().map(|x| x.0).collect())
-            .collect();
-        let body = json!({
-            "block": ctx.block,
-            "calls": batches.iter().map(|b| json!({ "fn": "enforceBell", "id": m.id.to_string(), "borrowers": b })).collect::<Vec<_>>(),
-            "expected": plan.iter().map(|(o, outcome, b)| json!({ "borrower": o, "outcome": outcome, "cureRepay": s(b.cure_repay), "safeLtv": s(b.safe_ltv) })).collect::<Vec<_>>(),
-        });
-        jobs::set_payload(conn, &key, &json!({ "plan": body })).await?;
-        if !core.j3_live {
-            tracing::info!(asset = %m.asset, closure = ctx.upcoming_closure_id, borrowers = plan.len(), plan = %body, "J3 enforceBell (dry-run)");
-            jobs::mark(conn, &key, "done", None).await?;
-            self.metrics
-                .jobs
-                .with_label_values(&["J3", "dry_run"])
-                .inc();
-            return Ok(());
-        }
-        for (i, b) in batches.into_iter().enumerate() {
-            let k = format!("{key}:{i}");
-            if !matches!(
-                jobs::claim(conn, &k, "J3", &json!({}), &self.instance).await?,
-                Claim::Run { .. }
-            ) {
-                continue;
-            }
-            let data = Bytes::from(
-                abi::ICredenceMarket::enforceBellCall {
-                    id: m.id,
-                    borrowers: b,
-                }
-                .abi_encode(),
-            );
-            self.send_and_mark(conn, &k, m.market, data, rep).await?;
-        }
-        jobs::mark(conn, &key, "done", None).await?;
-        Ok(())
+        Ok(plan)
     }
 
     async fn j4(
@@ -451,33 +529,41 @@ impl Keeper {
                 continue;
             }
             let key = format!("J4:{}:{owner:#x}:{}", m.id, ctx.upcoming_closure_id);
-            if !matches!(
-                jobs::claim(
-                    conn,
-                    &key,
-                    "J4",
-                    &json!({ "hf": s(hf), "state": ctx.clock_state, "live": core.j4_live }),
-                    &self.instance
-                )
-                .await?,
-                Claim::Run { .. }
-            ) {
-                continue;
-            }
             if !core.j4_live {
-                tracing::info!(asset = %m.asset, borrower = %owner, hf = %hf, state = ctx.clock_state, "J4 flagForAuction (dry-run)");
-                jobs::set_payload(conn, &key, &json!({ "plan": { "fn": "flagForAuction", "id": m.id.to_string(), "borrowers": [owner], "block": ctx.block } })).await?;
-                jobs::mark(conn, &key, "done", None).await?;
+                if matches!(
+                    jobs::claim(
+                        conn,
+                        &key,
+                        "J4",
+                        &json!({ "hf": s(hf), "state": ctx.clock_state, "live": false }),
+                        &self.instance
+                    )
+                    .await?,
+                    Claim::Run { .. }
+                ) {
+                    tracing::info!(asset = %m.asset, borrower = %owner, hf = %hf, state = ctx.clock_state, "J4 flagForAuction (dry-run)");
+                    jobs::set_payload(conn, &key, &json!({ "plan": { "fn": "flagForAuction", "id": m.id.to_string(), "borrowers": [owner], "block": ctx.block } })).await?;
+                    jobs::mark(conn, &key, "done", None).await?;
+                }
                 continue;
             }
-            let data = Bytes::from(
-                abi::ICredenceMarket::flagForAuctionCall {
-                    id: m.id,
-                    borrowers: vec![owner],
-                }
-                .abi_encode(),
-            );
-            self.send_and_mark(conn, &key, m.market, data, rep).await?;
+            self.tx_job(
+                conn,
+                &key,
+                &json!({ "hf": s(hf), "state": ctx.clock_state, "live": true }),
+                m.market,
+                || {
+                    Ok(Bytes::from(
+                        abi::ICredenceMarket::flagForAuctionCall {
+                            id: m.id,
+                            borrowers: vec![owner],
+                        }
+                        .abi_encode(),
+                    ))
+                },
+                rep,
+            )
+            .await?;
         }
         Ok(())
     }
@@ -494,15 +580,19 @@ impl Keeper {
             if !ctx.pending_fees {
                 continue;
             }
-            if matches!(
-                jobs::claim(conn, &key, "J8", &json!({}), &self.instance).await?,
-                Claim::Run { .. }
-            ) {
-                let data =
-                    Bytes::from(abi::ICredenceMarket::claimFeesCall { id: m.id }.abi_encode());
-                self.send_and_mark(conn, &key, m.market, data, &mut rep)
-                    .await?;
-            }
+            self.tx_job(
+                conn,
+                &key,
+                &json!({}),
+                m.market,
+                || {
+                    Ok(Bytes::from(
+                        abi::ICredenceMarket::claimFeesCall { id: m.id }.abi_encode(),
+                    ))
+                },
+                &mut rep,
+            )
+            .await?;
         }
         for (stack, vault) in &core.vaults {
             let key = format!("J8:{hour}:processQueue:{stack}");
@@ -516,26 +606,22 @@ impl Keeper {
             if len.is_zero() {
                 continue;
             }
-            if matches!(
-                jobs::claim(
-                    conn,
-                    &key,
-                    "J8",
-                    &json!({ "queueLength": s(len) }),
-                    &self.instance
-                )
-                .await?,
-                Claim::Run { .. }
-            ) {
-                let data = Bytes::from(
-                    abi::ISeniorVault::processQueueCall {
-                        maxRequests: U256::from(50u64),
-                    }
-                    .abi_encode(),
-                );
-                self.send_and_mark(conn, &key, *vault, data, &mut rep)
-                    .await?;
-            }
+            self.tx_job(
+                conn,
+                &key,
+                &json!({ "queueLength": s(len) }),
+                *vault,
+                || {
+                    Ok(Bytes::from(
+                        abi::ISeniorVault::processQueueCall {
+                            maxRequests: U256::from(50u64),
+                        }
+                        .abi_encode(),
+                    ))
+                },
+                &mut rep,
+            )
+            .await?;
         }
         Ok(())
     }
@@ -605,33 +691,6 @@ impl Keeper {
         rep.failed += (status != "done") as usize;
         tracing::info!(count = addrs.len(), status, "allowlist batch");
         Ok(())
-    }
-
-    async fn send_and_mark(
-        &self,
-        conn: &mut PgConnection,
-        key: &str,
-        to: Address,
-        data: Bytes,
-        rep: &mut TickReport,
-    ) -> Result<()> {
-        match self.tx.send(conn, key, to, data).await {
-            Ok(m) if m.success => jobs::mark(conn, key, "done", None).await,
-            Ok(m) => {
-                rep.failed += 1;
-                jobs::mark(
-                    conn,
-                    key,
-                    "failed",
-                    Some(&format!("reverted in {}", m.hash)),
-                )
-                .await
-            }
-            Err(e) => {
-                rep.failed += 1;
-                jobs::mark(conn, key, "failed", Some(&e.to_string())).await
-            }
-        }
     }
 }
 

@@ -112,3 +112,20 @@ tests:
         exp_alerts:
           - exp_labels: { severity: P2, wallet: relayerA }
             exp_annotations: { summary: "Wallet relayerA runs dry within 3 days at the current spend" }
+
+  - name: keeper failed tx
+    interval: 1m
+    input_series:
+      - series: 'keeper_failed_txs_total{job="J5",reason="reverted"}'
+        values: "0 0 1 1 1"
+      - series: 'keeper_failed_txs_total{job="J3",reason="estimate"}'
+        values: "0 1 2 3 4"
+    alert_rule_test:
+      - eval_time: 1m
+        alertname: KeeperFailedTx
+        exp_alerts: []
+      - eval_time: 3m
+        alertname: KeeperFailedTx
+        exp_alerts:
+          - exp_labels: { severity: P2, job: J5 }
+            exp_annotations: { summary: "Keeper J5: a tx reverted on chain in the last hour" }

@@ -22,3 +22,4 @@ pub mod sigma_job;
 pub mod sigma_runner;
 pub mod tasks;
 pub mod tx;
+pub mod txjob;

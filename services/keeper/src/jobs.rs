@@ -60,6 +60,27 @@ pub async fn claim(
     })
 }
 
+/// On becoming leader: jobs left `running` were claimed by a leader that died mid-job (only the
+/// leader runs jobs, through its fenced connection), so they are released to run again. `submitted`
+/// jobs stay as they are: their recorded tx is reconciled, never re-sent blindly.
+pub async fn release_orphans(conn: &mut PgConnection) -> Result<u64> {
+    Ok(sqlx::query(
+        "update ops.keeper_job set status = 'pending', updated_at = now() where status = 'running'",
+    )
+    .execute(&mut *conn)
+    .await?
+    .rows_affected())
+}
+
+pub async fn status(conn: &mut PgConnection, key: &str) -> Result<Option<String>> {
+    Ok(
+        sqlx::query_scalar("select status from ops.keeper_job where key = $1")
+            .bind(key)
+            .fetch_optional(&mut *conn)
+            .await?,
+    )
+}
+
 pub async fn mark(
     conn: &mut PgConnection,
     key: &str,

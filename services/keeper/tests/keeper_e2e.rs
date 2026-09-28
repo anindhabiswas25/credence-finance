@@ -469,7 +469,8 @@ async fn leader_failover_no_duplicates() {
     let kd = keeper("keeper-d", &anvil.rpc, clock_addr, &clock);
     let r = kd.tick(ld.conn().unwrap()).await.unwrap();
     assert_eq!(r.reconciled, 1, "{r:?}");
-    assert!(r.pokes.is_empty(), "{r:?}");
+    // the reconciled key is never sent again (the same minute's heartbeat is a key of its own)
+    assert!(r.pokes.iter().all(|(_, k)| *k != key), "{r:?}");
     assert_eq!(
         tx_count(&pool, &key).await,
         1,
@@ -481,4 +482,220 @@ async fn leader_failover_no_duplicates() {
         .await
         .unwrap();
     assert_eq!(status, "done");
+}
+
+async fn rpc_call(rpc: &str, method: &str, params: serde_json::Value) -> serde_json::Value {
+    let p = ProviderBuilder::new().connect_http(rpc.parse().unwrap());
+    p.raw_request::<_, serde_json::Value>(method.to_owned().into(), params)
+        .await
+        .unwrap()
+}
+
+fn spawn_keeper(url: &str, rpc: &str, clock: Address) -> std::process::Child {
+    let port = std::net::TcpListener::bind("127.0.0.1:0")
+        .unwrap()
+        .local_addr()
+        .unwrap()
+        .port();
+    std::process::Command::new(env!("CARGO_BIN_EXE_credence-keeper"))
+        .current_dir(repo())
+        .args(["run"])
+        .env("CHAIN_ID", "31337")
+        .env("DATABASE_URL", url)
+        .env("RPC_URL", rpc)
+        .env("CLOCK_ADDRESS", clock.to_string())
+        .env("KEEPER_ASSETS", "NVDA:XNAS")
+        .env("KEEPER_INSTANCE_ID", "keeper-restart") // the same instance id before and after
+        .env("KEEPER_CORE", "0")
+        .env("DEPLOYMENTS_FILE", "/nonexistent/book.json")
+        .env("SIGMA_COMMITTEE_KEYS", "")
+        .env("METRICS_ADDR", format!("127.0.0.1:{port}"))
+        .env("RUST_LOG", "info")
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .expect("keeper binary")
+}
+
+/// §10.2 "a restart resumes exactly where it stopped": the real keeper binary is killed (SIGKILL)
+/// while its poke is broadcast but not mined (anvil automine off). The tx then mines; the restarted
+/// keeper (same instance id) reconciles the recorded tx and marks the job done without sending it again.
+#[tokio::test]
+#[ignore = "needs anvil, forge, contracts/out and TEST_DATABASE_URL (make keeper-e2e)"]
+async fn killed_mid_job_restart_resumes_without_duplicates() {
+    let anvil = anvil_at(OPEN - 300).await;
+    let (clock_addr, nvda, feed) = deploy_clock(&anvil.rpc, "restart");
+    let (url, pool) = db("credence_keeper_restart").await;
+    set_chain_time(&anvil.rpc, OPEN + 1).await;
+    push_price(
+        &anvil.rpc,
+        feed,
+        nvda,
+        OPEN + 1,
+        credence_relayer::report::MarketStatus::Regular,
+    )
+    .await;
+    let sender: Address = ANVIL0.parse::<PrivateKeySigner>().unwrap().address();
+    let p = ProviderBuilder::new().connect_http(anvil.rpc.parse().unwrap());
+    let nonce0 = p.get_transaction_count(sender).await.unwrap();
+    rpc_call(&anvil.rpc, "evm_setAutomine", serde_json::json!([false])).await;
+
+    // 1. the keeper broadcasts its first poke; kill it before the tx can mine
+    let mut k1 = spawn_keeper(&url, &anvil.rpc, clock_addr);
+    let mut key: Option<String> = None;
+    for _ in 0..120 {
+        key = sqlx::query_scalar(
+            "select job_key from ops.keeper_tx where status = 'pending' order by submitted_at limit 1",
+        )
+        .fetch_optional(&pool)
+        .await
+        .unwrap();
+        if key.is_some() {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(250)).await;
+    }
+    let key = key.expect("the keeper never wrote a tx ahead");
+    k1.kill().unwrap(); // SIGKILL: no cleanup
+    k1.wait().unwrap();
+    let status: String = sqlx::query_scalar("select status from ops.keeper_job where key = $1")
+        .bind(&key)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(status, "submitted", "killed between broadcast and receipt");
+    assert_eq!(
+        p.get_transaction_count(sender).await.unwrap(),
+        nonce0,
+        "not mined yet"
+    );
+
+    // 2. the chain mines the orphaned tx while no keeper runs
+    rpc_call(&anvil.rpc, "evm_mine", serde_json::json!([])).await;
+    rpc_call(&anvil.rpc, "evm_setAutomine", serde_json::json!([true])).await;
+    assert_eq!(p.get_transaction_count(sender).await.unwrap(), nonce0 + 1);
+
+    // 3. restart: the job is reconciled to done, and nothing is sent for it again
+    let mut k2 = spawn_keeper(&url, &anvil.rpc, clock_addr);
+    let mut done = false;
+    for _ in 0..120 {
+        let s: String = sqlx::query_scalar("select status from ops.keeper_job where key = $1")
+            .bind(&key)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+        if s == "done" {
+            done = true;
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(250)).await;
+    }
+    tokio::time::sleep(Duration::from_secs(3)).await;
+    k2.kill().unwrap();
+    k2.wait().unwrap();
+    assert!(done, "the restarted keeper never finished {key}");
+    assert_eq!(tx_count(&pool, &key).await, 1, "exactly one tx for {key}");
+    // every tx the sender mined is a recorded, mined keeper tx (no untracked duplicate)
+    let mined: i64 =
+        sqlx::query_scalar("select count(*) from ops.keeper_tx where status = 'mined'")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    let dup_keys: i64 = sqlx::query_scalar(
+        "select count(*) from (select job_key from ops.keeper_tx where status = 'mined' group by job_key having count(*) > 1) d",
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(dup_keys, 0);
+    assert_eq!(
+        p.get_transaction_count(sender).await.unwrap() - nonce0,
+        mined as u64
+    );
+    println!("killed with {key} submitted; after restart: done, 1 tx, {mined} mined keeper tx(s) == chain nonce delta");
+}
+
+/// §10.2 stuck-tx rule: a tx not mined after 3 blocks is re-signed at the same nonce with +20% fees.
+#[tokio::test]
+#[ignore = "needs anvil, forge, contracts/out and TEST_DATABASE_URL (make keeper-e2e)"]
+async fn stuck_tx_is_replaced_after_3_blocks_at_plus_20_percent() {
+    let anvil = anvil_at(OPEN - 300).await;
+    let (clock_addr, nvda, _) = deploy_clock(&anvil.rpc, "replace");
+    let (url, pool) = db("credence_keeper_replace").await;
+    let clock = ManualClock::new(OPEN + 1);
+    set_chain_time(&anvil.rpc, OPEN + 1).await;
+    let k = keeper("keeper-r", &anvil.rpc, clock_addr, &clock);
+    let mut l = Leader::new(&url, pool.clone(), "keeper-r", 31_337);
+    assert!(l.tick().await.unwrap());
+    let key = "J1:replace-test".to_string();
+    rpc_call(&anvil.rpc, "evm_setAutomine", serde_json::json!([false])).await;
+    let rpc = anvil.rpc.clone();
+    let key2 = key.clone();
+    let pool2 = pool.clone();
+    // the "network": drop the first broadcast, mine 3 empty blocks, then mine whatever comes next
+    let net = tokio::spawn(async move {
+        let first: Vec<u8> = loop {
+            if let Some(h) = sqlx::query_scalar::<_, Vec<u8>>(
+                "select hash from ops.keeper_tx where job_key = $1 limit 1",
+            )
+            .bind(&key2)
+            .fetch_optional(&pool2)
+            .await
+            .unwrap()
+            {
+                break h;
+            }
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        };
+        tokio::time::sleep(Duration::from_millis(300)).await;
+        rpc_call(
+            &rpc,
+            "anvil_dropTransaction",
+            serde_json::json!([format!("0x{}", alloy::hex::encode(&first))]),
+        )
+        .await;
+        rpc_call(&rpc, "anvil_mine", serde_json::json!(["0x3"])).await;
+        loop {
+            let n: i64 =
+                sqlx::query_scalar("select count(*) from ops.keeper_tx where job_key = $1")
+                    .bind(&key2)
+                    .fetch_one(&pool2)
+                    .await
+                    .unwrap();
+            if n >= 2 {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+        tokio::time::sleep(Duration::from_millis(300)).await;
+        rpc_call(&rpc, "evm_mine", serde_json::json!([])).await;
+    });
+    let conn = l.conn().unwrap();
+    assert!(matches!(
+        jobs::claim(conn, &key, "J1", &serde_json::json!({}), "keeper-r")
+            .await
+            .unwrap(),
+        jobs::Claim::Run { .. }
+    ));
+    let data = Bytes::from(IAssetClock::pokeCall { assetId: nvda }.abi_encode());
+    let m = k.tx.send(conn, &key, clock_addr, data).await.unwrap();
+    net.await.unwrap();
+    assert!(m.success);
+    let rows: Vec<(i64, String, String)> = sqlx::query_as(
+        "select nonce, gas_price::text, status from ops.keeper_tx where job_key = $1 order by submitted_at",
+    )
+    .bind(&key)
+    .fetch_all(&pool)
+    .await
+    .unwrap();
+    assert_eq!(rows.len(), 2, "{rows:?}");
+    assert_eq!(rows[0].0, rows[1].0, "same nonce");
+    let (f0, f1): (u128, u128) = (rows[0].1.parse().unwrap(), rows[1].1.parse().unwrap());
+    assert!(f1 * 10 >= f0 * 12, "fee +20%: {f0} → {f1}");
+    assert_eq!(rows[1].2, "mined");
+    assert_eq!(rows[0].2, "replaced");
+    println!(
+        "stuck tx replaced at nonce {}: max fee {f0} → {f1}",
+        rows[0].0
+    );
 }

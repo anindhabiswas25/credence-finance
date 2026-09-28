@@ -148,6 +148,15 @@ async fn main() -> Result<()> {
         metrics.is_leader.set(is_leader as i64);
         if is_leader && !was_leader {
             keeper.tx.reset_nonce().await;
+            if let Some(conn) = leader.conn() {
+                match credence_keeper::jobs::release_orphans(conn).await {
+                    Ok(n) if n > 0 => {
+                        tracing::info!(jobs = n, "released jobs orphaned by the previous leader")
+                    }
+                    Ok(_) => {}
+                    Err(e) => tracing::error!(error = %e, "releasing orphaned jobs failed"),
+                }
+            }
         }
         was_leader = is_leader;
         if !is_leader {

@@ -62,6 +62,12 @@ groups:
         annotations:
           summary: "{{ $labels.venue }} calendar covers only {{ $value }} more days"
           runbook: RB-08
+      - alert: KeeperFailedTx
+        # every keeper job pre-checks with risk-core natively (§10.2), so any reverted tx is a bug
+        expr: sum by (job) (increase(keeper_failed_txs_total{reason="reverted"}[1h])) > 0
+        labels: { severity: P2 }
+        annotations:
+          summary: "Keeper {{ $labels.job }}: a tx reverted on chain in the last hour"
       - alert: StylusActivation
         expr: keeper_stylus_program_time_left_seconds < 30 * 86400
         labels: { severity: P2 }

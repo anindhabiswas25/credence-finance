@@ -85,6 +85,7 @@ pub fn core_jobs(chain_id: u64) -> Result<Option<crate::core_jobs::CoreJobs>> {
         crate::core_jobs::CoreJobs::new(markets, vaults, env::or("INDEXER_SCHEMA", "indexer"));
     c.j3_live = env::or("KEEPER_J3_LIVE", "0") == "1";
     c.j4_live = env::or("KEEPER_J4_LIVE", "0") == "1";
+    c.j3_batch = env::parse_or("KEEPER_J3_BATCH", crate::core_jobs::BELL_BATCH)?;
     // testnet self-service allowlist: never on Arbitrum One
     if chain_id != 42_161 {
         c.registry = book
