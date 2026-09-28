@@ -63,7 +63,7 @@ send "$T" 'mint(address,uint256)' "$ME" "$(( N * 100 ))000000000000000000"
 send "$T" 'approve(address,uint256)' "$MARKET" "$(( N * 100 ))000000000000000000"
 price "$A" 200000000000000000000
 for i in $(seq 0 $((N - 1))); do
-  BK[$i]="$(cast wallet new --json | jq -r '.[0].private_key')"; BA[$i]="$(cast wallet address --private-key "${BK[$i]}")"
+  BK[$i]="$(cast wallet new --json | jq -r '(.data // .)[0].private_key')"; BA[$i]="$(cast wallet address --private-key "${BK[$i]}")"
   cast send --rpc-url "$RPC" --private-key "$KEY" "${BA[$i]}" --value 0.2ether >/dev/null
   send "$MARKET" 'addCollateral(bytes32,address,uint256)' "$ID" "${BA[$i]}" 100000000000000000000
   [ $((i % 6)) = 5 ] && price "$A" 200000000000000000000
@@ -72,7 +72,7 @@ done
 say "$N AAPL positions at 72%"
 declare -a XK XA
 for i in $(seq 0 $((BIDS - 1))); do
-  XK[$i]="$(cast wallet new --json | jq -r '.[0].private_key')"; XA[$i]="$(cast wallet address --private-key "${XK[$i]}")"
+  XK[$i]="$(cast wallet new --json | jq -r '(.data // .)[0].private_key')"; XA[$i]="$(cast wallet address --private-key "${XK[$i]}")"
   cast send --rpc-url "$RPC" --private-key "$KEY" "${XA[$i]}" --value 0.2ether >/dev/null
   send "$USDC" 'mint(address,uint256)' "${XA[$i]}" 100000000000
   cast send --rpc-url "$RPC" --private-key "${XK[$i]}" "$USDC" 'approve(address,uint256)' "$HOUSE" 100000000000 >/dev/null
@@ -89,7 +89,7 @@ WIN="$(cast call --json --rpc-url "$RPC" "$CLOCK" 'closureInfo(bytes32)((uint8,u
 say "waiting for the Bell window at $WIN"
 while [ "$(date +%s)" -le "$WIN" ]; do sleep 10; done
 price "$NV" 180000000000000000000
-KC="$(cast wallet new --json | jq -r '.[0].private_key')"; C="$(cast wallet address --private-key "$KC")"
+KC="$(cast wallet new --json | jq -r '(.data // .)[0].private_key')"; C="$(cast wallet address --private-key "$KC")"
 cast send --rpc-url "$RPC" --private-key "$KEY" "$C" --value 0.2ether >/dev/null
 send "$NT" 'mint(address,uint256)' "$C" 100000000000000000000
 cast send --rpc-url "$RPC" --private-key "$KC" "$NT" 'approve(address,uint256)' "$MARKET" 100000000000000000000 >/dev/null
@@ -127,7 +127,7 @@ say "enforceBell($J3) sent: status $(echo "$R" | jq -r .status), gas $(echo "$R"
 
 # 5. an INTRADAY lot on NVDA cleared with the 64-bid maximum
 send "$HOUSE" 'setTimings(uint8,uint40[4])' 1 '[15,15,300,300]'
-KL="$(cast wallet new --json | jq -r '.[0].private_key')"; L="$(cast wallet address --private-key "$KL")"
+KL="$(cast wallet new --json | jq -r '(.data // .)[0].private_key')"; L="$(cast wallet address --private-key "$KL")"
 cast send --rpc-url "$RPC" --private-key "$KEY" "$L" --value 0.2ether >/dev/null
 send "$NT" 'mint(address,uint256)' "$L" 1000000000000000000000
 cast send --rpc-url "$RPC" --private-key "$KL" "$NT" 'approve(address,uint256)' "$MARKET" 1000000000000000000000 >/dev/null

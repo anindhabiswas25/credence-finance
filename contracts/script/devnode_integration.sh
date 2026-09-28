@@ -163,7 +163,7 @@ check "market.bellStatus after cover (COVERED)" "$(cast call --rpc-url "$RPC" "$
 
 # 5b. an INTRADAY auction on AAPL: a second borrower at 74%, AAPL −10% → HF < 1 → flag → fix → bid → clear (Stylus
 #     engine.clear) with the pool backstop → settle
-K2="$(cast wallet new --json | jq -r '.[0].private_key')"; B2="$(cast wallet address --private-key "$K2")"
+K2="$(cast wallet new --json | jq -r '(.data // .)[0].private_key')"; B2="$(cast wallet address --private-key "$K2")"
 cast send --rpc-url "$RPC" --private-key "$KEY" "$B2" --value 1ether >/dev/null
 A2="$(jq -r .assetIds.AAPL "$BOOK")"; ID2="$(jq -r .equity.markets.AAPL "$BOOK")"; T2="$(jq -r .tokens.tAAPL "$BOOK")"
 send "$T2" 'mint(address,uint256)' "$B2" 100000000000000000000
