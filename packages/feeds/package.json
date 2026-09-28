@@ -1,0 +1,30 @@
+{
+  "name": "@credence/feeds",
+  "version": "0.1.0",
+  "private": true,
+  "description": "R-26 prototype readers for on-chain-licensed equity feeds (RedStone pull, Chainlink push, Pyth) and the Arbitrum Sepolia probe (ADR-0009).",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": { "types": "./dist/index.d.ts", "default": "./dist/index.js" }
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "probe": "node dist/probe.js"
+  },
+  "dependencies": {
+    "viem": "2.56.9"
+  },
+  "devDependencies": {
+    "@credence/config": "workspace:*",
+    "@types/node": "24.19.0",
+    "eslint": "9.39.5",
+    "typescript": "~6.0.0",
+    "vitest": "3.2.7"
+  }
+}

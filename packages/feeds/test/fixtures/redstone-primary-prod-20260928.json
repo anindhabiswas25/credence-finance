@@ -1,0 +1,156 @@
+{
+ "NVDA": [
+  {
+   "timestampMilliseconds": 1790580150000,
+   "signature": "oBz5KVNwnDzwSdNIlknHiv96Ql7WmJzRjBzm6N3hhOxuEpWByF1UxAHu+VyGKAh4Ks7fwiviOIsOtSUleUsZPhs=",
+   "isSignatureValid": true,
+   "dataPoints": [
+    {
+     "dataFeedId": "NVDA",
+     "value": 225.04013925
+    }
+   ],
+   "dataServiceId": "redstone-primary-prod",
+   "dataPackageId": "NVDA",
+   "signerAddress": "0xdEB22f54738d54976C4c0fe5ce6d408E40d88499",
+   "dataFeedId": "NVDA"
+  },
+  {
+   "timestampMilliseconds": 1790580150000,
+   "signature": "sm5XxR/YKIIa2QZToTmWUpqMRdl8TQOp3uNtGcvqVc4b8D4/dv2YFzam8OtaLkkJI68m/BHOh4nLeNuXeIhc4hw=",
+   "isSignatureValid": true,
+   "dataPoints": [
+    {
+     "dataFeedId": "NVDA",
+     "value": 225.04117789
+    }
+   ],
+   "dataServiceId": "redstone-primary-prod",
+   "dataPackageId": "NVDA",
+   "signerAddress": "0x51Ce04Be4b3E32572C4Ec9135221d0691Ba7d202",
+   "dataFeedId": "NVDA"
+  },
+  {
+   "timestampMilliseconds": 1790580150000,
+   "signature": "tvjEhsSRIpIBi4bMlPHQk6VmXSAqdg9t/VnZyoEiGnB3my90HzQ3uhZRE5g0cu6LuzAHsVQSs5Ift23uyQWFcBw=",
+   "isSignatureValid": true,
+   "dataPoints": [
+    {
+     "dataFeedId": "NVDA",
+     "value": 225.0415008
+    }
+   ],
+   "dataServiceId": "redstone-primary-prod",
+   "dataPackageId": "NVDA",
+   "signerAddress": "0x8BB8F32Df04c8b654987DAaeD53D6B6091e3B774",
+   "dataFeedId": "NVDA"
+  },
+  {
+   "timestampMilliseconds": 1790580150000,
+   "signature": "hUu8PI31m3SrFj5VH2AVRM6dOrbAGyJaX3Eyc9QQ18dCeKczUIcfxWYQ2Dp4Jd4UHqZSxjb6NxbCy+lXxYFeMxw=",
+   "isSignatureValid": true,
+   "dataPoints": [
+    {
+     "dataFeedId": "NVDA",
+     "value": 225.04443453
+    }
+   ],
+   "dataServiceId": "redstone-primary-prod",
+   "dataPackageId": "NVDA",
+   "signerAddress": "0x9c5AE89C4Af6aA32cE58588DBaF90d18a855B6de",
+   "dataFeedId": "NVDA"
+  },
+  {
+   "timestampMilliseconds": 1790580150000,
+   "signature": "h5UkvcKuvK6xfbuHQEE1FHfR/0jx837jJLIc4bAJkARWOZDqNMnu73cYagv0+LsQnKuuHtjcCFzowzrM3Pof6hs=",
+   "isSignatureValid": true,
+   "dataPoints": [
+    {
+     "dataFeedId": "NVDA",
+     "value": 225.04163385
+    }
+   ],
+   "dataServiceId": "redstone-primary-prod",
+   "dataPackageId": "NVDA",
+   "signerAddress": "0xDD682daEC5A90dD295d14DA4b0bec9281017b5bE",
+   "dataFeedId": "NVDA"
+  }
+ ],
+ "AAPL": [
+  {
+   "timestampMilliseconds": 1790580150000,
+   "signature": "nrTai6exA6tLqhlZSZCtebiMEuWW5N4EIL9VtsWonUkD2gKGHUuafe/BZ86ua1VZWLMwR27YmFQJLkaimQARGhw=",
+   "isSignatureValid": true,
+   "dataPoints": [
+    {
+     "dataFeedId": "AAPL",
+     "value": 341.0323806
+    }
+   ],
+   "dataServiceId": "redstone-primary-prod",
+   "dataPackageId": "AAPL",
+   "signerAddress": "0xdEB22f54738d54976C4c0fe5ce6d408E40d88499",
+   "dataFeedId": "AAPL"
+  },
+  {
+   "timestampMilliseconds": 1790580150000,
+   "signature": "9/fiHRar4RXfaQp+VyCOXt8ZrdUGDMUczJzqFc+WvLQ7ykVAKtHtMAvpf4t6XfCcRuQ4j0/8mP5lS3aL/2wxnxw=",
+   "isSignatureValid": true,
+   "dataPoints": [
+    {
+     "dataFeedId": "AAPL",
+     "value": 341.03450512
+    }
+   ],
+   "dataServiceId": "redstone-primary-prod",
+   "dataPackageId": "AAPL",
+   "signerAddress": "0x51Ce04Be4b3E32572C4Ec9135221d0691Ba7d202",
+   "dataFeedId": "AAPL"
+  },
+  {
+   "timestampMilliseconds": 1790580150000,
+   "signature": "GikgFQGNGWTxO6Z+lMIrjLhWv+OXuC+T3ihh4I6NVE1SaSyf57PT3rtdWgpp5fehTLFZ9dPxChxnD7dPBRBM6Bw=",
+   "isSignatureValid": true,
+   "dataPoints": [
+    {
+     "dataFeedId": "AAPL",
+     "value": 341.03606902
+    }
+   ],
+   "dataServiceId": "redstone-primary-prod",
+   "dataPackageId": "AAPL",
+   "signerAddress": "0x8BB8F32Df04c8b654987DAaeD53D6B6091e3B774",
+   "dataFeedId": "AAPL"
+  },
+  {
+   "timestampMilliseconds": 1790580150000,
+   "signature": "UyZFA+4YIk1LENh1HcOj3bb1deRdQXagggTN9IST6fsIJeHAEIKfuCRfBWr3//OyB/4E4FvpC5HuXx2AdQAWTxw=",
+   "isSignatureValid": true,
+   "dataPoints": [
+    {
+     "dataFeedId": "AAPL",
+     "value": 341.00122705
+    }
+   ],
+   "dataServiceId": "redstone-primary-prod",
+   "dataPackageId": "AAPL",
+   "signerAddress": "0x9c5AE89C4Af6aA32cE58588DBaF90d18a855B6de",
+   "dataFeedId": "AAPL"
+  },
+  {
+   "timestampMilliseconds": 1790580150000,
+   "signature": "xsLAWDVTmHhSvVbkWC+0rcQmDNvUbpGnLay+JfAPIcFE0GKfOxrB8iXCS4lT5yRDB8gVuHtFnEZlFXijsWDwUBw=",
+   "isSignatureValid": true,
+   "dataPoints": [
+    {
+     "dataFeedId": "AAPL",
+     "value": 341.01157932
+    }
+   ],
+   "dataServiceId": "redstone-primary-prod",
+   "dataPackageId": "AAPL",
+   "signerAddress": "0xDD682daEC5A90dD295d14DA4b0bec9281017b5bE",
+   "dataFeedId": "AAPL"
+  }
+ ]
+}

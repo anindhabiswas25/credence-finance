@@ -22,7 +22,7 @@ PNPM := pnpm
 .PHONY: backend-install backend-build backend-test backend-lint backend-fmt \
         infra-up infra-down infra-reset infra-ps db-migrate db-rollback calendar-gen calendar-test \
         relayer-dev relayer-smoke keeper-dev indexer-dev api-dev relayer-e2e keeper-e2e indexer-e2e services-up \
-        notifier-dev notifier-e2e
+        notifier-dev notifier-e2e r26-probe
 
 backend-install: ## Install backend deps: pnpm workspace, uv calibration env, Rust crates fetched
 	$(PNPM) install --frozen-lockfile
@@ -112,3 +112,19 @@ notifier-e2e: ## Notifier e2e on Postgres: scenario A Bell heads-up (G-10, G-11)
 
 services-up: ## Build and start relayer + keeper containers on the local stack
 	$(COMPOSE) --profile services up -d --build
+
+R26_DIR := target/be/r26
+R26_CONNECTOR := @redstone-finance/evm-connector@1.0.0
+r26-probe: ## R-26 feed probe on Arbitrum Sepolia (ADR-0009): RedStone verified by its own connector via eth_call, Chainlink + Pyth reads → target/be/r26/probe.json
+	@mkdir -p $(R26_DIR)/src
+	@[ -d $(R26_DIR)/package ] || (cd $(R26_DIR) && npm pack --silent $(R26_CONNECTOR) >/dev/null && tar xzf redstone-finance-evm-connector-*.tgz)
+	@rm -rf $(R26_DIR)/src/redstone && cp -r $(R26_DIR)/package/contracts $(R26_DIR)/src/redstone
+	@printf '%s\n' '// SPDX-License-Identifier: MIT' 'pragma solidity ^0.8.17;' \
+	  'import "./redstone/data-services/PrimaryProdDataServiceConsumerBase.sol";' \
+	  'contract Probe is PrimaryProdDataServiceConsumerBase {' \
+	  '  function read(bytes32[] calldata ids) external view returns (uint256[] memory values, uint256 ts) {' \
+	  '    (values, ts) = getOracleNumericValuesAndTimestampFromTxMsg(ids);' \
+	  '  }' '}' > $(R26_DIR)/src/Probe.sol
+	cd $(R26_DIR) && forge build --root . --contracts src/Probe.sol -o out --cache-path cache --skip test >/dev/null
+	$(PNPM) --filter @credence/feeds build
+	node packages/feeds/dist/probe.js --verifier $(R26_DIR)/out/Probe.sol/Probe.json --out $(R26_DIR)/probe.json $(if $(RPC),--rpc $(RPC))

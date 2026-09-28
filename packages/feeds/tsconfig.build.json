@@ -1,0 +1,5 @@
+{
+  "extends": "@credence/config/tsconfig.node.json",
+  "compilerOptions": { "rootDir": "src", "outDir": "dist", "noEmit": false },
+  "include": ["src"]
+}

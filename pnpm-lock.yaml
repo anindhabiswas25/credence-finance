@@ -61,6 +61,28 @@ importers:
         specifier: 8.70.1
         version: 8.70.1(eslint@9.39.5)(typescript@6.0.3)
 
+  packages/feeds:
+    dependencies:
+      viem:
+        specifier: 2.56.9
+        version: 2.56.9(typescript@6.0.3)(zod@4.6.5)
+    devDependencies:
+      '@credence/config':
+        specifier: workspace:*
+        version: link:../config
+      '@types/node':
+        specifier: 24.19.0
+        version: 24.19.0
+      eslint:
+        specifier: 9.39.5
+        version: 9.39.5
+      typescript:
+        specifier: ~6.0.0
+        version: 6.0.3
+      vitest:
+        specifier: 3.2.7
+        version: 3.2.7(@types/node@24.19.0)(yaml@2.9.1)
+
   packages/sdk:
     dependencies:
       viem:
