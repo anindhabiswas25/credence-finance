@@ -7,7 +7,7 @@
 //!   borrowers in batches of ≤ 50 with each one's expected `BellOutcome` (CoverLogic._cure's branches).
 //! * **J4 health watcher** (dry-run unless `KEEPER_J4_LIVE=1`): REGULAR HF < 1, EXTENDED uncovered
 //!   HF < 0.92 → `flagForAuction`.
-//! * **J8** (hourly): `claimFees` where fees are accrued, `SeniorVault.processQueue` where requests wait.
+//! * **J8** (hourly): `claimFees` where fees are accrued, `SeniorVault.processQueue` where requests are queued.
 //! * **Allowlist** (testnet only): `ComplianceRegistry.setAllowedBatch` for `app.allowlist_request`.
 //!
 //! Dry-run jobs record their plan in `ops.keeper_job.payload`, so an e2e can compare it with risk-cli.
@@ -174,6 +174,7 @@ impl Keeper {
         ctx: &RiskCtx,
         now: u64,
     ) -> Result<()> {
+        tracing::debug!(asset = %m.asset, state = ctx.clock_state, block = ctx.block, now, "J2 check");
         if ctx.clock_state != REGULAR {
             return Ok(());
         }
@@ -190,6 +191,7 @@ impl Keeper {
             let Some(stage) = headsup_stage(now, t.close_at, t.bell_at) else {
                 continue;
             };
+            tracing::debug!(asset = %m.asset, close = t.close_at, closure_type = t.closure_type, stage, "J2 target");
             if let Err(e) = self.j2_target(conn, core, m, ctx, &t, stage).await {
                 tracing::warn!(asset = %m.asset, close = t.close_at, error = %e, "J2 failed");
                 self.metrics.jobs.with_label_values(&["J2", "error"]).inc();
@@ -310,7 +312,7 @@ impl Keeper {
         jobs::set_payload(
             conn,
             &key,
-            &json!({ "binding": true, "safeLtv": s(safe), "enqueued": sent }),
+            &json!({ "binding": true, "safeLtv": s(safe), "enqueued": sent, "block": ctx.block }),
         )
         .await?;
         jobs::mark(conn, &key, "done", None).await?;
@@ -508,8 +510,10 @@ impl Keeper {
                 continue;
             }
             let v = abi::ISeniorVault::new(*vault, self.rpc.primary());
-            let (len, idle) = (v.queueLength().call().await?, v.idle().call().await?);
-            if len.is_zero() || idle.is_zero() {
+            // processQueue pays from idle cash and market liquidity (`_available`), so any queued
+            // request is worth a call; it stops by itself at the first request it cannot pay
+            let len = v.queueLength().call().await?;
+            if len.is_zero() {
                 continue;
             }
             if matches!(

@@ -614,7 +614,11 @@ mod tests {
 
     #[test]
     fn targets_are_the_next_two_scheduled_closes() {
-        let cal = credence_common::calendar::Calendar::load(concat!(env!("CARGO_MANIFEST_DIR"), "/../../calibration/out/calendars/XNYS-20261001-20271031.json")).unwrap();
+        let cal = credence_common::calendar::Calendar::load(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../calibration/out/calendars/XNYS-20261001-20271031.json"
+        ))
+        .unwrap();
         // Thu 2026-10-08 14:05 ET (18:05Z): T-26h before Friday's close
         let t = targets(&cal, 1_791_482_700);
         assert_eq!(t.len(), 2);

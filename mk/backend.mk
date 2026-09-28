@@ -22,7 +22,7 @@ PNPM := pnpm
 .PHONY: backend-install backend-build backend-test backend-lint backend-fmt \
         infra-up infra-down infra-reset infra-ps db-migrate db-rollback calendar-gen calendar-test \
         relayer-dev relayer-smoke keeper-dev indexer-dev api-dev relayer-e2e keeper-e2e indexer-e2e services-up \
-        notifier-dev notifier-e2e r26-probe keeper-sigma-test keeper-j12-e2e keeper-j7-e2e obs-up obs-down obs-check api-db-test
+        notifier-dev notifier-e2e r26-probe keeper-sigma-test keeper-j12-e2e keeper-j7-e2e keeper-core-e2e obs-up obs-down obs-check api-db-test
 
 backend-install: ## Install backend deps: @credence/risk-wasm (wasm-pack, into target/be), pnpm workspace, uv calibration env, Rust crates fetched
 	CARGO_TARGET_DIR=$(BACKEND_TARGET_DIR) $(MAKE) --no-print-directory risk-wasm
@@ -135,6 +135,9 @@ keeper-j12-e2e: ## J12 on the devnode: ArbWasm programTimeLeft of shared.riskEng
 
 keeper-j7-e2e: contracts-build ## J7 on real contracts: SigmaOracle (anvil) accepts the keeper's 2-of-3 committee; the Stylus engine (devnode) accepts planned σ and rejects a >10%/day drop
 	$(CARGO) test --locked -p credence-keeper --test j7_e2e -- --ignored --nocapture --test-threads=1
+
+keeper-core-e2e: contracts-build ## Keeper acceptance 5 on DeployCoreLocal (anvil + Postgres): J2 == market.bellStatus, J3 dry-run outcome == BellEnforced, J4 iff HF < 1, J8 claimFees/processQueue, allowlist
+	TEST_DATABASE_URL=$(TEST_DATABASE_URL) $(CARGO) test --locked -p credence-keeper --test core_e2e -- --ignored --nocapture
 
 keeper-sigma-test: ## J7 σ: reproduce QE's calibration/docs/sigma-vectors.json bit for bit + resume from the calibration snapshot
 	$(CARGO) test --locked -p credence-keeper --test sigma_vectors -- --nocapture
