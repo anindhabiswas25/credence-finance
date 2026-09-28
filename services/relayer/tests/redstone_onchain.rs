@@ -207,6 +207,7 @@ async fn recorded_packages_on_anvil() {
         "data older than 180 s must revert"
     );
     let _ = child.kill();
+    let _ = child.wait();
 }
 
 #[tokio::test]
