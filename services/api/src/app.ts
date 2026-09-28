@@ -3,6 +3,7 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { cors } from "hono/cors";
 import { secureHeaders } from "hono/secure-headers";
+import { routePath } from "hono/route";
 import { deleteCookie, getCookie, setCookie } from "hono/cookie";
 import { getConnInfo } from "@hono/node-server/conninfo";
 import { formatUnits, isHex, keccak256, stringToHex, verifyMessage, type Address, type Hex, type PublicClient } from "viem";
@@ -13,6 +14,7 @@ import type { AuthRepo, ClockRepo } from "./repo.ts";
 import { FixedWindow, clientIp, rateLimit } from "./ratelimit.ts";
 import { SESSION_COOKIE, newNonce, newSessionId, signSession, verifySession } from "./session.ts";
 import { log } from "./log.ts";
+import { createMetrics, type ApiMetrics } from "./metrics.ts";
 
 export interface Deps {
   config: Config;
@@ -23,6 +25,7 @@ export interface Deps {
   /** Next calendar boundaries per asset id (lower-case hex), if calendars are loaded. */
   nextBoundaries?: (assetId: Hex, now: number) => { at: number; kind: string }[] | undefined;
   now?: () => number; // ms
+  metrics?: ApiMetrics;
 }
 
 // ── schemas ──────────────────────────────────────────────────────────────────────────────────────
@@ -89,6 +92,18 @@ export function createApp(deps: Deps) {
     },
   });
 
+  const metrics = deps.metrics ?? createMetrics(false);
+  app.use("*", async (c, next) => {
+    const t0 = performance.now();
+    await next();
+    // the last matched route is the handler; if only wildcard middleware matched (a 404), use one
+    // shared label so a scanner cannot blow up the series count
+    const last = routePath(c, -1);
+    const route = last && !last.endsWith("*") ? last : "unmatched";
+    const labels = { method: c.req.method, route, status: String(c.res.status) };
+    metrics.duration.observe(labels, (performance.now() - t0) / 1000);
+    metrics.requests.inc(labels);
+  });
   app.use("*", secureHeaders());
   app.use(
     "*",
@@ -127,6 +142,7 @@ export function createApp(deps: Deps) {
 
   // health
   app.get("/healthz", (c) => c.text("credence-api ok\n"));
+  app.get("/metrics", async (c) => c.text(await metrics.registry.metrics(), 200, { "content-type": metrics.registry.contentType }));
   app.get("/readyz", async (c) => {
     try {
       await deps.clock.ping();

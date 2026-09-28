@@ -1,0 +1,114 @@
+# promtool unit tests for alerts.yml (`make obs-check`).
+rule_files: [alerts.yml]
+evaluation_interval: 10s
+
+tests:
+  - name: feed stale only in REGULAR
+    interval: 10s
+    input_series:
+      # NVDA last LIVE at t=0 and the market is REGULAR; AAPL is just as old but CLOSED
+      - series: 'relayer_last_live_timestamp_seconds{feed="A",asset="NVDA"}'
+        values: "0x30"
+      - series: 'relayer_market_status{feed="A",asset="NVDA"}'
+        values: "2x30"
+      - series: 'relayer_last_live_timestamp_seconds{feed="A",asset="AAPL"}'
+        values: "0x30"
+      - series: 'relayer_market_status{feed="A",asset="AAPL"}'
+        values: "0x30"
+    alert_rule_test:
+      - eval_time: 60s # 60 s old: not yet (> 60)
+        alertname: FeedStale
+        exp_alerts: []
+      - eval_time: 100s # stale since 70 s, pending 30 s → firing
+        alertname: FeedStale
+        exp_alerts:
+          - exp_labels: { severity: P1, feed: A, asset: NVDA }
+            exp_annotations:
+              summary: "Feed A NVDA: last LIVE 1m 40s ago in REGULAR"
+              runbook: RB-04
+
+  - name: disagreement P2 then P1
+    interval: 30s
+    input_series:
+      - series: 'relayer_vendor_disagreement_ppm{feed="A",asset="TSLA"}'
+        values: "10000 20000 20000 20000 20000 20000 60000 60000 60000 60000 60000 60000"
+    alert_rule_test:
+      - eval_time: 2m
+        alertname: FeedDisagreement
+        exp_alerts: []
+      - eval_time: 150s # above 1.5% since 30 s, for 2 min
+        alertname: FeedDisagreement
+        exp_alerts:
+          - exp_labels: { severity: P2, feed: A, asset: TSLA }
+            exp_annotations: { summary: "Feed A vs the other feed on TSLA: 20000 ppm (> 1.5%)", runbook: RB-04 }
+      - eval_time: 5m
+        alertname: FeedDisagreementSevere
+        exp_alerts:
+          - exp_labels: { severity: P1, feed: A, asset: TSLA }
+            exp_annotations: { summary: "Feed A vs the other feed on TSLA: 60000 ppm (> 5%)", runbook: RB-04 }
+
+  - name: keeper leader missing
+    interval: 10s
+    input_series:
+      - series: 'keeper_is_leader{instance="k1"}'
+        values: "1 1 1 0 0 0 0 0 0"
+      - series: 'keeper_is_leader{instance="k2"}'
+        values: "0 0 0 0 0 0 0 0 0"
+    alert_rule_test:
+      - eval_time: 20s
+        alertname: KeeperLeaderMissing
+        exp_alerts: []
+      - eval_time: 70s # no leader since 30 s, for 30 s → firing
+        alertname: KeeperLeaderMissing
+        exp_alerts:
+          - exp_labels: { severity: P1 }
+            exp_annotations: { summary: "No keeper leader heartbeat for 30 s" }
+
+  - name: keeper absent entirely
+    interval: 10s
+    input_series:
+      - series: 'up{job="api"}'
+        values: "1x10"
+    alert_rule_test:
+      - eval_time: 60s
+        alertname: KeeperLeaderMissing
+        exp_alerts:
+          - exp_labels: { severity: P1 }
+            exp_annotations: { summary: "No keeper leader heartbeat for 30 s" }
+
+  - name: housekeeping thresholds
+    interval: 1m
+    input_series:
+      - series: 'keeper_calendar_coverage_days{venue="XNYS"}'
+        values: "29x5"
+      - series: 'keeper_calendar_coverage_days{venue="USBANK"}'
+        values: "400x5"
+      - series: 'keeper_stylus_program_time_left_seconds{program="riskEngine"}'
+        values: "2505600x5" # 29 days
+    alert_rule_test:
+      - eval_time: 1m
+        alertname: CalendarCoverage
+        exp_alerts:
+          - exp_labels: { severity: P2, venue: XNYS }
+            exp_annotations: { summary: "XNYS calendar covers only 29 more days", runbook: RB-08 }
+      - eval_time: 1m
+        alertname: StylusActivation
+        exp_alerts:
+          - exp_labels: { severity: P2, program: riskEngine }
+            exp_annotations: { summary: "Stylus riskEngine: programTimeLeft 29d 0h 0m 0s", runbook: RB-10 }
+
+  - name: wallet runs dry within 3 days
+    interval: 1h
+    input_series:
+      # 10 ETH (1e10 gwei) burning 0.2 ETH/h → dry in 50 h (< 72 h)
+      - series: 'keeper_wallet_balance_gwei{wallet="relayerA"}'
+        values: "10000000000-200000000x10"
+      # 10 ETH burning 0.05 ETH/h → 200 h: fine
+      - series: 'keeper_wallet_balance_gwei{wallet="keeper"}'
+        values: "10000000000-50000000x10"
+    alert_rule_test:
+      - eval_time: 7h
+        alertname: WalletLow
+        exp_alerts:
+          - exp_labels: { severity: P2, wallet: relayerA }
+            exp_annotations: { summary: "Wallet relayerA runs dry within 3 days at the current spend" }

@@ -1,0 +1,10 @@
+# Grafana datasource for the local stack (`make obs-up`). Owner: BE-backend.
+apiVersion: 1
+datasources:
+  - name: Prometheus
+    uid: credence-prom
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
+    jsonData: { timeInterval: 10s }

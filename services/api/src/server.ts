@@ -6,6 +6,7 @@ import { assetVenues, boundariesAfter, loadCalendars } from "./calendar.ts";
 import { loadConfig } from "./config.ts";
 import { pgRepos } from "./repo.ts";
 import { log } from "./log.ts";
+import { createMetrics } from "./metrics.ts";
 
 const config = loadConfig();
 const repos = pgRepos(config.databaseUrl, config.indexerSchema);
@@ -17,6 +18,7 @@ const app = createApp({
   config,
   clock: repos.clock,
   auth: repos.auth,
+  metrics: createMetrics(),
   publicClient: config.rpcUrl ? createPublicClient({ transport: http(config.rpcUrl) }) : undefined,
   nextBoundaries: (id, now) => {
     const v = venues.get(id);

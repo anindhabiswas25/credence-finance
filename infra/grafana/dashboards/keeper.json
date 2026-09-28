@@ -1,0 +1,361 @@
+{
+  "uid": "credence-keeper",
+  "title": "Credence \u00b7 Keeper jobs",
+  "tags": [
+    "credence",
+    "keeper"
+  ],
+  "timezone": "browser",
+  "schemaVersion": 41,
+  "version": 1,
+  "refresh": "10s",
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "Leader",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "credence-prom"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 6,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "credence-prom"
+          },
+          "expr": "keeper_is_leader",
+          "legendFormat": "{{instance}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "green",
+                "value": 1
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {}
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Stylus programTimeLeft",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "credence-prom"
+      },
+      "gridPos": {
+        "x": 6,
+        "y": 0,
+        "w": 6,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "credence-prom"
+          },
+          "expr": "keeper_stylus_program_time_left_seconds",
+          "legendFormat": "{{program}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "green",
+                "value": 2592000
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {}
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Calendar coverage (days)",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "credence-prom"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 0,
+        "w": 6,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "credence-prom"
+          },
+          "expr": "keeper_calendar_coverage_days",
+          "legendFormat": "{{venue}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "green",
+                "value": 30
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {}
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Alerts raised (24 h)",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "credence-prom"
+      },
+      "gridPos": {
+        "x": 18,
+        "y": 0,
+        "w": 6,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "credence-prom"
+          },
+          "expr": "sum by (check, severity) (increase(keeper_alerts_total[24h]))",
+          "legendFormat": "{{check}} {{severity}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "options": {}
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "Jobs by result",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "credence-prom"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 6,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "credence-prom"
+          },
+          "expr": "sum by (job, result) (rate(keeper_jobs_total[5m]))",
+          "legendFormat": "{{job}} {{result}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops"
+        },
+        "overrides": []
+      },
+      "options": {}
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "Pokes by asset and trigger",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "credence-prom"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 6,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "credence-prom"
+          },
+          "expr": "sum by (asset, trigger) (increase(keeper_pokes_total[5m]))",
+          "legendFormat": "{{asset}} {{trigger}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "options": {}
+    },
+    {
+      "id": 7,
+      "type": "timeseries",
+      "title": "Transactions by outcome / replacements",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "credence-prom"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 14,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "credence-prom"
+          },
+          "expr": "sum by (outcome) (rate(keeper_txs_total[5m]))",
+          "legendFormat": "{{outcome}}"
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "credence-prom"
+          },
+          "expr": "sum by (job) (rate(keeper_tx_replacements_total[5m]))",
+          "legendFormat": "replaced {{job}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops"
+        },
+        "overrides": []
+      },
+      "options": {}
+    },
+    {
+      "id": 8,
+      "type": "timeseries",
+      "title": "Wallet balances (ETH)",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "credence-prom"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 14,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "credence-prom"
+          },
+          "expr": "keeper_wallet_balance_gwei / 1e9",
+          "legendFormat": "{{wallet}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "options": {},
+      "description": "WalletLow fires when the 6 h trend reaches 0 within 3 days."
+    },
+    {
+      "id": 9,
+      "type": "timeseries",
+      "title": "RPC failovers",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "credence-prom"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 22,
+        "w": 24,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "credence-prom"
+          },
+          "expr": "sum by (rpc) (rate(keeper_rpc_failovers_total[5m]))",
+          "legendFormat": "{{rpc}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "options": {}
+    }
+  ],
+  "editable": false,
+  "templating": {
+    "list": []
+  },
+  "annotations": {
+    "list": []
+  }
+}

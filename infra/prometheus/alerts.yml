@@ -1,0 +1,92 @@
+# §16.1 alerts that are measurable before the pool and auction house exist (S2). Owner: BE-backend.
+# Severity label = the guide's P1/P2 (P3 = operability, not in the guide). Unit tests: alerts.test.yml
+# (`make obs-check` runs promtool). Runbooks: docs/runbooks (RB-xx in the annotations).
+groups:
+  - name: credence-feeds
+    rules:
+      - alert: FeedStale
+        # REGULAR only (relayer_market_status 2); the relayer publishes LIVE every 10 s, OracleAdapter's
+        # REGULAR limit is 60 s
+        expr: (time() - relayer_last_live_timestamp_seconds) > 60 and on (feed, asset) relayer_market_status == 2
+        for: 30s
+        labels: { severity: P1 }
+        annotations:
+          summary: "Feed {{ $labels.feed }} {{ $labels.asset }}: last LIVE {{ $value | humanizeDuration }} ago in REGULAR"
+          runbook: RB-04
+      - alert: FeedDisagreement
+        expr: relayer_vendor_disagreement_ppm > 15000
+        for: 2m
+        labels: { severity: P2 }
+        annotations:
+          summary: "Feed {{ $labels.feed }} vs the other feed on {{ $labels.asset }}: {{ $value }} ppm (> 1.5%)"
+          runbook: RB-04
+      - alert: FeedDisagreementSevere
+        expr: relayer_vendor_disagreement_ppm > 50000
+        for: 2m
+        labels: { severity: P1 }
+        annotations:
+          summary: "Feed {{ $labels.feed }} vs the other feed on {{ $labels.asset }}: {{ $value }} ppm (> 5%)"
+          runbook: RB-04
+      - alert: RelayerStreamDown
+        expr: relayer_stream_connected == 0
+        for: 5m
+        labels: { severity: P3 }
+        annotations:
+          summary: "Vendor {{ $labels.vendor }} WebSocket down for 5 min (REST fallback in use)"
+
+  - name: credence-keeper
+    rules:
+      - alert: KeeperLeaderMissing
+        # no instance holds the lock, or no keeper is scraped at all
+        expr: (max(keeper_is_leader) < 1) or absent(keeper_is_leader == 1)
+        for: 30s
+        labels: { severity: P1 }
+        annotations:
+          summary: "No keeper leader heartbeat for 30 s"
+      - alert: WalletLow
+        # < 3 days of spend at the last 6 h's burn rate
+        expr: predict_linear(keeper_wallet_balance_gwei[6h], 3 * 86400) < 0
+        for: 15m
+        labels: { severity: P2 }
+        annotations:
+          summary: "Wallet {{ $labels.wallet }} runs dry within 3 days at the current spend"
+      - alert: WalletBelowFloor
+        # the keeper's own configured floor (KEEPER_MIN_BALANCE_WEI), raised by J12
+        expr: increase(keeper_alerts_total{check="wallet-balance"}[1d]) > 0
+        labels: { severity: P2 }
+        annotations:
+          summary: "A watched wallet is below the keeper's configured floor"
+      - alert: CalendarCoverage
+        expr: keeper_calendar_coverage_days < 30
+        labels: { severity: P2 }
+        annotations:
+          summary: "{{ $labels.venue }} calendar covers only {{ $value }} more days"
+          runbook: RB-08
+      - alert: StylusActivation
+        expr: keeper_stylus_program_time_left_seconds < 30 * 86400
+        labels: { severity: P2 }
+        annotations:
+          summary: "Stylus {{ $labels.program }}: programTimeLeft {{ $value | humanizeDuration }}"
+          runbook: RB-10
+
+  - name: credence-services
+    rules:
+      - alert: IndexerLag
+        expr: time() - ponder_indexing_timestamp > 120
+        for: 5m
+        labels: { severity: P2 }
+        annotations:
+          summary: "Indexer is {{ $value | humanizeDuration }} behind"
+      - alert: NotifierBacklog
+        expr: credence_notifier_oldest_due_seconds > 300
+        for: 2m
+        labels: { severity: P2 }
+        annotations:
+          summary: "Oldest due notification waits {{ $value | humanizeDuration }} (Bell heads-ups expire)"
+          runbook: RB-01
+      - alert: ApiErrors
+        expr: sum(rate(credence_api_http_requests_total{status=~"5.."}[5m])) / sum(rate(credence_api_http_requests_total[5m])) > 0.05
+        for: 5m
+        labels: { severity: P3 }
+        annotations:
+          summary: "API 5xx rate above 5%"

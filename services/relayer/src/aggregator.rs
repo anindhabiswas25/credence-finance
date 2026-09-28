@@ -471,7 +471,17 @@ impl Aggregator {
                 .last_seq
                 .with_label_values(&[&self.cfg.feed, &sym])
                 .set(r.seq as i64);
+            if matches!(kind, Kind::Live | Kind::Status) {
+                self.metrics
+                    .market_status
+                    .with_label_values(&[&self.cfg.feed, &sym])
+                    .set(r.marketStatus as i64);
+            }
             if kind == Kind::Live {
+                self.metrics
+                    .last_live_at
+                    .with_label_values(&[&self.cfg.feed, &sym])
+                    .set(r.observedAt.to::<u64>() as i64);
                 if let Ok(Some(other)) = self.chain.other_feed_latest(r.assetId).await {
                     if other > 0 {
                         let ppm = rel_diff_ppm(r.price, other).min(i64::MAX as u128) as i64;

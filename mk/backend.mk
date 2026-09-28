@@ -22,7 +22,7 @@ PNPM := pnpm
 .PHONY: backend-install backend-build backend-test backend-lint backend-fmt \
         infra-up infra-down infra-reset infra-ps db-migrate db-rollback calendar-gen calendar-test \
         relayer-dev relayer-smoke keeper-dev indexer-dev api-dev relayer-e2e keeper-e2e indexer-e2e services-up \
-        notifier-dev notifier-e2e r26-probe keeper-sigma-test keeper-j12-e2e
+        notifier-dev notifier-e2e r26-probe keeper-sigma-test keeper-j12-e2e obs-up obs-down obs-check
 
 backend-install: ## Install backend deps: @credence/risk-wasm (wasm-pack, into target/be), pnpm workspace, uv calibration env, Rust crates fetched
 	CARGO_TARGET_DIR=$(BACKEND_TARGET_DIR) $(MAKE) --no-print-directory risk-wasm
@@ -136,3 +136,25 @@ keeper-j12-e2e: ## J12 on the devnode: ArbWasm programTimeLeft of shared.riskEng
 keeper-sigma-test: ## J7 σ: reproduce QE's calibration/docs/sigma-vectors.json bit for bit + resume from the calibration snapshot
 	$(CARGO) test --locked -p credence-keeper --test sigma_vectors -- --nocapture
 	$(CARGO) test --locked -p credence-keeper --lib sigma_job
+
+PROMTOOL := docker run --rm -v $(CURDIR)/infra/prometheus:/etc/prometheus:ro -w /etc/prometheus --entrypoint promtool prom/prometheus:v3.6.0
+
+obs-up: ## Prometheus (:9090) + Grafana (:3001, dashboards and alert rules from infra/) for the local stack, then obs-check
+	$(COMPOSE) --profile obs up -d --wait prometheus grafana
+	$(MAKE) --no-print-directory obs-check
+
+obs-down: ## Stop Prometheus + Grafana (the devnode and Postgres keep running)
+	$(COMPOSE) --profile obs stop prometheus grafana
+	$(COMPOSE) --profile obs rm -f prometheus grafana
+
+obs-check: ## promtool config/rules check + alert unit tests; if obs is up: every rule and dashboard is loaded
+	$(PROMTOOL) check config prometheus.yml
+	$(PROMTOOL) test rules alerts.test.yml
+	@if curl -sf localhost:$${PROMETHEUS_PORT:-9090}/-/ready >/dev/null 2>&1; then \
+	  n=$$(curl -sf localhost:$${PROMETHEUS_PORT:-9090}/api/v1/rules | jq '[.data.groups[].rules[]] | length'); \
+	  want=$$(grep -c '^      - alert:' infra/prometheus/alerts.yml); \
+	  echo "prometheus: $$n alert rules loaded (want $$want)"; [ "$$n" = "$$want" ]; \
+	  d=$$(curl -sf "localhost:$${GRAFANA_PORT:-3001}/api/search?tag=credence" | jq -r '[.[].uid] | sort | join(" ")'); \
+	  echo "grafana: $$d"; [ "$$d" = "credence-api credence-indexer credence-keeper credence-relayer" ]; \
+	  curl -sf "localhost:$${GRAFANA_PORT:-3001}/api/datasources/uid/credence-prom/health" -u admin:credence | jq -e '.status == "OK"' >/dev/null && echo "grafana → prometheus: OK"; \
+	else echo "(obs stack not running: static checks only)"; fi

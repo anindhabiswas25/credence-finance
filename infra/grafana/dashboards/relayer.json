@@ -1,0 +1,369 @@
+{
+  "uid": "credence-relayer",
+  "title": "Credence \u00b7 Relayer",
+  "tags": [
+    "credence",
+    "relayer"
+  ],
+  "timezone": "browser",
+  "schemaVersion": 41,
+  "version": 1,
+  "refresh": "10s",
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "timeseries",
+      "title": "Seconds since last LIVE (per feed, asset)",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "credence-prom"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "credence-prom"
+          },
+          "expr": "time() - relayer_last_live_timestamp_seconds",
+          "legendFormat": "{{feed}} {{asset}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 60
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {},
+      "description": "FeedStale fires above 60 s while relayer_market_status == 2 (REGULAR)."
+    },
+    {
+      "id": 2,
+      "type": "state-timeline",
+      "title": "Market status (0 closed, 1 pre, 2 regular, 3 post, 4 overnight, 5 halted)",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "credence-prom"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 0,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "credence-prom"
+          },
+          "expr": "relayer_market_status",
+          "legendFormat": "{{feed}} {{asset}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "options": {}
+    },
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "Feed A vs B disagreement (ppm)",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "credence-prom"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 8,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "credence-prom"
+          },
+          "expr": "relayer_vendor_disagreement_ppm",
+          "legendFormat": "{{feed}} {{asset}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 15000
+              },
+              {
+                "color": "red",
+                "value": 50000
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {}
+    },
+    {
+      "id": 4,
+      "type": "timeseries",
+      "title": "Node spread (ppm)",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "credence-prom"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 8,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "credence-prom"
+          },
+          "expr": "relayer_node_spread_ppm",
+          "legendFormat": "{{feed}} {{asset}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "options": {}
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "Report latency p50 / p95 (print \u2192 on-chain)",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "credence-prom"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 16,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "credence-prom"
+          },
+          "expr": "histogram_quantile(0.5, sum by (le, kind) (rate(relayer_report_latency_seconds_bucket[5m])))",
+          "legendFormat": "p50 {{kind}}"
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "credence-prom"
+          },
+          "expr": "histogram_quantile(0.95, sum by (le, kind) (rate(relayer_report_latency_seconds_bucket[5m])))",
+          "legendFormat": "p95 {{kind}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "options": {}
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "Submits by result",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "credence-prom"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 16,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "credence-prom"
+          },
+          "expr": "sum by (feed, result) (rate(relayer_submits_total[5m]))",
+          "legendFormat": "{{feed}} {{result}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops"
+        },
+        "overrides": []
+      },
+      "options": {}
+    },
+    {
+      "id": 7,
+      "type": "timeseries",
+      "title": "Accepted reports by kind",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "credence-prom"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 24,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "credence-prom"
+          },
+          "expr": "sum by (feed, kind) (increase(relayer_reports_accepted_total[5m]))",
+          "legendFormat": "{{feed}} {{kind}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "options": {}
+    },
+    {
+      "id": 8,
+      "type": "timeseries",
+      "title": "Vendor stream connected / reconnects",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "credence-prom"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 24,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "credence-prom"
+          },
+          "expr": "relayer_stream_connected",
+          "legendFormat": "up {{vendor}}"
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "credence-prom"
+          },
+          "expr": "increase(relayer_stream_reconnects_total[1h])",
+          "legendFormat": "reconnects/h {{vendor}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "options": {}
+    },
+    {
+      "id": 9,
+      "type": "timeseries",
+      "title": "Rejections and refusals",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "credence-prom"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 32,
+        "w": 24,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "credence-prom"
+          },
+          "expr": "sum by (reason) (rate(relayer_observation_rejections_total[5m]))",
+          "legendFormat": "reject {{reason}}"
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "credence-prom"
+          },
+          "expr": "sum by (reason) (rate(relayer_sign_refusals_total[5m]))",
+          "legendFormat": "refuse {{reason}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "options": {}
+    }
+  ],
+  "editable": false,
+  "templating": {
+    "list": []
+  },
+  "annotations": {
+    "list": []
+  }
+}

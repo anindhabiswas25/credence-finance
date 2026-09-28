@@ -1,0 +1,9 @@
+# Dashboards as code: every JSON file in infra/grafana/dashboards is loaded into the "Credence" folder.
+apiVersion: 1
+providers:
+  - name: credence
+    folder: Credence
+    type: file
+    disableDeletion: true
+    allowUiUpdates: false
+    options: { path: /var/lib/grafana/dashboards, foldersFromFilesStructure: false }

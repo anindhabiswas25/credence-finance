@@ -1,0 +1,30 @@
+# Prometheus for the local stack (Build Guide §16.1). Owner: BE-backend. `make obs-up`.
+# Services run either on the host (`make relayer-dev`, `keeper-dev`, …: host.docker.internal) or as
+# compose containers (`--profile services`: service names). A target that is not running is simply down.
+global:
+  scrape_interval: 10s
+  evaluation_interval: 10s
+  external_labels: { stack: local }
+
+rule_files:
+  - /etc/prometheus/alerts.yml
+
+scrape_configs:
+  - job_name: relayer
+    static_configs:
+      - targets: ["host.docker.internal:9101", "relayer:9101"]
+  - job_name: keeper
+    static_configs:
+      - targets: ["host.docker.internal:9102", "keeper:9102"]
+  - job_name: notifier
+    static_configs:
+      - targets: ["host.docker.internal:9103"]
+  - job_name: api
+    static_configs:
+      - targets: ["host.docker.internal:8787"]
+  - job_name: indexer # Ponder serves /metrics on its HTTP port (42069 by default)
+    static_configs:
+      - targets: ["host.docker.internal:42069"]
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]

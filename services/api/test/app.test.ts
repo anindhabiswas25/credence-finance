@@ -71,6 +71,22 @@ describe("health and OpenAPI", () => {
   });
 });
 
+describe("GET /metrics", () => {
+  it("counts requests by route pattern and status, with one label for unmatched paths", async () => {
+    const a = app();
+    await a.request("/healthz");
+    await a.request(`/v1/clock/${NVDA}`);
+    await a.request("/v1/clock/nope!");
+    await a.request("/wp-admin/xyz");
+    const body = await (await a.request("/metrics")).text();
+    expect(body).toMatch(/credence_api_http_requests_total\{method="GET",route="\/healthz",status="200"\} 1/);
+    expect(body).toMatch(/credence_api_http_request_duration_seconds_count\{method="GET",route="\/v1\/clock\/:assetId",status="200"\} 1/);
+    expect(body).toMatch(/route="\/v1\/clock\/:assetId",status="400"/);
+    expect(body).toMatch(/route="unmatched",status="404"/);
+    expect(body).not.toMatch(/wp-admin/);
+  });
+});
+
 describe("GET /v1/clock/:assetId", () => {
   it("accepts TICKER:MIC and bytes32 ids", () => {
     expect(toAssetId("nvda:xnas")).toBe(NVDA);

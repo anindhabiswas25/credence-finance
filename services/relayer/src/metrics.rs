@@ -28,6 +28,11 @@ pub struct Metrics {
     pub refusals: IntCounterVec,
     /// last seq submitted per asset.
     pub last_seq: IntGaugeVec,
+    /// exchange time (unix s) of the last accepted LIVE report per asset: the "feed stale" alert (§16.1).
+    pub last_live_at: IntGaugeVec,
+    /// `marketStatus` of the last accepted LIVE/STATUS report per asset (0 closed, 1 pre, 2 regular,
+    /// 3 post, 4 overnight, 5 halted), so staleness is only alerted during REGULAR.
+    pub market_status: IntGaugeVec,
     /// 1 while the vendor WebSocket is authenticated and subscribed, per vendor.
     pub stream_connected: IntGaugeVec,
     /// WebSocket reconnects, per vendor.
@@ -98,6 +103,20 @@ impl Metrics {
                 Opts::new("relayer_last_seq", "last submitted seq"),
                 &["feed", "asset"],
             )?,
+            last_live_at: IntGaugeVec::new(
+                Opts::new(
+                    "relayer_last_live_timestamp_seconds",
+                    "observedAt of the last accepted LIVE report",
+                ),
+                &["feed", "asset"],
+            )?,
+            market_status: IntGaugeVec::new(
+                Opts::new(
+                    "relayer_market_status",
+                    "marketStatus of the last accepted LIVE/STATUS report",
+                ),
+                &["feed", "asset"],
+            )?,
             stream_connected: IntGaugeVec::new(
                 Opts::new(
                     "relayer_stream_connected",
@@ -127,6 +146,8 @@ impl Metrics {
         registry.register(Box::new(m.rejections.clone()))?;
         registry.register(Box::new(m.refusals.clone()))?;
         registry.register(Box::new(m.last_seq.clone()))?;
+        registry.register(Box::new(m.last_live_at.clone()))?;
+        registry.register(Box::new(m.market_status.clone()))?;
         registry.register(Box::new(m.stream_connected.clone()))?;
         registry.register(Box::new(m.stream_reconnects.clone()))?;
         registry.register(Box::new(m.stream_messages.clone()))?;
