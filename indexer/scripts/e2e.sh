@@ -63,3 +63,33 @@ echo "$BODY" | jq -e --arg a "$NVDA" --arg s "$SEQ" '
   .assetId == $a and (.transitions | length) >= 1 and any(.feeds[]; .feed == "A" and .seq == $s and .price.formatted == "181.33")' >/dev/null
 curl -sf localhost:$PORT_API/v1/openapi.json | jq -e '.paths["/v1/clock/{assetId}"]' >/dev/null
 echo "OK: StateChanged + ReportAccepted indexed and served by GET /v1/clock/:assetId"
+
+echo "── 4. WS /v1/stream (prices channel)"
+push_live() {  # $1 = price (WAD), echoes the new seq
+  local now seq r d s1 s2
+  now=$(date +%s); seq=$(( $(cast call $FEED 'latestSeq(bytes32)(uint64)' $NVDA -r $RPC) + 1 ))
+  r="[($NVDA,0,$1,$now,$((now/86400)),0,$seq)]"
+  d=$(cast call $FEED "hashReports($REPORT_T)(bytes32)" "$r" -r $RPC)
+  s1=$(cast wallet sign --no-hash $d --private-key 0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d)
+  s2=$(cast wallet sign --no-hash $d --private-key 0x5de4111afa1a4b94908f83103eb1f1706367c2e68ca870fc3fb9a804cdab365a)
+  cast send $FEED "submit($REPORT_T,bytes[])" "$r" "[$s2,$s1]" --private-key $PK -r $RPC >/dev/null
+  echo $seq
+}
+WS_OUT=$(mktemp)
+node -e '
+  const ws = new WebSocket(process.argv[1]);
+  const t = setTimeout(() => { console.log("TIMEOUT"); process.exit(1); }, 60000);
+  ws.onopen = () => ws.send(JSON.stringify({ op: "subscribe", channels: ["prices"], assets: ["NVDA:XNAS"] }));
+  ws.onmessage = (e) => { const f = JSON.parse(e.data); console.log(JSON.stringify(f));
+    if (f.type === "subscribed") console.error("subscribed");
+    if (f.channel === "prices") { clearTimeout(t); ws.close(); process.exit(0); } };
+' "ws://127.0.0.1:$PORT_API/v1/stream" >"$WS_OUT" 2>"$WS_OUT.err" &
+WS_PID=$!
+for i in $(seq 1 50); do grep -q subscribed "$WS_OUT.err" 2>/dev/null && break; sleep 0.2; done
+sleep 1.5   # let the hub position its cursor at the current head
+SEQ2=$(push_live 181500000000000000000)
+wait $WS_PID || { echo "no prices frame"; cat "$WS_OUT"; tail -20 "$API_LOG"; exit 1; }
+FRAME=$(grep '"channel":"prices"' "$WS_OUT" | head -1)
+echo "   $FRAME"
+echo "$FRAME" | jq -e --arg a "$NVDA" --arg s "$SEQ2" '.data.assetId == $a and .data.seq == $s and .data.price.formatted == "181.5"' >/dev/null
+echo "OK: a LIVE report submitted after subscribing arrived on WS /v1/stream (prices)"

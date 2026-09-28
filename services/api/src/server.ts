@@ -1,7 +1,8 @@
 // Node 24 entry point: `node src/server.ts` (type stripping) or `node dist/server.js`.
 import { serve } from "@hono/node-server";
 import { createPublicClient, http } from "viem";
-import { createApp } from "./app.ts";
+import { createApp, toAssetId } from "./app.ts";
+import { StreamHub, attachStream } from "./stream.ts";
 import { assetVenues, boundariesAfter, loadCalendars } from "./calendar.ts";
 import { loadConfig } from "./config.ts";
 import { pgRepos } from "./repo.ts";
@@ -39,12 +40,19 @@ const app = createApp({
   },
 });
 
+const hub = new StreamHub(repos.stream, toAssetId, { pollMs: Number(process.env.STREAM_POLL_MS ?? 1000), batch: 500, maxAssets: 100 });
+const injectWebSocket = await attachStream(app, hub);
+hub.start((err) => log.warn({ err: String(err) }, "stream poll failed"));
+
 const server = serve({ fetch: app.fetch, port: config.port }, (info) => {
   log.info({ port: info.port, indexerSchema: config.indexerSchema, corsOrigins: config.corsOrigins }, "credence-api listening");
 });
 
+injectWebSocket(server);
+
 for (const sig of ["SIGINT", "SIGTERM"] as const) {
   process.on(sig, () => {
+    hub.stop();
     server.close();
     void repos.close().then(() => process.exit(0));
   });

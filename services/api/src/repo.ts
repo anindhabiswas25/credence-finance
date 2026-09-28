@@ -3,6 +3,7 @@
 import postgres from "postgres";
 import { getAddress, type Address, type Hex } from "viem";
 import type { AccountView, MeRepo, Pref, PushSub } from "./me.ts";
+import type { StreamSource } from "./stream.ts";
 
 export interface ClockRow {
   assetId: Hex;
@@ -350,7 +351,34 @@ export function pgRepos(databaseUrl: string, indexerSchema: string) {
     },
   };
 
-  return { clock, auth, core, me, sql, close: () => sql.end() };
+  const stream: StreamSource = {
+    async head() {
+      const [r] = await sql`select greatest((select coalesce(max(block), 0) from ${ix("clock_transition")}),
+                                            (select coalesce(max(block), 0) from ${ix("price_point")})) as b`;
+      return BigInt(r!.b);
+    },
+    async clockSince(block, limit) {
+      const rows = await sql`select asset_id, "from", "to", closure_id, block, ts from ${ix("clock_transition")}
+                             where block > ${block.toString()} order by block, id limit ${limit}`;
+      return rows.map((r) => ({ assetId: hx(r.asset_id), from: Number(r.from), to: Number(r.to), closureId: BigInt(r.closure_id), block: BigInt(r.block), ts: BigInt(r.ts) }));
+    },
+    async pricesSince(block, limit) {
+      const rows = await sql`select asset_id, feed, seq, kind, price, observed_at, status, block from ${ix("price_point")}
+                             where block > ${block.toString()} order by block, feed, seq limit ${limit}`;
+      return rows.map((r) => ({
+        assetId: hx(r.asset_id),
+        feed: String(r.feed),
+        seq: BigInt(r.seq),
+        kind: Number(r.kind),
+        price: BigInt(r.price),
+        observedAt: BigInt(r.observed_at),
+        status: r.status === null ? null : Number(r.status),
+        block: BigInt(r.block),
+      }));
+    },
+  };
+
+  return { clock, auth, core, me, stream, sql, close: () => sql.end() };
 }
 
 /** In-memory repos (tests, and `API_MEMORY=1` demos). */
