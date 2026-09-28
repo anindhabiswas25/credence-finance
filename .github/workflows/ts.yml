@@ -2,7 +2,7 @@
 name: ts
 on:
   pull_request:
-    paths: ["packages/**", "services/api/**", "services/notifier/**", "indexer/**", "deployments/abis/**",
+    paths: ["packages/**", "crates/risk-core/**", "crates/risk-wasm/**", "services/api/**", "services/notifier/**", "indexer/**", "deployments/abis/**",
             "package.json", "pnpm-lock.yaml", "pnpm-workspace.yaml", "turbo.json", "calibration/**", ".github/workflows/ts.yml"]
   push:
     branches: [main]
@@ -15,6 +15,11 @@ jobs:
       - uses: pnpm/action-setup@v4 # version from package.json "packageManager"
       - uses: actions/setup-node@v4
         with: { node-version: 24, cache: pnpm }
+      - uses: dtolnay/rust-toolchain@1.95.0
+        with: { targets: wasm32-unknown-unknown }
+      - run: cargo install wasm-pack --version 0.15.0 --locked
+      - name: "@credence/risk-wasm (the SDK links crates/risk-wasm/pkg)"
+        run: make risk-wasm
       - run: pnpm install --frozen-lockfile
       - run: pnpm turbo run build
       - run: pnpm turbo run typecheck lint
