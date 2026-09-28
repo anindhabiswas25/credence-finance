@@ -2423,6 +2423,7 @@ dependencies = [
  "clap",
  "credence-common",
  "credence-relayer",
+ "credence-risk-core",
  "futures",
  "prometheus",
  "reqwest 0.12.28",

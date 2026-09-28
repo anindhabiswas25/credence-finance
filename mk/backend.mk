@@ -22,7 +22,7 @@ PNPM := pnpm
 .PHONY: backend-install backend-build backend-test backend-lint backend-fmt \
         infra-up infra-down infra-reset infra-ps db-migrate db-rollback calendar-gen calendar-test \
         relayer-dev relayer-smoke keeper-dev indexer-dev api-dev relayer-e2e keeper-e2e indexer-e2e services-up \
-        notifier-dev notifier-e2e r26-probe
+        notifier-dev notifier-e2e r26-probe keeper-sigma-test
 
 backend-install: ## Install backend deps: pnpm workspace, uv calibration env, Rust crates fetched
 	$(PNPM) install --frozen-lockfile
@@ -128,3 +128,7 @@ r26-probe: ## R-26 feed probe on Arbitrum Sepolia (ADR-0009): RedStone verified 
 	cd $(R26_DIR) && forge build --root . --contracts src/Probe.sol -o out --cache-path cache --skip test >/dev/null
 	$(PNPM) --filter @credence/feeds build
 	node packages/feeds/dist/probe.js --verifier $(R26_DIR)/out/Probe.sol/Probe.json --out $(R26_DIR)/probe.json $(if $(RPC),--rpc $(RPC))
+
+keeper-sigma-test: ## J7 σ: reproduce QE's calibration/docs/sigma-vectors.json bit for bit + resume from the calibration snapshot
+	$(CARGO) test --locked -p credence-keeper --test sigma_vectors -- --nocapture
+	$(CARGO) test --locked -p credence-keeper --lib sigma_job

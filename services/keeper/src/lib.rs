@@ -15,5 +15,7 @@ pub mod leader;
 pub mod metrics;
 pub mod rpc;
 pub mod schedule;
+pub mod sigma;
+pub mod sigma_job;
 pub mod tasks;
 pub mod tx;
