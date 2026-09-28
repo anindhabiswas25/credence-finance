@@ -2,8 +2,8 @@
 # Every target has a `## help` comment; `make help` lists them.
 
 CONTRACTS_DIR   := contracts
-# v0 is frozen history (S1); v1 = S2 (ADR-0104). Never re-export v0.
-ABI_VERSION     ?= v1
+# v0 is frozen history (S1), v1 = S2 (ADR-0104), v2 = S3 (ADR-0110). Never re-export v0 or v1.
+ABI_VERSION     ?= v2
 ABI_OUT         := deployments/abis/$(ABI_VERSION)
 DEVNODE_RPC     ?= http://127.0.0.1:8547
 # Pre-funded dev key of nitro-devnode (public, local only; never used on a real network).
@@ -71,8 +71,9 @@ abis-export: contracts-build ## Export frozen ABIs to deployments/abis/$(ABI_VER
 	done
 	@echo "exported $$(ls $(ABI_OUT) | wc -l) ABIs to $(ABI_OUT)"
 
-abis-check: ## ABIs v1 are additive over the frozen v0 (except the allowed R-25 break); regenerates v1/CHANGELOG.md
+abis-check: ## ABIs are additive release to release except the ADR-listed breaks (v0→v1, v1→v2); regenerates each CHANGELOG.md
 	python3 $(CONTRACTS_DIR)/script/abi_diff.py deployments/abis/v0 deployments/abis/v1 --write deployments/abis/v1/CHANGELOG.md
+	python3 $(CONTRACTS_DIR)/script/abi_diff.py deployments/abis/v1 deployments/abis/v2 --write deployments/abis/v2/CHANGELOG.md
 
 risk-build: ## Build risk-core and risk-cli (native, release)
 	cargo build --release -p credence-risk-core -p credence-risk-cli

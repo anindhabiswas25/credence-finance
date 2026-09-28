@@ -62,6 +62,7 @@ library LiquidationLogic {
             if (auctionId == 0) auctionId = $.lotFor(id, p.assetId, kind, d.closureId);
             $.join(auctionId, b, pos, 0);
             emit ICredenceMarketEvents.Flagged(id, b, auctionId, kind);
+            if ($.lots[auctionId].borrowers.length == MarketLib.MAX_LOT_POSITIONS) auctionId = 0; // next tranche
             $.tip(KeeperJob.FLAG);
         }
     }
@@ -264,7 +265,9 @@ library LiquidationLogic {
         if (r.penalty != 0) _splitPenalty($, token, r.penalty);
         if (r.refund != 0) token.safeTransfer(b, r.refund);
         if (r.shortfall != 0) _waterfall($, id, b, token, r.shortfall);
-        emit ICredenceMarketEvents.PositionSettled(auctionId, b, r.proceeds, r.penalty, r.repaid, r.refund);
+        emit ICredenceMarketEvents.PositionSettled(
+            id, b, auctionId, e.qty, r.proceeds, r.penalty, r.shortfall, r.refund, $.debtOf(id, pos)
+        );
     }
 
     /// @dev ⅓ pool, ⅓ reserve, the rest (⅓ + rounding) to the treasury. A failing reserve leaves its part with the

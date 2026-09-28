@@ -63,20 +63,23 @@ library CoverLogic {
             uint256 coverable = $.coverableLtv(id, p);
             if (cur > coverable) revert ICredenceErrors.LtvAboveCoverable(cur, coverable);
         }
-        IUnderwriterPool pool = IUnderwriterPool($.w.pool);
-        (premium,) = pool.previewCover(req);
+        // v2 (ADR-0110): one pool computation; the pool checks `premium ≤ maxPremium` and capacity, then the market
+        // pays it in the same transaction.
+        address pool = $.w.pool;
+        uint64 policyId;
+        (policyId, premium) = IUnderwriterPool(pool).writeCover(req, maxPremium);
         if (premium > maxPremium) revert ICredenceErrors.PremiumAboveMax(premium, maxPremium);
         IERC20 token = IERC20(p.loanToken);
         if (addToDebt) {
             $.mintDebt(id, p, pos, premium);
-            token.safeTransfer(address(pool), premium);
+            token.safeTransfer(pool, premium);
         } else {
-            token.safeTransferFrom(b, address(pool), premium);
+            token.safeTransferFrom(b, pool, premium);
         }
-        uint64 policyId = pool.writeCover(req, premium);
         pos.coverClosureId = upcoming;
         $.covered[id][upcoming] += pos.collateral;
         emit ICredenceMarketEvents.CoverBought(id, b, upcoming, policyId, premium, addToDebt, auto_);
+        if (auto_) emit ICredenceMarketEvents.AutoCoverApplied(id, b, upcoming, premium, $.debtOf(id, pos));
     }
 
     /// @dev §8.4.3 `enforceBell`: `bellAt ≤ now < closeAt` in REGULAR. SAFE and already-covered borrowers are

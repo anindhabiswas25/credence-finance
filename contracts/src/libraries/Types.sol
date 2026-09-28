@@ -317,20 +317,47 @@ struct CoverRequest {
     uint256 debtProjected; // loan units, D × (1 + r_b × τ) (R-08)
 }
 
+/// @notice One venue closure of the UnderwriterPool (R-10). v2 (S3): the flows of the epoch are recorded, so
+///         INV-POOL-01 can be checked from state and `EpochSettled` alone.
 struct Epoch {
-    uint64 epochId;
-    uint40 bellWindowAt;
+    uint64 epochId; // calendar session index of the close that starts the closure (venueEpoch)
+    uint40 bellWindowAt; // close − 2 h
+    uint40 bellAt; // close − 15 m (J snapshot, the Bell deadline)
     uint40 closeAt;
-    uint40 reopenAt;
-    uint128 premiums;
-    uint128 lossesPaid;
-    uint128 pendingLossReserve; // R-11
+    uint40 reopenAt; // the next session's open
+    EpochPhase phase;
+    uint32 policies;
+    uint128 premiums; // written for this epoch (unearned until settlement)
+    uint128 riskFees; // credited while the epoch was open
+    uint128 penalties;
+    uint128 bonds;
+    int128 backstopPnl; // realised GDA P&L while the epoch was open
+    uint128 lossesPaid; // shortfalls paid while the epoch was open
+    uint128 pendingLossReserve; // R-11: worst covered loss of assets whose REOPEN had not completed at settlement
     uint128 equityAtRisk; // J snapshot at the Bell deadline
-    uint128 sharePriceAfter; // WAD
+    uint128 navBefore; // NAV when the epoch opened
+    uint128 navAfter; // NAV at settlement (after the premiums are released, before withdrawals / deposits)
+    uint128 sharePriceAfter; // WAD, written at settlement
     uint128 withdrawSharesQueued;
+    uint128 withdrawAssetsReserved; // withdrawSharesQueued × sharePriceAfter, reserved at settlement
     uint128 depositAssetsQueued;
-    uint64 lossVectorSlot; // pointer to the packed K-vector (R-13)
-    bool settled;
+    uint128 depositSharesMinted; // minted at settlement, held by the pool until claimDeposit
+}
+
+enum EpochPhase {
+    NONE,
+    OPEN, // Bell window opened: covers are written against it
+    SNAPSHOT, // Bell deadline passed: J is frozen
+    SETTLED
+}
+
+/// @notice The pool's backstop inventory of one collateral token (R-12): valued at min(cost, V × (1 − κ)).
+struct Inventory {
+    address token;
+    uint128 qty; // held by the pool or listed in a GDA
+    uint128 cost; // loan units paid for `qty`
+    uint128 inGda; // part of `qty` handed to the auction house for GDA resale
+    uint64 gdaId; // the running GDA (0 = none)
 }
 
 // ─────────────────────────────── auctions ───────────────────────────────
@@ -343,14 +370,43 @@ struct Auction {
     bytes32 marketId;
     bytes32 assetId;
     uint64 closureId;
-    uint32 tranche;
+    uint64 venueEpoch; // the pool epoch a REOPEN auction belongs to (R-10)
+    uint32 tranche; // 0, 1, … for lots beyond 256 positions (same schedule)
     uint40[4] deadlines;
     uint128 lot; // Q, collateral units
-    uint128 reserve; // R, WAD per token
+    uint128 reserve; // R, WAD per token (final at clearing for the open kinds, R-19)
     uint128 pStar; // WAD per token
     uint128 filled; // collateral units sold to bidders
     uint128 qPool; // collateral units bought by the pool
     uint128 proceeds; // loan units
+    uint128 startPrice; // V at creation (INTRADAY, EMERGENCY) or at lot fixing (PRECLOSE), WAD
     uint16 bidCount;
     uint16 positionCount;
+    bool full; // no more positions join (a tranche follows)
+    bool settled; // every position settled in the market, or an empty lot (ADR-0107 §7)
+}
+
+/// @notice One bid (sealed or open). `escrow` is the loan units held for it (bond included).
+struct Bid {
+    bytes32 commitment; // sealed bids only
+    uint128 maxNotional; // sealed bids: declared at commit (R-04)
+    uint128 qty;
+    uint128 price; // WAD per token
+    uint128 escrow;
+    uint128 fill; // set at clearing
+    bool revealed; // open bids: true when placed
+    bool claimed;
+}
+
+/// @notice A continuous GDA over the pool's backstop inventory (F-4.5e).
+struct Gda {
+    bytes32 assetId;
+    address token;
+    uint128 qty; // initial
+    uint128 sold;
+    uint128 k; // WAD
+    uint128 decay; // λ_d, WAD per second
+    uint128 emissionPerSec; // r_e, token units per second
+    uint40 start;
+    bool active;
 }

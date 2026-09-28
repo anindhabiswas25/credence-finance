@@ -84,13 +84,17 @@ interface ICredenceMarketEvents {
     event BellEnforced(bytes32 indexed id, address indexed owner, uint64 closureId, uint8 outcome);
     event Flagged(bytes32 indexed id, address indexed owner, uint64 auctionId, AuctionKind kind);
     event LotReleased(uint64 indexed auctionId, address indexed owner, uint256 qty);
+    /// @dev v2 (ADR-0110): replaces v1's `PositionSettled(auctionId, owner, proceeds, penalty, repaid, refund)`.
     event PositionSettled(
+        bytes32 indexed marketId,
+        address indexed borrower,
         uint64 indexed auctionId,
-        address indexed owner,
+        uint256 collateralSold,
         uint256 proceeds,
         uint256 penalty,
-        uint256 repaid,
-        uint256 refund
+        uint256 shortfall,
+        uint256 refund,
+        uint256 debtAfter
     );
     event Shortfall(
         bytes32 indexed id,
@@ -116,6 +120,14 @@ interface ICredenceMarketEvents {
     event LotsReleased(uint64 indexed auctionId, uint256 totalQty, uint256 positions);
     event LotCleared(uint64 indexed auctionId, uint256 proceeds, uint256 blendedPrice);
     event Dequeued(bytes32 indexed id, address indexed owner, uint64 auctionId);
+    // v2 additions (S3)
+    event AutoCoverApplied(
+        bytes32 indexed marketId,
+        address indexed borrower,
+        uint64 closureId,
+        uint256 premium,
+        uint256 debtAfter
+    );
 }
 
 interface ISeniorVaultEvents {
@@ -130,59 +142,112 @@ interface ISeniorVaultEvents {
     event AllocatorSet(address allocator);
 }
 
+/// @dev v2 (S3, ADR-0110): every pool state change the indexer projects carries its result, so handlers need no
+///      state reads (Guide §10.3).
 interface IUnderwriterPoolEvents {
-    event EpochOpened(uint64 indexed e);
-    event EpochSnapshotted(uint64 indexed e, uint256 equity);
+    event EpochOpened(
+        uint64 indexed epochId,
+        bytes32 venue,
+        uint40 bellWindowAt,
+        uint40 bellAt,
+        uint40 closeAt,
+        uint40 reopenAt,
+        uint256 navBefore,
+        uint256 withdrawSharesQueued
+    );
+    event EpochSnapshotted(uint64 indexed epochId, uint256 equityAtRisk, uint256 worstLoss);
     event EpochSettled(
-        uint64 indexed e,
+        uint64 indexed epochId,
         uint256 premiums,
-        uint256 fees,
+        uint256 riskFees,
         uint256 penalties,
         uint256 bonds,
-        uint256 losses,
+        int256 backstopPnl,
+        uint256 lossesPaid,
+        uint256 pendingLossReserve,
+        uint256 navAfter,
         uint256 sharePriceAfter
+    );
+    event EpochQueuesProcessed(
+        uint64 indexed epochId,
+        uint256 sharesBurned,
+        uint256 assetsReserved,
+        uint256 depositAssets,
+        uint256 sharesMinted
     );
     event CoverWritten(
         uint64 indexed policyId,
-        bytes32 marketId,
-        address owner,
-        uint64 epoch,
+        bytes32 indexed marketId,
+        address indexed borrower,
+        uint64 epochId,
+        bytes32 assetId,
         uint256 premium,
-        uint256 uAfter
+        uint256 uAfter,
+        uint256 worstLoss
     );
-    event ShortfallPaid(uint256 amount);
-    event BackstopBought(bytes32 asset, uint256 qty, uint256 price);
-    event DepositQueued(uint64 indexed epoch, address indexed owner, uint256 assets);
-    event DepositClaimed(uint64 indexed epoch, address indexed owner, uint256 shares);
-    event WithdrawRequested(uint64 indexed epoch, address indexed owner, uint256 shares);
-    event WithdrawClaimed(uint64 indexed epoch, address indexed owner, uint256 assets);
-    event RiskFeeCredited(uint256 assets);
-    event PenaltyCredited(uint256 assets);
-    event BondCredited(uint256 assets);
+    event Deposited(address indexed caller, address indexed owner, uint256 assets, uint256 shares);
+    event DepositQueued(uint64 indexed epochId, address indexed owner, uint256 assets);
+    event DepositClaimed(uint64 indexed epochId, address indexed owner, uint256 shares);
+    event WithdrawRequested(uint64 indexed epochId, address indexed owner, uint256 shares);
+    event WithdrawClaimed(uint64 indexed epochId, address indexed owner, uint256 assets, uint256 stillOwed);
+    event ShortfallPaid(uint64 indexed epochId, uint256 requested, uint256 paid);
+    event RiskFeeCredited(uint64 indexed epochId, uint256 assets);
+    event PenaltyCredited(uint64 indexed epochId, uint256 assets);
+    event BondCredited(uint64 indexed epochId, uint256 assets);
+    event BackstopBought(
+        uint64 indexed epochId, bytes32 indexed assetId, uint256 qty, uint256 price, uint256 paid
+    );
+    event InventoryListed(bytes32 indexed assetId, uint64 gdaId, uint256 qty);
+    event InventorySold(bytes32 indexed assetId, uint256 qty, uint256 proceeds, int256 realisedPnl);
+    event LossReserveReleased(uint64 indexed epochId, bytes32 indexed assetId, uint256 amount);
     event FallbackAdvanced(bytes32 indexed marketId, uint256 qty, uint256 price, uint256 requestId);
 }
 
+/// @dev v2 (S3, ADR-0110): see IUnderwriterPoolEvents.
 interface IAuctionHouseEvents {
     event AuctionCreated(
-        uint64 indexed id, AuctionKind kind, bytes32 asset, uint64 closureId, uint40[4] deadlines
+        uint64 indexed id,
+        AuctionKind kind,
+        bytes32 indexed marketId,
+        bytes32 assetId,
+        uint64 closureId,
+        uint64 venueEpoch,
+        uint32 tranche,
+        uint40[4] deadlines
     );
-    event LotsFixed(uint64 indexed id, uint256 lot, uint256 reserve);
-    event BidCommitted(uint64 indexed id, address indexed bidder, bytes32 c, uint256 maxNotional);
-    event BidRevealed(uint64 indexed id, address indexed bidder, uint256 qty, uint256 price);
-    event BidPlaced(uint64 indexed id, address indexed bidder, uint256 qty, uint256 price);
-    event AuctionCleared(uint64 indexed id, uint256 pStar, uint256 filled, uint256 qPool, uint256 proceeds);
-    event BondForfeited(uint64 indexed id, address bidder, uint256 bond);
+    event LotsFixed(uint64 indexed id, uint256 lot, uint256 reserve, uint256 positions);
+    event BidCommitted(
+        uint64 indexed id, address indexed bidder, bytes32 commitment, uint256 maxNotional, uint256 bond
+    );
+    event BidRevealed(uint64 indexed id, address indexed bidder, uint256 qty, uint256 price, uint256 escrow);
+    event BidPlaced(uint64 indexed id, address indexed bidder, uint256 qty, uint256 price, uint256 escrow);
+    event AuctionCleared(
+        uint64 indexed id,
+        uint256 pStar,
+        uint256 filled,
+        uint256 qPool,
+        uint256 proceeds,
+        uint256 blendedPrice,
+        uint256 reserve
+    );
+    event BondForfeited(uint64 indexed id, address indexed bidder, uint256 bond);
     event Claimed(uint64 indexed id, address indexed bidder, uint256 tokens, uint256 refund);
+    event LotSettled(uint64 indexed id);
+    event ReopenCompleted(bytes32 indexed assetId, uint64 closureId, uint64 venueEpoch);
     event GdaStarted(
         uint64 indexed gdaId,
-        bytes32 asset,
+        bytes32 indexed assetId,
         address token,
         uint256 qty,
         uint256 k,
         uint256 decay,
-        uint256 emissionPerSec
+        uint256 emissionPerSec,
+        uint40 start
     );
-    event GdaBuy(uint64 indexed gdaId, address indexed buyer, uint256 qty, uint256 cost);
+    event GdaBought(uint64 indexed gdaId, address indexed buyer, uint256 qty, uint256 cost);
+    event GdaClosed(uint64 indexed gdaId, uint256 unsold);
+    event TimingsSet(AuctionKind indexed kind, uint40[4] offsets);
+    event LimitsSet(uint16 maxBids, uint128 minNotional, uint16 bondBps);
 }
 
 interface ISettlementEvents {

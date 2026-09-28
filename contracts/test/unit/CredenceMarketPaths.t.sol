@@ -135,9 +135,13 @@ contract CredenceMarketPathsTest is CoreFixture {
         vm.startPrank(address(vault));
         vm.expectRevert(ICredenceErrors.ZeroAmount.selector);
         market.supply(idNVDA, 0);
-        vm.expectRevert(abi.encodeWithSelector(ICredenceErrors.CapExceeded.selector, 2_000_000e6 + 1, 2_000_000e6));
+        vm.expectRevert(
+            abi.encodeWithSelector(ICredenceErrors.CapExceeded.selector, 2_000_000e6 + 1, 2_000_000e6)
+        );
         market.supply(idNVDA, 1_800_000e6 + 1);
-        vm.expectRevert(abi.encodeWithSelector(ICredenceErrors.InsufficientLiquidity.selector, 300_000e6, 200_000e6));
+        vm.expectRevert(
+            abi.encodeWithSelector(ICredenceErrors.InsufficientLiquidity.selector, 300_000e6, 200_000e6)
+        );
         market.withdrawSupply(idNVDA, 300_000e6, lena);
         vm.stopPrank();
     }
@@ -164,7 +168,9 @@ contract CredenceMarketPathsTest is CoreFixture {
         clk.setState(NVDA, ClockState.EXTENDED);
         vm.prank(bob);
         vm.expectRevert(
-            abi.encodeWithSelector(ICredenceErrors.ActionNotAllowedInState.selector, MarketAction.BUY_COVER, ClockState.EXTENDED)
+            abi.encodeWithSelector(
+                ICredenceErrors.ActionNotAllowedInState.selector, MarketAction.BUY_COVER, ClockState.EXTENDED
+            )
         );
         market.borrowWithCover(idNVDA, 1e6, bob, 10e6);
         // zero / bad inputs
@@ -221,7 +227,9 @@ contract CredenceMarketPathsTest is CoreFixture {
         vm.prank(bob);
         vm.expectRevert(
             abi.encodeWithSelector(
-                ICredenceErrors.ActionNotAllowedInState.selector, MarketAction.WITHDRAW_COLLATERAL, ClockState.REOPEN
+                ICredenceErrors.ActionNotAllowedInState.selector,
+                MarketAction.WITHDRAW_COLLATERAL,
+                ClockState.REOPEN
             )
         );
         market.withdrawCollateral(idNVDA, 1e18, bob);
@@ -295,7 +303,9 @@ contract CredenceMarketPathsTest is CoreFixture {
         clk.setState(NVDA, ClockState.CLOSED);
         vm.expectRevert(
             abi.encodeWithSelector(
-                ICredenceErrors.ActionNotAllowedInState.selector, MarketAction.FLAG_FOR_AUCTION, ClockState.CLOSED
+                ICredenceErrors.ActionNotAllowedInState.selector,
+                MarketAction.FLAG_FOR_AUCTION,
+                ClockState.CLOSED
             )
         );
         ah.fix(id);
@@ -388,7 +398,9 @@ contract CredenceMarketPathsTest is CoreFixture {
         assertEq(vault.queueLength(), 0);
         assertEq(vault.maxRedeem(lena), vault.balanceOf(lena));
         vm.prank(bob);
-        vm.expectRevert(abi.encodeWithSelector(ICredenceErrors.CapExceeded.selector, 2_000_001e6 + 0, 2_000_000e6));
+        vm.expectRevert(
+            abi.encodeWithSelector(ICredenceErrors.CapExceeded.selector, 2_000_001e6 + 0, 2_000_000e6)
+        );
         vault.allocate(idAAPL, 2_000_001e6 - 100_000e6 + 0);
         vm.prank(bob);
         vm.expectRevert(abi.encodeWithSelector(ICredenceErrors.UnknownMarket.selector, bytes32(uint256(7))));

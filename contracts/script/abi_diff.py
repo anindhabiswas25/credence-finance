@@ -4,21 +4,56 @@
 Every entry is keyed by its signature (type + name + input types). The check fails if an entry of `old` is
 missing from `new` (a breaking change) unless the signature is listed in ALLOWED_BREAKS with a reason.
 
-    python3 contracts/script/abi_diff.py deployments/abis/v0 deployments/abis/v1 [--write CHANGELOG.md]
+    python3 contracts/script/abi_diff.py deployments/abis/v1 deployments/abis/v2 [--write CHANGELOG.md]
 """
 import json
 import sys
 from pathlib import Path
 
-# Deliberate breaking changes between v0 and v1, with the rule that requires them.
-ALLOWED_BREAKS = {
-    "event ReportAccepted(bytes32,uint8,uint256,uint40,uint64)": "R-25: replaced by the 6-argument event with marketStatus",
-    # R-24 / ADR-0108: the engine is a router in front of two Stylus programs, so its auction math forwards (pure → view).
-    # Same selectors and outputs; both are called with STATICCALL, so no caller changes.
-    "function liquidationLot(uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint8,uint8)": "R-24: pure → view",
-    "function precloseLot(uint256,uint256,uint256,uint256,uint256,uint256,uint8,uint8)": "R-24: pure → view",
-    "function clear(uint256[],uint256[],bytes32[],uint256,uint256)": "R-24: pure → view",
+# Deliberate breaking changes per release pair (old dir name → new dir name), with the rule that requires them.
+_V1_POOL = "ADR-0110: v2 pool events carry the epoch and the resulting state (indexer projections, Guide §10.3)"
+_V1_AH = "ADR-0110: v2 auction events carry market, epoch, tranche and escrow (indexer projections)"
+ALLOWED = {
+    ("v0", "v1"): {
+        "event ReportAccepted(bytes32,uint8,uint256,uint40,uint64)": "R-25: replaced by the 6-argument event with marketStatus",
+        # R-24 / ADR-0108: the engine is a router in front of two Stylus programs, so its auction math forwards (pure →
+        # view). Same selectors and outputs; both are called with STATICCALL, so no caller changes.
+        "function liquidationLot(uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint8,uint8)": "R-24: pure → view",
+        "function precloseLot(uint256,uint256,uint256,uint256,uint256,uint256,uint8,uint8)": "R-24: pure → view",
+        "function clear(uint256[],uint256[],bytes32[],uint256,uint256)": "R-24: pure → view",
+    },
+    ("v1", "v2"): {
+        "event PositionSettled(uint64,address,uint256,uint256,uint256,uint256)":
+            "ADR-0110 (PM ruling S2 BE-backend #1): marketId, borrower, auctionId, collateralSold, proceeds, penalty, "
+            "shortfall, refund, debtAfter",
+        "function writeCover((bytes32,bytes32,address,uint8,uint16,uint64,uint64,uint256,uint256),uint256)":
+            "ADR-0110: one pool computation per cover; the second argument is maxPremium and it returns the premium",
+        "function backstopBuy(bytes32,address,uint256,uint256)": "ADR-0110: takes the auctionId, returns the amount paid",
+        "function epoch(uint64)": "ADR-0110: the Epoch struct records the epoch's flows (INV-POOL-01)",
+        "function auction(uint64)": "ADR-0110: the Auction struct adds venueEpoch, startPrice, full, settled",
+        "function startGda(bytes32,address,uint256,uint256,uint256,uint256)": "ADR-0110: returns the gdaId",
+        "function gdaBuy(uint64,uint256,uint256)": "ADR-0110: returns the cost",
+        "event EpochOpened(uint64)": _V1_POOL,
+        "event EpochSnapshotted(uint64,uint256)": _V1_POOL,
+        "event EpochSettled(uint64,uint256,uint256,uint256,uint256,uint256,uint256)": _V1_POOL,
+        "event CoverWritten(uint64,bytes32,address,uint64,uint256,uint256)": _V1_POOL,
+        "event ShortfallPaid(uint256)": _V1_POOL,
+        "event BackstopBought(bytes32,uint256,uint256)": _V1_POOL,
+        "event WithdrawClaimed(uint64,address,uint256)": _V1_POOL,
+        "event RiskFeeCredited(uint256)": _V1_POOL,
+        "event PenaltyCredited(uint256)": _V1_POOL,
+        "event BondCredited(uint256)": _V1_POOL,
+        "event AuctionCreated(uint64,uint8,bytes32,uint64,uint40[4])": _V1_AH,
+        "event LotsFixed(uint64,uint256,uint256)": _V1_AH,
+        "event BidCommitted(uint64,address,bytes32,uint256)": _V1_AH,
+        "event BidRevealed(uint64,address,uint256,uint256)": _V1_AH,
+        "event BidPlaced(uint64,address,uint256,uint256)": _V1_AH,
+        "event AuctionCleared(uint64,uint256,uint256,uint256,uint256)": _V1_AH,
+        "event GdaStarted(uint64,bytes32,address,uint256,uint256,uint256,uint256)": _V1_AH,
+        "event GdaBuy(uint64,address,uint256,uint256)": "ADR-0110: renamed GdaBought (S3 brief A2)",
+    },
 }
+ALLOWED_BREAKS = {}
 
 
 def canon(t):
@@ -44,6 +79,7 @@ def main():
     old_dir, new_dir = sys.argv[1], sys.argv[2]
     write = sys.argv[sys.argv.index("--write") + 1] if "--write" in sys.argv else None
     old, new = load(old_dir), load(new_dir)
+    ALLOWED_BREAKS.update(ALLOWED.get((Path(old_dir).name, Path(new_dir).name), {}))
     breaks, lines = [], []
     lines.append(f"# ABI changes {Path(old_dir).name} → {Path(new_dir).name}\n")
     lines.append("Generated by `contracts/script/abi_diff.py`. Additive unless listed under *Breaking*.\n")

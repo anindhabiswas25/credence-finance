@@ -4,7 +4,13 @@ pragma solidity 0.8.30;
 import {Test} from "forge-std/Test.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {
-    MarketParams, MarketKind, RateParams, MarketWiring, RiskParams, ClockState, ClosureType
+    MarketParams,
+    MarketKind,
+    RateParams,
+    MarketWiring,
+    RiskParams,
+    ClockState,
+    ClosureType
 } from "../../src/libraries/Types.sol";
 import {CredenceMarket} from "../../src/core/CredenceMarket.sol";
 import {SeniorVault} from "../../src/core/SeniorVault.sol";
@@ -68,7 +74,9 @@ abstract contract CoreFixture is Test {
         reserve = new ProtocolReserve(timelock, address(usdc), address(treasury));
         guardianC = new CredenceGuardian(timelock, safe);
         market = new CredenceMarket(timelock, address(guardianC));
-        vault = new SeniorVault(IERC20(address(usdc)), "Credence Senior USDC", "csUSDC", timelock, address(market), allocator);
+        vault = new SeniorVault(
+            IERC20(address(usdc)), "Credence Senior USDC", "csUSDC", timelock, address(market), allocator
+        );
 
         market.initializeWiring(
             MarketWiring({

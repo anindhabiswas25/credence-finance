@@ -92,4 +92,10 @@ interface ICredenceMarket is ICredenceMarketEvents, ICredenceErrors {
     function upcomingClosureId(bytes32 id) external view returns (uint64);
     /// @notice Σ totalBorrowAssets over all markets (ProtocolReserve target, §8.10).
     function totalBorrowsAll() external view returns (uint256);
+    /// @notice v2 (S3): the pool's capacity input for one market (§9.5): the value at V_live of the collateral not
+    ///         covered for the upcoming closure, and the safe LTV of that closure (with the haircut applied).
+    function uncoveredExposure(bytes32 id)
+        external
+        view
+        returns (bytes32 assetId, uint8 closureType, uint256 uncoveredValue, uint256 safeLtv);
 }

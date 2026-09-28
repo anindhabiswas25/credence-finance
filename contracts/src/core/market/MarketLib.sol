@@ -83,7 +83,7 @@ library MarketLib {
     uint256 internal constant WITHDRAW_MIN_HF = 1.05e18; // §12.2
     uint256 internal constant REOPEN_QUEUE = 120; // §8.4.3
     uint256 internal constant FALLBACK_CLOSURE_DAYS = 4; // R-07: a 3-day holiday weekend
-    uint256 internal constant MAX_LOT_POSITIONS = 200;
+    uint256 internal constant MAX_LOT_POSITIONS = 256; // §8.7.1; beyond it, a tranche (v2)
     uint256 internal constant MAX_MARKETS = 64;
 
     // ───────────── wiring ─────────────
@@ -318,6 +318,8 @@ library MarketLib {
             revert ICredenceErrors.TooManyPositions(lot.borrowers.length + 1, MAX_LOT_POSITIONS);
         }
         lot.borrowers.push(b);
+        // the lot is full: the next borrower joins the next tranche (same schedule, §8.7.1)
+        if (lot.borrowers.length == MAX_LOT_POSITIONS) auctionHouse($).nextTranche(auctionId);
         $.entries[auctionId][b] = LotEntry({
             qty: 0, qtyBefore: 0, targetLtv: targetLtv, index: uint32(lot.borrowers.length), settled: false
         });

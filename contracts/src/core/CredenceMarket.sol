@@ -14,7 +14,8 @@ import {
     MarketWiring,
     LotInfo,
     ClockData,
-    AuctionKind
+    AuctionKind,
+    ClosureType
 } from "../libraries/Types.sol";
 import {WadMath} from "../libraries/WadMath.sol";
 import {SharesMath} from "../libraries/SharesMath.sol";
@@ -438,6 +439,22 @@ contract CredenceMarket is ICredenceMarket, ReentrancyGuardTransient {
         for (uint256 i; i < $.ids.length; ++i) {
             total += $.accruedView($.ids[i]).totalBorrowAssets;
         }
+    }
+
+    /// @inheritdoc ICredenceMarket
+    function uncoveredExposure(bytes32 id)
+        external
+        view
+        returns (bytes32 assetId, uint8 closureType, uint256 uncoveredValue, uint256 safeLtv)
+    {
+        MarketParams memory p = $.market(id);
+        assetId = p.assetId;
+        (,, ClosureType t) = $.clock().closureWindow(assetId);
+        closureType = uint8(t);
+        uint256 total = $.state[id].totalCollateral;
+        uint256 cov = $.covered[id][$.upcoming(assetId)];
+        if (total > cov) uncoveredValue = $.valueNow(id, assetId, total - cov);
+        safeLtv = $.safeLtv(assetId, $.maxLtvEff(id, p.maxLtv));
     }
 
     /// @inheritdoc ICredenceMarket

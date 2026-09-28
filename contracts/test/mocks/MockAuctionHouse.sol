@@ -13,6 +13,7 @@ contract MockAuctionHouse {
     mapping(bytes32 => uint64) public idOf;
     mapping(uint64 => bool) public settled;
     mapping(uint64 => uint256) public lotQty;
+    bytes32[] internal keys;
 
     function setMarket(address m) external {
         market = ICredenceMarket(m);
@@ -28,6 +29,16 @@ contract MockAuctionHouse {
         if (id == 0) {
             id = nextId++;
             idOf[key] = id;
+            keys.push(key);
+        }
+    }
+
+    /// @dev v2: a full lot hands new positions to a fresh tranche (the key now maps to it).
+    function nextTranche(uint64 id) external returns (uint64 t) {
+        require(msg.sender == address(market), "only market");
+        t = nextId++;
+        for (uint256 i; i < keys.length; ++i) {
+            if (idOf[keys[i]] == id) idOf[keys[i]] = t;
         }
     }
 

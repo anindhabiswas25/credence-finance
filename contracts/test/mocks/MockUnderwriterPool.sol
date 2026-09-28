@@ -3,6 +3,7 @@ pragma solidity 0.8.30;
 
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {CoverRequest} from "../../src/libraries/Types.sol";
+import {ICredenceErrors} from "../../src/libraries/Errors.sol";
 
 /// @notice Stand-in for the S3 UnderwriterPool with the market-facing half of its interface: quotes a premium the
 ///         test injects, records policies, keeps credited fees / penalties, and pays shortfalls from its balance
@@ -48,13 +49,14 @@ contract MockUnderwriterPool {
         return (premium, uAfter);
     }
 
-    function writeCover(CoverRequest calldata r, uint256 p) external returns (uint64) {
+    /// @dev v2 protocol (ADR-0110): the pool quotes once and the market pays in the same transaction.
+    function writeCover(CoverRequest calldata r, uint256 maxPremium) external returns (uint64, uint256) {
         require(msg.sender == market, "only market");
         require(!capacityFull, "capacity");
-        require(p == premium, "premium changed");
+        if (premium > maxPremium) revert ICredenceErrors.PremiumAboveMax(premium, maxPremium);
         _last = r;
-        premiumsReceived += p;
-        return ++policies;
+        premiumsReceived += premium;
+        return (++policies, premium);
     }
 
     function lastRequest() external view returns (CoverRequest memory) {

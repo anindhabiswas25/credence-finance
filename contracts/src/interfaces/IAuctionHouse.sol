@@ -1,28 +1,41 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity 0.8.30;
 
-import {AuctionKind, Auction} from "../libraries/Types.sol";
+import {AuctionKind, Auction, Bid, Gda} from "../libraries/Types.sol";
 import {ICredenceErrors} from "../libraries/Errors.sol";
 import {IAuctionHouseEvents} from "../libraries/Events.sol";
 
-/// @title Uniform-price batch auctions for every liquidation (Build Guide §8.7). Implemented in S3.
+/// @title Uniform-price batch auctions for every liquidation (Build Guide §8.7). Interface v2 (S3, ADR-0110).
 /// @notice Commitment = keccak256(abi.encode(block.chainid, address(this), auctionId, msg.sender, qty, price, salt)).
+///         Deadlines = [lotFixAt, biddingStartAt, commitEnd (REOPEN) / biddingEnd, clearAt], phase extension included.
 interface IAuctionHouse is IAuctionHouseEvents, ICredenceErrors {
+    // ── market ──
+    /// @notice onlyMarket: the joinable auction of (kind, market, closure), or a new one (same schedule for a
+    ///         REOPEN / PRECLOSE closure; a new 60 s / 5 min batch for INTRADAY / EMERGENCY once the lot is fixed).
     function getOrCreate(AuctionKind k, bytes32 marketId, bytes32 assetId, uint64 closureId)
         external
-        returns (uint64 auctionId); // onlyMarket
-    function lotSettled(uint64 auctionId) external; // onlyMarket
-    // keeper steps (permissionless, tipped)
+        returns (uint64 auctionId);
+    /// @notice onlyMarket: `auctionId` holds 256 positions; the next tranche (same schedule) takes new ones.
+    function nextTranche(uint64 auctionId) external returns (uint64 trancheId);
+    /// @notice onlyMarket: every position of the lot is settled.
+    function lotSettled(uint64 auctionId) external;
+
+    // ── keeper steps (permissionless, tipped) ──
     function fixLots(uint64 auctionId) external;
     function clear(uint64 auctionId) external;
-    // sealed bidding (REOPEN)
-    function commitBid(uint64 auctionId, bytes32 commitment, uint128 maxNotional) external; // bond = 10% × maxNotional (R-04)
+    /// @notice Ends an asset's REOPEN (clock.markReopenComplete) once its queue window is over and every REOPEN
+    ///         tranche of the closure has cleared, including when none was ever created.
+    function completeReopen(bytes32 assetId) external;
+
+    // ── sealed bidding (REOPEN) ──
+    function commitBid(uint64 auctionId, bytes32 commitment, uint128 maxNotional) external; // bond = 10% (R-04)
     function revealBid(uint64 auctionId, uint128 qty, uint128 price, bytes32 salt) external;
-    // open bidding (INTRADAY, EMERGENCY, PRECLOSE)
+    // ── open bidding (INTRADAY, EMERGENCY, PRECLOSE) ──
     function placeBid(uint64 auctionId, uint128 qty, uint128 price) external;
-    // after clearing
+    // ── after clearing ──
     function claim(uint64 auctionId) external;
-    // GDA resale of pool inventory
+
+    // ── GDA resale of pool inventory ──
     function startGda(
         bytes32 assetId,
         address token,
@@ -30,10 +43,19 @@ interface IAuctionHouse is IAuctionHouseEvents, ICredenceErrors {
         uint256 k,
         uint256 decay,
         uint256 emissionPerSec
-    ) external; // onlyPool
-    function gdaBuy(uint64 gdaId, uint256 qty, uint256 maxCost) external;
+    ) external returns (uint64 gdaId); // onlyPool
+    function gdaBuy(uint64 gdaId, uint256 qty, uint256 maxCost) external returns (uint256 cost);
+    /// @notice onlyPool: ends a GDA and returns the unsold tokens to the pool.
+    function closeGda(uint64 gdaId) external returns (uint256 unsold);
     function gdaPrice(uint64 gdaId, uint256 qty) external view returns (uint256);
-    // views
+
+    // ── views ──
     function allReopenLotsSettled(bytes32 venue, uint64 epochId) external view returns (bool);
+    /// @notice Every REOPEN auction of (asset, closure) cleared and settled (true when there was none).
+    function reopenSettled(bytes32 assetId, uint64 closureId) external view returns (bool);
     function auction(uint64 auctionId) external view returns (Auction memory);
+    function bid(uint64 auctionId, address bidder) external view returns (Bid memory);
+    function bidders(uint64 auctionId) external view returns (address[] memory);
+    function gda(uint64 gdaId) external view returns (Gda memory);
+    function nextAuctionId() external view returns (uint64);
 }

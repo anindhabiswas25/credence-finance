@@ -131,4 +131,33 @@ interface ICredenceErrors {
     // ── gas (v1.1, S3; ADR-0109) ──
     /// @notice A guarded try-call failed because the caller supplied too little gas (not because the callee reverted).
     error InsufficientGas();
+
+    // ── pool (v2, S3; ADR-0110) ──
+    error WrongVenue(bytes32 venue);
+    error NotInBellWindow(uint40 bellWindowAt, uint40 closeAt);
+    error EpochNotOpen(uint64 epochId);
+    error EpochStillOpen(uint64 epochId); // an earlier epoch is unsettled
+    error EpochNotReady(uint64 epochId, uint8 reason); // settleEpoch preconditions (§8.6.3), see UnderwriterPool
+    error SnapshotTooEarly(uint40 bellAt);
+    error PolicyEpochMismatch(uint64 given, uint64 active);
+    error InsufficientShares(uint256 have, uint256 want);
+    error NothingQueued(uint64 epochId);
+    error ClaimOrder(uint64 olderEpochId); // FIFO: an older epoch still has unpaid withdrawals
+    error NoInventory(bytes32 assetId);
+    error GdaRunning(uint64 gdaId);
+    error ReserveNotReleasable(uint64 epochId, bytes32 assetId);
+    error NotImplemented(); // fallbackAdvance until S4
+
+    // ── auction house (v2, S3; ADR-0110) ──
+    error UnknownAuction(uint64 auctionId);
+    error WrongKind(uint8 kind);
+    error TooEarly(uint40 at);
+    error TooLate(uint40 at);
+    error LotNotFixed(uint64 auctionId);
+    error AlreadyBid(uint64 auctionId, address bidder);
+    error NoBid(uint64 auctionId, address bidder);
+    error ReopenNotOver(bytes32 assetId);
+    error UnknownGda(uint64 gdaId);
+    error GdaInsufficient(uint256 available, uint256 wanted);
+    error CostAboveMax(uint256 cost, uint256 maxCost);
 }
