@@ -1,5 +1,6 @@
 {
  "joint/joint-fe9059bb.json": "d857cf3d4dba3fe65979227ff6c4accf8f2615d5e44c0d03ee9e4eb0bec55c2b",
+ "quality/README.md": "e85493e695c91dbf1b3aedeb0986f5ac569f03c10ee4359a8ca4a5c91f44cb9d",
  "quality/quality-e1bec843f52147d3.json": "f878aa4559e9b2ab4c28e635194be0aff0f83ec92288a0f9e185e4d55ddabc7f",
  "scenarios/AAPL-XNAS-1-366013c4.json": "d6e34e13795db5ffb3d0afa4fa79a3a29ddd9025560494958f8f230bf8e11485",
  "scenarios/AAPL-XNAS-2-43644d8c.json": "1757f9d747a62818289e928ecaa46f7186e5390d71e6713b4e04b60e71781cd5",
@@ -13,6 +14,7 @@
  "scenarios/NVDA-XNAS-1-b35c31e5.json": "e5c1748e2f1336994099d5fb948f403cc4b0df9161a382e3916e806f92640354",
  "scenarios/NVDA-XNAS-2-4e8e6fe1.json": "94a1fe9c81364e311fbde21c0afb91fd3e17a810d0924ef792d67cd01fd94fe6",
  "scenarios/NVDA-XNAS-3-c0ce910d.json": "7a995ad85748f8ead2cbfd082824b1762389559c6665b77b47b268df316b5a01",
+ "scenarios/README.md": "305c7ef4ce1ab083cef95970f871424461baa0fc6c1262b68f09d109931eef7f",
  "scenarios/SPY-XNAS-1-35a41612.json": "aecbea3d8b60f906d59ec4b64293ed1b356cf4052938a2996e9c7769cd823407",
  "scenarios/SPY-XNAS-2-db083a0f.json": "29432d0783f10a60759fad44b270a74cb9316c87f8b1f0f3632d018369b35f68",
  "scenarios/SPY-XNAS-3-9c4d6b61.json": "29a71f98d859295c31bea4dc766893b1886cbfc156dbdcd608a1bfe1c35093b0",
@@ -20,5 +22,6 @@
  "scenarios/TSLA-XNAS-2-0558a953.json": "93af3a012a858b6af3a914ef9d8b74a890c232eff0f02f32f11a7fbfc8b94872",
  "scenarios/TSLA-XNAS-3-72ba3183.json": "8c59582aba76cd7c9418bbc9755ca6a625bfba39126b86a4c27e7df6b667574a",
  "sigma/sigma-a5cbc91633743fa4.json": "9572831394ec41dcf914461869c45535829a24ee0b705b23372608c8339a0bcd",
+ "validation/README.md": "0ec1ae96501ca43f3387b5cb9e8637b05458423251bf7a34fe0789a38f8e1e1d",
  "validation/validation-7c0b71bdf619d99b.json": "652406662c350ada67b6bda63a73e6b2f427194a566f3bbc103991ffa42d217f"
 }
