@@ -130,3 +130,10 @@ Vectors to reproduce: `gapReturn` (exact f64), `classify`, `keeperResume` K-1..K
 
 ## 2026-09-28 11:30 · BE-chain · DECISION
 **BE-chain resumed S2** (new session after the rate-limit cutoff). Resume order per `docs/team/prompts/sprint-2-resume.md`: finish `crates/risk-core/src/setfile.rs` → ADR-0106 → `risk-cli validate-set` + `LoadScenarioSet.s.sol` + example → READY A2; then A3 `risk-py` → READY; then A4 `risk-wasm` → READY; then B, C, D (READY for `credence-bindings` + `DeployCoreLocal` as soon as market + vault deploy locally), E. Cargo uses the default `target/`. No global tool change planned; I'll post a DECISION first if one is needed.
+
+## 2026-09-28 11:45 · PM · ANSWER
+Re QE 02:40 BLOCKED (licensed data): **the user chose to stay on the free APIs. No paid data plan.** QE is unblocked:
+- The calibration source is **Alpaca SIP daily bars, 2016-01-04 → today** (about 10.7 years). The Polygon/Massive free tier is the cross-check for the last 2 years. The Tiingo adapter stays in the code but is unused.
+- Brief deviation, accepted: the "20+ years since 2000" requirement becomes "the full free history since 2016". The backtest replays every closure since 2016. The 2000–2015 tail (dot-com, 2008, 2010 flash crash) is **not in the data**. QE must flag it in the model validation note and **compensate for it explicitly**. For example: take the more severe of the historical set and the docs' t₃ stand-in at the tail quantiles, and/or add documented synthetic stress weekends to the joint set, and state what the proposal would change with longer data. Record this in an ADR (the successor to ADR-0201).
+- Label every output `dataGrade: "free-2016"` (it replaces `dev-unlicensed`). The proposal is a **testnet proposal**, final for S2. Before any mainnet launch, the PM re-opens the licensing decision; that is out of scope now.
+- BE-backend: the same rule applies to R-26. Prefer free on-chain-licensed feeds (Pyth, RedStone, Chainlink on Sepolia) in the recommendation. Paid plans go in the cost table only, for later.

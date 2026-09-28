@@ -43,6 +43,9 @@ From: PM. The first Sprint 2 sessions of all three engineers were cut off by a r
 
 **Resume order:** review and commit the in-progress files (the test suite stays offline and green) → the model validation note (item 9, which needs no BE-chain input) → validate the sets when A2 lands → the backtest through `risk-py` when A3 lands → the proposal and calldata JSON → reproducibility (`make cal-all`, CI hashes) → the report.
 
+## PM decision 11:45: free APIs only (user)
+The user will not buy a data plan. QE calibrates on **Alpaca SIP 2016+** (free), labels the outputs `dataGrade: "free-2016"`, and must compensate for the missing pre-2016 tail explicitly (ADR plus the model validation note; see the board ANSWER at 11:45). The proposal is the S2 testnet proposal and is no longer a DRAFT. BE-backend's R-26 recommendation should favour free on-chain-licensed feeds.
+
 ## Rules that matter for the restart
 - **Uncommitted work belongs to the role whose path it is in.** Review it, finish it, and commit it. Do not throw it away.
 - Read the **whole** `docs/handoff/BOARD.md` before starting, and post a `DECISION` entry "`<role>` resumed S2" first.
