@@ -122,7 +122,7 @@ local-deploy-clock: contracts-build ## Deploy the clock + price stack and test a
 	  forge script script/DeployClockLocal.s.sol:DeployClockLocal --rpc-url $(LOCAL_RPC) --broadcast --slow
 
 # CALENDAR=synthetic (S3 A1): XNYS + USBANK centred on the chain's clock (REGULAR for 12 h from now, then a WEEKEND
-# closure, then 10 sessions), so a devnode core is pokeable today; QE's bundle is then (re)loaded with risk-load-set.
+# closure, then 10 sessions) and the equity vault seeded to every market's $$2M cap (SEED_EQUITY default 12M), so a devnode core is pokeable today; QE's bundle is then (re)loaded with risk-load-set.
 # The default (CALENDAR=real) uses the calibration calendars and is unchanged.
 CALENDAR        ?= real
 QE_BUNDLE       ?= calibration/out/risk-bundle-889d50e4.json
@@ -134,7 +134,7 @@ ifeq ($(CALENDAR),synthetic)
 	python3 $(CONTRACTS_DIR)/script/synthetic_calendar.py $$(cast block latest --field timestamp --rpc-url $(LOCAL_RPC)) $(SYNTH_CAL_DIR)
 	cd $(CONTRACTS_DIR) && PRIVATE_KEY=$(DEVNODE_KEY) RELAYER_A_SIGNERS=$(RELAYER_A_SIGNERS) \
 	  RELAYER_B_SIGNERS=$(RELAYER_B_SIGNERS) XNYS_CALENDAR=$(abspath $(SYNTH_CAL_DIR))/XNYS-synthetic.json \
-	  USBANK_CALENDAR=$(abspath $(SYNTH_CAL_DIR))/USBANK-synthetic.json \
+	  USBANK_CALENDAR=$(abspath $(SYNTH_CAL_DIR))/USBANK-synthetic.json SEED_EQUITY=$${SEED_EQUITY:-12000000000000} \
 	  forge script script/DeployCoreLocal.s.sol:DeployCoreLocal --rpc-url $(LOCAL_RPC) --broadcast --slow
 	@if [ -n "$$(cast code --rpc-url $(LOCAL_RPC) $$(jq -r .shared.riskEngine deployments/$$(cast chain-id --rpc-url $(LOCAL_RPC)).local.json) | sed 's/^0x$$//')" ] \
 	  && cast call --rpc-url $(LOCAL_RPC) $$(jq -r .shared.riskEngine deployments/$$(cast chain-id --rpc-url $(LOCAL_RPC)).local.json) 'pricing()(address)' >/dev/null 2>&1; then \
