@@ -37,4 +37,4 @@ This is the deliberate cost of the missing 2000–2015 tail. The backtest's capa
 - **Survivorship:** the comparable groups are today's large names (ADR-0203), which understates the tail. The t₃ floor partly offsets this.
 - **Discreteness:** a finite set cannot reach the continuous t₃ tail beyond 1/(2N). The G-22 premium on an N = 3,000 t₃ set is $3.59, against the docs' continuous $4.39. The chain prices on the finite set, so the doc figures overstate the premium under the same model by about 20%.
 - **z scale:** the weekend and holiday z of the chosen σ blend have sd 1.07–1.09, not 1. The sets carry that (FHS), and the t₃ comparison is in the same units the engine uses.
-- **Data:** 10.7 years of free, personal-licence data. The re-pull on licensed 2000+ data is one command (ADR-0204 §1). §5 of that ADR lists what it would change.
+- **Data:** 10.7 years of free, personal-licence data. The re-pull on licensed 2000+ data is one command (ADR-0204 §1). Its section "What longer data would change" lists what it would change.

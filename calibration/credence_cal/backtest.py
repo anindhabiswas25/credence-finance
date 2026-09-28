@@ -118,6 +118,7 @@ def run(eng: Engine, gaps: pd.DataFrame, z: pd.DataFrame, daily: dict[str, list[
     r_b = eng.kinked_rate(w(p.util), w(0.02), w(0.06), w(0.80), w(0.90))
 
     breaches = defaultdict(lambda: [0, 0])  # (asset, type) -> [breaches, trials]
+    events = []
     epochs = []
     for ci, (date, t) in enumerate(closures):
         year = int(date[:4])
@@ -138,12 +139,16 @@ def run(eng: Engine, gaps: pd.DataFrame, z: pd.DataFrame, daily: dict[str, list[
             r_px = float(row.r) - float(row.d)
             realised = max(0.0, 1.0 + r_px) * (1.0 - p.kappa)
             b = breaches[(a, t)]
-            b[0] += int(realised * WAD < g_alpha)
+            hit = realised * WAD < g_alpha
+            b[0] += int(hit)
             b[1] += 1
+            if hit:
+                events.append({"asset": a, "date": date, "type": ClosureType(t).name, "r": round(float(row.r), 6),
+                               "sigma": round(sig, 6), "gAlpha": str(g_alpha)})
             mkt[a] = {"sigma": sig_w, "d": d_w, "safe": safe, "r_px": r_px, "set": s}
         epochs.append(_epoch(eng, ci, date, t, days, mkt, ys, p, r_b))
     return {"breaches": {f"{a}:{ClosureType(t).name}": v for (a, t), v in sorted(breaches.items())},
-            "epochs": epochs, "params": p}
+            "breachEvents": events, "epochs": epochs, "params": p}
 
 
 def _book(ci: int, asset: str, max_ltv: float) -> list[float]:
@@ -239,7 +244,10 @@ def summarize(res: dict) -> dict:
     e["pnlUsd"] = e["pnl"] / USD
     e["year"] = e["date"].str[:4]
     yearly = e.groupby("year")["pnlUsd"].sum()
+    span = e.groupby("year")["date"].agg(["min", "max"])
+    full = [y for y in yearly.index if span.loc[y, "min"][5:7] == "01" and span.loc[y, "max"][5:7] == "12"]
     worst = e.loc[e["pnlUsd"].idxmin()]
+    prem_type = e.groupby("type")[["premiums", "requests"]].sum()
     q = e["pnlUsd"].quantile([0.001, 0.01, 0.05, 0.5, 0.95]).to_dict()
     return {
         "breach": {"total": _binom(tot[0], tot[1], p.alpha), "byType": {t: _binom(*v, p.alpha) for t, v in by_type.items()},
@@ -257,7 +265,11 @@ def summarize(res: dict) -> dict:
             "worstEpoch": {"date": worst["date"], "type": ClosureType(int(worst["type"])).name,
                            "pnlUsd": round(float(worst["pnlUsd"]), 2), "shortfallUsd": round(float(worst["shortfall"] / USD), 2),
                            "shareOfJ0": round(float(-worst["pnlUsd"] / J0), 4)},
-            "worstYear": {"year": str(yearly.idxmin()), "pnlUsd": round(float(yearly.min()), 2)},
+            "worstYear": {"year": str(yearly[full].idxmin()), "pnlUsd": round(float(yearly[full].min()), 2),
+                          "note": "full calendar years only"},
+            "premiumsByType": {ClosureType(int(t)).name: {"usd": round(float(r["premiums"] / USD), 2), "policies": int(r["requests"]),
+                                                         "perPolicyUsd": round(float(r["premiums"] / USD / max(1, r["requests"])), 2)}
+                               for t, r in prem_type.iterrows()},
             "yearly": {k: round(float(v), 2) for k, v in yearly.items()},
             "capacityBindingRate": round(float((e["refused"] > 0).mean()), 4),
             "capacityBindingRateNonOvernight": round(float((e.loc[e["type"] != 1, "refused"] > 0).mean()), 4),
@@ -265,6 +277,7 @@ def summarize(res: dict) -> dict:
             "coverRefused": int(e["refused"].sum()),
             "liquidations": int(e["liquidated"].sum()),
         },
+        "breachEvents": res["breachEvents"],
         "seniorLossEvents": [{"date": r["date"], "shortfallUsd": round(r["shortfall"] / USD, 2), "seniorLossUsd": round(r["seniorLoss"] / USD, 2)}
                              for r in res["epochs"] if r["seniorLoss"] > 0],
         "worstShortfallEpochs": [{"date": r["date"], "type": ClosureType(int(r["type"])).name, "shortfallUsd": round(r["shortfall"] / USD, 2)}
@@ -359,8 +372,11 @@ def markdown(doc: dict, fname: str) -> str:
               f"total ${pool['totalPnlUsd']:,.2f}; mean annual return on J0 {pool['annualReturnOnJ0']:.2%}; premiums ${pool['premiumsUsd']:,.2f}; "
               f"shortfalls ${pool['shortfallsUsd']:,.2f}; liquidations {pool['liquidations']}.", "",
               f"Epoch P&L quantiles (USD): {pool['quantilesUsd']}.", "",
+              "Premiums by closure type: " + "; ".join(f"{t} ${v['usd']:,.2f} on {v['policies']:,} covers (${v['perPolicyUsd']:.2f} each)"
+                                                       for t, v in pool["premiumsByType"].items()) + ".", "",
+              "Breach events: " + (", ".join(f"{b['asset']} {b['date']} {b['type']} r {b['r']:+.2%} (σ {b['sigma']:.2%})" for b in s["breachEvents"]) or "none") + ".", "",
               f"Worst epoch: {we['date']} ({we['type']}) ${we['pnlUsd']:,.2f}, shortfall ${we['shortfallUsd']:,.2f} ({we['shareOfJ0']:.2%} of J0). "
-              f"Worst year: {wy['year']} ${wy['pnlUsd']:,.2f}.", "",
+              f"Worst full calendar year: {wy['year']} ${wy['pnlUsd']:,.2f}.", "",
               f"Capacity binding rate (epochs with at least one cover refused): {pool['capacityBindingRate']:.2%} "
               f"(weekend and holiday closures only: {pool['capacityBindingRateNonOvernight']:.2%}); "
               f"{pool['coverRefused']} of {pool['coverRequests']} cover requests refused.", "",

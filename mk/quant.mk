@@ -35,9 +35,10 @@ cal-sample: ## QE: rebuild every output from the committed synthetic sample into
 cal-risk-cli: ## QE: build risk-cli into target/quant (engine math for the backtest fallback and validate-set)
 	$(QE_CARGO) build --release -p credence-risk-cli
 
-cal-validate: cal-risk-cli ## QE: run risk-cli validate-set on every scenario set and joint file (CAL_OUT=calibration/out|out-sample)
-	@set -e; for f in $(CAL_OUT)/scenarios/*.json $(CAL_OUT)/joint/*.json; do \
-	  $(RISK_CLI) validate-set $$f >/dev/null || { echo "INVALID: $$f"; exit 1; }; done; \
+cal-validate: cal-risk-cli ## QE: run risk-cli validate-set on every scenario set, joint file and risk bundle (CAL_OUT=calibration/out|out-sample)
+	@set -e; for f in $(CAL_OUT)/scenarios/*.json $(CAL_OUT)/joint/*.json $(CAL_OUT)/risk-bundle-*.json; do \
+	  [ -e $$f ] || continue; \
+	  $(RISK_CLI) validate-set $$f >/dev/null || { echo "INVALID: $$f"; exit 1; }; echo "valid: $$f"; done; \
 	echo "validate-set: every file in $(CAL_OUT) passes"
 
 cal-crosscheck: ## QE: cross-check the pinned Alpaca bars against Polygon official open/close (last 2 years, ~10 min)

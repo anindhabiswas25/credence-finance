@@ -1,6 +1,12 @@
 {
+ "backtest/README.md": "f7f184031ffd81c62651f18a0214072d6c22cc22a0d592ec4d3a5d6bcf7db845",
+ "backtest/backtest-d40243903c1aabf0.json": "eab9459263c29912836cc36012236c7c84d1d5e05ffeaa9afe766438880add6b",
  "joint/joint-4dcad6d1.json": "c0d19be9e76255b1bbfa11b2f7a50f128bdc91e3937ec8c3b76814c0ee2eae98",
+ "proposal/2026-09-28.md": "fa551d4320e54c6120357e8fb3f6ed4bd47403cd9c00229745c074e0beaeca6b",
+ "proposal/calldata-fb8a9e82.json": "548211c40c68d489c7ba54c993ee302670aa16c34dab4c4dde0c2a1fbe11bdd2",
+ "quality/README.md": "b77eea571759ab80fbeb87cc0aece725fc066fe3b3230906051c9acaba128981",
  "quality/quality-e90a0846d6aa349c.json": "114466655e742546a93b4a01031f783a61c7f84f36986ab2f3ef9c97615543b7",
+ "risk-bundle-889d50e4.json": "27f0231be93c2df65a086fa008d5ba220a6e3f5df97447ac5a902770828804d6",
  "scenarios/AAPL-XNAS-1-93475757.json": "07e5f4dd057cd2a9b03c6e61fcbfe8c68ee3b5a95c77a0dfa33fd675a6450667",
  "scenarios/AAPL-XNAS-2-d8db8648.json": "6b14a85f2268effc2b5f0db68ce0d935ed054e5d61b96afb46599377d39f9f76",
  "scenarios/AAPL-XNAS-3-d7a70435.json": "4f6a6b24f397d23851207a8662a624c0f507eecae28fc1602906ac007fa7b0e6",
@@ -13,6 +19,7 @@
  "scenarios/NVDA-XNAS-1-71b80aa3.json": "1d2e02f90ee62411f67fae517ef9079110933f46913cff49436053e98367dc00",
  "scenarios/NVDA-XNAS-2-57154f93.json": "60f29dd3db73d0eb0248d81b144cb077be1d585fd5dd498baf7fabf25e3b9eaa",
  "scenarios/NVDA-XNAS-3-314c3954.json": "d7edbf2d0db0025de9b5d333cf9ac31f8c6b8b7f46f3b8f96769855592478160",
+ "scenarios/README.md": "2772ef89b9c7194cca396bc39b21b40e359aae452cf8c5e285b008c68ac79271",
  "scenarios/SPY-XNAS-1-d5f23580.json": "b1aa05755319d634b71696c453b8f4337491a6fc50840e4a78b0e6955ce5eb61",
  "scenarios/SPY-XNAS-2-d0f2e482.json": "a34f0e20aa4b0459370c2ac88dce445da409f41192d0ed1c95f8027b4a098ef1",
  "scenarios/SPY-XNAS-3-9dbaae4c.json": "772e39b6afc84fd7cf6c294abad5a1fc46fbb6caa834833b482030e4c4663649",
@@ -20,5 +27,6 @@
  "scenarios/TSLA-XNAS-2-f9786acc.json": "7a3148af042451fd699f69f5a10d046b41ea174effded88d8c5c7ce2976761ed",
  "scenarios/TSLA-XNAS-3-40700cdb.json": "4ebe9dfe47fe4efb72ad53f7a289a1ed5a113f17222c23af6537a8d187c14e92",
  "sigma/sigma-84d3ee7a661db5f3.json": "a51377912759e95e714312ddfae3c650038bb9ca23b2a1cbfd983d260218f26e",
+ "validation/README.md": "c6cfe6004af3105e2f08786fda318b391e640f67358ac94b673052046beeba16",
  "validation/validation-9d8238b620da5230.json": "3c9e295b72f2b9ef0a6c1fb7fe9557bc8d3a303960028044178efe94bc46ade4"
 }

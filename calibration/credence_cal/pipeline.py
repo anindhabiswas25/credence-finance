@@ -2,7 +2,7 @@
 
     python -m credence_cal.pipeline all      [--vendor alpaca|tiingo|sample] [--out DIR]   (every stage)
     python -m credence_cal.pipeline core     [...]   (gaps, sigma, sets, validation: fast; the CI sample check)
-    python -m credence_cal.pipeline <stage>  (gaps | sigma | sets | validation | backtest)
+    python -m credence_cal.pipeline <stage>  (gaps | sigma | sets | validation | backtest | proposal)
 
 Stages read the pinned raw data (checked against the committed manifest first) and write
 content-addressed JSON under `--out` (default `calibration/out`). Intermediate tables go to
@@ -242,13 +242,29 @@ def stage_backtest(c: Ctx, end: str = "9999-12-31") -> None:
           f"{doc['inSample']['pool']['epochs']} in-sample -> {p.name}")
 
 
+def stage_proposal(c: Ctx) -> None:
+    """The S2 testnet proposal: risk bundle (LoadScenarioSet), timelock calldata, reasoning (brief item 7)."""
+    from . import proposal
+    from .engine import default_engine
+
+    sigma_doc = json.loads(next((c.out / "sigma").glob("sigma-*.json")).read_text())
+    bt_path = next((c.out / "backtest").glob("backtest-*.json"))
+    val_path = next((c.out / "validation").glob("validation-*.json"))
+    bpath, cpath, bundle = proposal.build(c.out, sigma_doc, default_engine(), c.grade)
+    md = proposal.markdown(json.loads(bt_path.read_text()), json.loads(val_path.read_text()), sigma_doc, bundle,
+                           {"bundle": bpath.name, "calldata": cpath.name, "backtest": bt_path.name, "validation": val_path.name})
+    (c.out / "proposal" / f"{proposal.PROPOSAL_DATE}.md").write_text(md)
+    print(f"proposal: {bpath.name}, {cpath.relative_to(c.out)}, proposal/{proposal.PROPOSAL_DATE}.md")
+
+
 STAGES = {"gaps": stage_gaps, "sigma": stage_sigma, "sets": stage_sets, "validation": stage_validation,
-          "backtest": stage_backtest}
+          "backtest": stage_backtest, "proposal": stage_proposal}
 CORE = ("gaps", "sigma", "sets", "validation")  # fast; the CI sample check runs these
 
 
 def hashes(c: Ctx) -> None:
-    files = sorted(p for p in c.out.rglob("*.json") if not p.name.startswith("HASHES") and "calendars" not in p.parts)
+    files = sorted(p for p in c.out.rglob("*") if p.suffix in (".json", ".md") and not p.name.startswith("HASHES")
+                   and "calendars" not in p.parts)
     doc = {str(p.relative_to(c.out)): sha256_hex(p.read_bytes()) for p in files}
     write_json(c.out / f"HASHES.{c.vendor}.json", doc)
 
@@ -263,8 +279,7 @@ def main(argv: list[str] | None = None) -> None:
     for name, fn in STAGES.items():
         if a.stage == "all" or (a.stage == "core" and name in CORE) or a.stage == name:
             fn(c)
-    if a.stage in ("all", "core"):
-        hashes(c)
+    hashes(c)  # after any stage, so HASHES always describes what is on disk
 
 
 if __name__ == "__main__":
