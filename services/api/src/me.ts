@@ -304,12 +304,10 @@ export function registerMeRoutes(app: OpenAPIHono, deps: MeDeps) {
             "application/json": {
               schema: z
                 .object({
-                  attest: z
-                    .literal(true)
-                    .openapi({
-                      description:
-                        "I accept the testnet terms (test assets, no value)",
-                    }),
+                  attest: z.literal(true).openapi({
+                    description:
+                      "I accept the testnet terms (test assets, no value)",
+                  }),
                 })
                 .strict(),
             },

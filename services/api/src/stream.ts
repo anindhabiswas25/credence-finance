@@ -1,20 +1,54 @@
-// WS /v1/stream (Build Guide §10.4): the `clock` and `prices` channels. One hub per process polls the
-// indexer views for rows newer than its cursor and fans them out to the sockets subscribed to that
-// channel (optionally filtered by asset). `auctions` and `bell:<owner>` join with the S3 contracts.
+// WS /v1/stream (Build Guide §10.4): the `clock`, `prices`, `auctions` and `bell:<owner>` channels. One
+// hub per process polls the indexer views for rows newer than its cursor and fans them out to the sockets
+// subscribed to that channel (optionally filtered by asset). `bell:<owner>` (the owner's Bell, cover,
+// queue and settlement events) needs a SIWE session for that address: the socket's session cookie is
+// checked at the upgrade, and the channel is refused for any other address.
 //
 // Protocol (JSON text frames):
-//   → {"op":"subscribe","channels":["clock","prices"],"assets":["NVDA:XNAS" | "0x…"]?}
+//   → {"op":"subscribe","channels":["clock","prices","auctions","bell:0x…"],"assets":["NVDA:XNAS" | "0x…"]?}
 //   → {"op":"unsubscribe","channels":["prices"]}
 //   ← {"type":"subscribed","channels":[…],"assets":[…]|null}
 //   ← {"channel":"clock","data":{assetId,from,to,closureId,block,ts}}
 //   ← {"channel":"prices","data":{assetId,feed,seq,kind,price:{raw,formatted},observedAt,status,block}}
+//   ← {"channel":"auctions","data":{auctionId,kind,assetId,closureId,status,deadlines,lot,reserve,pStar,…,block}}
+//   ← {"channel":"bell:0x…","data":{marketId,kind,amounts,clockState,block,ts,txHash}}
 //   ← {"type":"error","message":…}
 import type { Hono } from "hono";
 import { formatUnits, type Hex } from "viem";
 import { clockStateName } from "@credence/sdk";
 
-export const CHANNELS = ["clock", "prices"] as const;
-export type Channel = (typeof CHANNELS)[number];
+export const CHANNELS = ["clock", "prices", "auctions"] as const;
+export type Channel = (typeof CHANNELS)[number] | `bell:${string}`;
+const BELL = /^bell:(0x[0-9a-fA-F]{40})$/;
+
+export interface AuctionEvent {
+  auctionId: bigint;
+  kind: number;
+  assetId: Hex;
+  marketId: Hex;
+  closureId: bigint;
+  tranche: number;
+  status: string;
+  deadlines: number[];
+  lot: bigint | null;
+  reserve: bigint | null;
+  bids: number;
+  pStar: bigint | null;
+  qPool: bigint | null;
+  proceeds: bigint | null;
+  block: bigint;
+}
+/** One row of the owner's position history (`position_event`). */
+export interface OwnerEvent {
+  owner: Hex;
+  marketId: Hex | null;
+  kind: string;
+  amounts: unknown;
+  clockState: number | null;
+  block: bigint;
+  ts: bigint;
+  txHash: Hex;
+}
 
 export interface ClockEvent {
   assetId: Hex;
@@ -40,6 +74,8 @@ export interface StreamSource {
   head(): Promise<bigint>;
   clockSince(block: bigint, limit: number): Promise<ClockEvent[]>;
   pricesSince(block: bigint, limit: number): Promise<PriceEvent[]>;
+  auctionsSince(block: bigint, limit: number): Promise<AuctionEvent[]>;
+  ownerEventsSince(block: bigint, limit: number): Promise<OwnerEvent[]>;
 }
 
 export interface Socket {
@@ -50,6 +86,8 @@ export interface Socket {
 interface Sub {
   channels: Set<Channel>;
   assets: Set<string> | null;
+  /** The SIWE-authenticated address of this socket (lower-case), if any. */
+  owner: string | null;
 }
 
 /** A full batch may end mid-block: drop the trailing block (the next poll re-reads it whole). */
@@ -67,6 +105,8 @@ export class StreamHub {
   private subs = new Map<Socket, Sub>();
   private cursorClock = -1n;
   private cursorPrices = -1n;
+  private cursorAuctions = -1n;
+  private cursorOwners = -1n;
   private timer: NodeJS.Timeout | undefined;
   private running = false;
 
@@ -92,8 +132,13 @@ export class StreamHub {
     return this.subs.size;
   }
 
-  add(ws: Socket): void {
-    this.subs.set(ws, { channels: new Set(), assets: null });
+  /** `owner`: the address of the socket's SIWE session (checked at the upgrade), if any. */
+  add(ws: Socket, owner?: string | null): void {
+    this.subs.set(ws, {
+      channels: new Set(),
+      assets: null,
+      owner: owner ? owner.toLowerCase() : null,
+    });
   }
 
   remove(ws: Socket): void {
@@ -111,14 +156,32 @@ export class StreamHub {
       return this.err(ws, "frames must be JSON");
     }
     const channels = Array.isArray(m.channels) ? m.channels : [];
-    const bad = channels.find((c) => !CHANNELS.includes(c as Channel));
+    const bad = channels.find(
+      (c) =>
+        !CHANNELS.includes(c as (typeof CHANNELS)[number]) &&
+        !(typeof c === "string" && BELL.test(c)),
+    );
     if (bad !== undefined)
       return this.err(
         ws,
-        `unknown channel ${JSON.stringify(bad)} (available: ${CHANNELS.join(", ")})`,
+        `unknown channel ${JSON.stringify(bad)} (available: ${CHANNELS.join(", ")}, bell:<owner>)`,
       );
     if (m.op === "subscribe") {
-      for (const c of channels) sub.channels.add(c as Channel);
+      const denied = channels.find((c) => {
+        const x = typeof c === "string" ? BELL.exec(c) : null;
+        return x !== null && x[1]!.toLowerCase() !== sub.owner;
+      });
+      if (denied !== undefined)
+        return this.err(
+          ws,
+          `${String(denied)} needs a SIWE session for that address (POST /v1/auth/siwe/verify, then reconnect)`,
+        );
+    }
+    if (m.op === "subscribe") {
+      for (const c of channels)
+        sub.channels.add(
+          (BELL.test(c as string) ? (c as string).toLowerCase() : c) as Channel,
+        );
       if (m.assets !== undefined) {
         if (!Array.isArray(m.assets) || m.assets.length > this.opts.maxAssets)
           return this.err(
@@ -133,7 +196,10 @@ export class StreamHub {
         sub.assets = new Set(ids as string[]);
       }
     } else if (m.op === "unsubscribe") {
-      for (const c of channels) sub.channels.delete(c as Channel);
+      for (const c of channels)
+        sub.channels.delete(
+          (typeof c === "string" ? c.toLowerCase() : c) as Channel,
+        );
     } else {
       return this.err(ws, 'op must be "subscribe" or "unsubscribe"');
     }
@@ -150,11 +216,12 @@ export class StreamHub {
     ws.send(JSON.stringify({ type: "error", message }));
   }
 
-  private broadcast(channel: Channel, assetId: string, data: unknown) {
+  private broadcast(channel: Channel, assetId: string | null, data: unknown) {
     const frame = JSON.stringify({ channel, data });
     for (const [ws, s] of this.subs) {
       if (!s.channels.has(channel)) continue;
-      if (s.assets && !s.assets.has(assetId.toLowerCase())) continue;
+      if (assetId !== null && s.assets && !s.assets.has(assetId.toLowerCase()))
+        continue;
       try {
         ws.send(frame);
       } catch {
@@ -167,8 +234,53 @@ export class StreamHub {
   async poll(): Promise<void> {
     if (this.cursorClock < 0n || this.cursorPrices < 0n) {
       const h = await this.source.head();
-      this.cursorClock = this.cursorPrices = h;
+      this.cursorClock =
+        this.cursorPrices =
+        this.cursorAuctions =
+        this.cursorOwners =
+          h;
       return;
+    }
+    const [auctions, owners] = await Promise.all([
+      this.source
+        .auctionsSince(this.cursorAuctions, this.opts.batch)
+        .then((r) => wholeBlocks(r, this.opts.batch)),
+      this.source
+        .ownerEventsSince(this.cursorOwners, this.opts.batch)
+        .then((r) => wholeBlocks(r, this.opts.batch)),
+    ]);
+    const s = (v: bigint | null) => (v === null ? null : v.toString());
+    for (const a of auctions) {
+      this.broadcast("auctions", a.assetId, {
+        auctionId: a.auctionId.toString(),
+        kind: a.kind,
+        assetId: a.assetId,
+        marketId: a.marketId,
+        closureId: a.closureId.toString(),
+        tranche: a.tranche,
+        status: a.status,
+        deadlines: a.deadlines,
+        lot: s(a.lot),
+        reserve: s(a.reserve),
+        bids: a.bids,
+        pStar: s(a.pStar),
+        qPool: s(a.qPool),
+        proceeds: s(a.proceeds),
+        block: a.block.toString(),
+      });
+      if (a.block > this.cursorAuctions) this.cursorAuctions = a.block;
+    }
+    for (const e of owners) {
+      this.broadcast(`bell:${e.owner.toLowerCase()}`, null, {
+        marketId: e.marketId,
+        kind: e.kind,
+        amounts: e.amounts,
+        clockState: e.clockState,
+        block: e.block.toString(),
+        ts: Number(e.ts),
+        txHash: e.txHash,
+      });
+      if (e.block > this.cursorOwners) this.cursorOwners = e.block;
     }
     const [clock, prices] = await Promise.all([
       this.source
@@ -233,8 +345,15 @@ export class StreamHub {
  * Mount `GET /v1/stream` (WebSocket upgrade) on a Node server. Returns `injectWebSocket(server)`, to
  * call once `serve()` has returned. The hub keys sockets by the underlying `ws` object.
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function attachStream(app: Hono<any, any, any>, hub: StreamHub) {
+export async function attachStream(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  app: Hono<any, any, any>,
+  hub: StreamHub,
+  /** The SIWE session's address for the upgrade request's cookie header, if valid. */
+  sessionOwner: (
+    cookieHeader: string | undefined,
+  ) => Promise<string | undefined> = async () => undefined,
+) {
   const { createNodeWebSocket } = await import("@hono/node-ws");
   const { injectWebSocket, upgradeWebSocket } = createNodeWebSocket({ app });
   const sockets = new WeakMap<object, Socket>();
@@ -253,16 +372,21 @@ export async function attachStream(app: Hono<any, any, any>, hub: StreamHub) {
   };
   app.get(
     "/v1/stream",
-    upgradeWebSocket(() => ({
-      onOpen: (_e, ws) => hub.add(of(ws)),
-      onMessage: (e, ws) =>
-        hub.message(
-          of(ws),
-          typeof e.data === "string" ? e.data : String(e.data),
-        ),
-      onClose: (_e, ws) => hub.remove(of(ws)),
-      onError: (_e, ws) => hub.remove(of(ws)),
-    })),
+    upgradeWebSocket(async (c) => {
+      const owner = await sessionOwner(c.req.header("cookie")).catch(
+        () => undefined,
+      );
+      return {
+        onOpen: (_e, ws) => hub.add(of(ws), owner),
+        onMessage: (e, ws) =>
+          hub.message(
+            of(ws),
+            typeof e.data === "string" ? e.data : String(e.data),
+          ),
+        onClose: (_e, ws) => hub.remove(of(ws)),
+        onError: (_e, ws) => hub.remove(of(ws)),
+      };
+    }),
   );
   return injectWebSocket;
 }

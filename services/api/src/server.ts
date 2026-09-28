@@ -3,6 +3,7 @@ import { serve } from "@hono/node-server";
 import { createPublicClient, http } from "viem";
 import { createApp, toAssetId } from "./app.ts";
 import { StreamHub, attachStream } from "./stream.ts";
+import { SESSION_COOKIE, verifySession } from "./session.ts";
 import { assetVenues, boundariesAfter, loadCalendars } from "./calendar.ts";
 import { loadConfig } from "./config.ts";
 import { pgRepos } from "./repo.ts";
@@ -56,7 +57,21 @@ const hub = new StreamHub(repos.stream, toAssetId, {
   batch: 500,
   maxAssets: 100,
 });
-const injectWebSocket = await attachStream(app, hub);
+// bell:<owner> needs the SIWE session of that owner: the upgrade request's session cookie
+const injectWebSocket = await attachStream(app, hub, async (cookie) => {
+  const raw = cookie
+    ?.split(";")
+    .map((x) => x.trim())
+    .find((x) => x.startsWith(`${SESSION_COOKIE}=`))
+    ?.slice(SESSION_COOKIE.length + 1);
+  const sid = verifySession(
+    config.sessionSecret,
+    raw ? decodeURIComponent(raw) : undefined,
+  );
+  return sid
+    ? (await repos.auth.getSession(sid, new Date()))?.address
+    : undefined;
+});
 hub.start((err) => log.warn({ err: String(err) }, "stream poll failed"));
 
 const server = serve({ fetch: app.fetch, port: config.port }, (info) => {

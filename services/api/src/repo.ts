@@ -413,6 +413,8 @@ export function pgRepos(databaseUrl: string, indexerSchema: string) {
   };
 
   const stream: StreamSource = {
+    auctionsSince: async () => [],
+    ownerEventsSince: async () => [],
     async head() {
       const [r] =
         await sql`select greatest((select coalesce(max(block), 0) from ${ix("clock_transition")}),
@@ -449,6 +451,42 @@ export function pgRepos(databaseUrl: string, indexerSchema: string) {
     },
   };
 
+  stream.auctionsSince = async (block, limit) => {
+    const rows =
+      await sql`select * from ${ix("auction")} where updated_block > ${block.toString()} order by updated_block, auction_id limit ${limit}`;
+    return rows.map((r) => ({
+      auctionId: BigInt(r.auction_id),
+      kind: Number(r.kind),
+      assetId: hx(r.asset_id),
+      marketId: hx(r.market_id),
+      closureId: BigInt(r.closure_id),
+      tranche: Number(r.tranche),
+      status: String(r.status),
+      deadlines: (r.deadlines as (string | number)[]).map(Number),
+      lot: big(r.lot),
+      reserve: big(r.reserve),
+      bids: Number(r.bids),
+      pStar: big(r.p_star),
+      qPool: big(r.q_pool),
+      proceeds: big(r.proceeds),
+      block: BigInt(r.updated_block),
+    }));
+  };
+  stream.ownerEventsSince = async (block, limit) => {
+    const rows =
+      await sql`select owner, market_id, kind, amounts, clock_state, block, ts, tx_hash from ${ix("position_event")}
+                           where block > ${block.toString()} order by block, id limit ${limit}`;
+    return rows.map((r) => ({
+      owner: hx(r.owner),
+      marketId: r.market_id ? hx(r.market_id) : null,
+      kind: String(r.kind),
+      amounts: r.amounts,
+      clockState: r.clock_state === null ? null : Number(r.clock_state),
+      block: BigInt(r.block),
+      ts: BigInt(r.ts),
+      txHash: hx(r.tx_hash),
+    }));
+  };
   const rt = pgRiskTransferRepo(sql, ix);
   return { clock, auth, core, me, rt, stream, sql, close: () => sql.end() };
 }

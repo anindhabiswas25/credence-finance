@@ -12,6 +12,8 @@ import {
   type PriceEvent,
   type Socket,
   type StreamSource,
+  type AuctionEvent,
+  type OwnerEvent,
 } from "../src/stream.ts";
 
 const NVDA = keccak256(stringToHex("NVDA:XNAS")) as Hex;
@@ -29,6 +31,14 @@ class FakeSource implements StreamSource {
   }
   async pricesSince(b: bigint, limit: number) {
     return this.prices.filter((e) => e.block > b).slice(0, limit);
+  }
+  auctions: AuctionEvent[] = [];
+  owners: OwnerEvent[] = [];
+  async auctionsSince(b: bigint, limit: number) {
+    return this.auctions.filter((e) => e.block > b).slice(0, limit);
+  }
+  async ownerEventsSince(b: bigint, limit: number) {
+    return this.owners.filter((e) => e.block > b).slice(0, limit);
   }
 }
 const price = (assetId: Hex, block: bigint, seq: bigint): PriceEvent => ({
@@ -136,7 +146,7 @@ describe("StreamHub", () => {
     const s = new FakeSocket();
     hub.add(s);
     hub.message(s, "not json");
-    hub.message(s, JSON.stringify({ op: "subscribe", channels: ["auctions"] }));
+    hub.message(s, JSON.stringify({ op: "subscribe", channels: ["gossip"] }));
     hub.message(
       s,
       JSON.stringify({
@@ -226,3 +236,75 @@ async function until(ok: () => boolean, ms = 3000) {
     await new Promise((r) => setTimeout(r, 10));
   }
 }
+
+describe("S3 channels", () => {
+  const ME = "0x00000000000000000000000000000000000000b1";
+  const OTHER = "0x00000000000000000000000000000000000000b2";
+  it("auctions streams auction rows; bell:<owner> needs the socket's SIWE address and gets only that owner's events", async () => {
+    const src = new FakeSource();
+    const hub = new StreamHub(src, toAssetId);
+    const mine = new FakeSocket();
+    const anon = new FakeSocket();
+    hub.add(mine, ME.toUpperCase().replace("0X", "0x"));
+    hub.add(anon);
+    hub.message(
+      mine,
+      JSON.stringify({ op: "subscribe", channels: ["auctions", `bell:${ME}`] }),
+    );
+    hub.message(
+      anon,
+      JSON.stringify({ op: "subscribe", channels: [`bell:${ME}`] }),
+    );
+    expect(mine.sent.at(-1)).toMatchObject({ type: "subscribed" });
+    expect(anon.sent.at(-1)).toMatchObject({ type: "error" });
+    hub.message(
+      mine,
+      JSON.stringify({ op: "subscribe", channels: [`bell:${OTHER}`] }),
+    );
+    expect(mine.sent.at(-1)).toMatchObject({ type: "error" });
+    await hub.poll();
+    src.auctions.push({
+      auctionId: 1n,
+      kind: 0,
+      assetId: NVDA,
+      marketId: NVDA,
+      closureId: 7n,
+      tranche: 0,
+      status: "cleared",
+      deadlines: [1, 1, 2, 3],
+      lot: 5n,
+      reserve: 6n,
+      bids: 2,
+      pStar: 7n,
+      qPool: 0n,
+      proceeds: 35n,
+      block: 11n,
+    });
+    src.owners.push({
+      owner: ME as Hex,
+      marketId: NVDA,
+      kind: "auto_cover_applied",
+      amounts: { premium: "35950000" },
+      clockState: 0,
+      block: 11n,
+      ts: 1n,
+      txHash: NVDA,
+    });
+    src.owners.push({
+      owner: OTHER as Hex,
+      marketId: NVDA,
+      kind: "flagged",
+      amounts: {},
+      clockState: 3,
+      block: 11n,
+      ts: 1n,
+      txHash: NVDA,
+    });
+    const before = mine.sent.length;
+    await hub.poll();
+    const got = mine.sent.slice(before);
+    expect(got.map((f) => f.channel)).toEqual(["auctions", `bell:${ME}`]);
+    expect(got[0]).toMatchObject({ data: { auctionId: "1", pStar: "7" } });
+    expect(got[1]).toMatchObject({ data: { kind: "auto_cover_applied" } });
+  });
+});

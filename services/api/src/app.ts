@@ -117,12 +117,10 @@ const ClockBody = z
         price: Amount,
         observedAt: z.number(),
         ageSeconds: z.number(),
-        stale: z
-          .boolean()
-          .openapi({
-            description:
-              "Older than 60 s (the REGULAR staleness limit). Indexed view; the authoritative check is OracleAdapter.feedHealth.",
-          }),
+        stale: z.boolean().openapi({
+          description:
+            "Older than 60 s (the REGULAR staleness limit). Indexed view; the authoritative check is OracleAdapter.feedHealth.",
+        }),
       }),
     ),
     next: z.array(z.object({ at: z.number(), kind: z.string() })).nullable(),

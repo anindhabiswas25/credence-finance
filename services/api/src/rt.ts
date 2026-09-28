@@ -544,13 +544,10 @@ const PoolBody = z
   .object({
     stack: z.string(),
     pool: z.string(),
-    block: z
-      .string()
-      .nullable()
-      .openapi({
-        description:
-          "The block every live figure was read at (null: no chain reader)",
-      }),
+    block: z.string().nullable().openapi({
+      description:
+        "The block every live figure was read at (null: no chain reader)",
+    }),
     nav: Amt.nullable(),
     sharePrice: z.string().nullable().openapi({ description: "WAD" }),
     totalSupply: z.string().nullable(),
