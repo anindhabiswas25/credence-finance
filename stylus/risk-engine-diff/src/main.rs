@@ -2,7 +2,7 @@
 //!
 //! ```text
 //! credence-risk-engine-diff --rpc http://127.0.0.1:8547 --n 10000 [--book deployments/<chainId>.local.json | --engine 0x…] \
-//!     [--seed 42] [--gas]
+//!     [--seed 42] [--only lot,preclose,clear,closure] [--gas] [--gas-check]
 //! ```
 //! For every `IRiskEngine` math function (`safeLtv`, `bellStatus`, `quoteCover`, `coverLossVector`, `poolCapacity`,
 //! `liquidationLot`, `precloseLot`, `clear`) it draws `n` random inputs inside the
@@ -1034,10 +1034,22 @@ async fn main() -> Result<()> {
     };
     let mut g = Rng(seed);
     let t0 = std::time::Instant::now();
-    diff_lot(&*provider, engine, &mut g, n, &mut d).await?;
-    diff_clear(&*provider, engine, &mut g, n, &mut d).await?;
-    diff_preclose(&*provider, engine, &mut g, n, &mut d).await?;
-    diff_closure(&*provider, engine, &mut g, n, &mut d).await?;
+    // `--only lot,preclose,clear,closure` runs a subset (the nightly splits 1M per function across jobs);
+    // `closure` = safeLtv, bellStatus, quoteCover, coverLossVector, poolCapacity (they share the on-chain setup)
+    let only = arg(&args, "--only");
+    let want = |g: &str| only.as_deref().is_none_or(|o| o.split(',').any(|x| x == g));
+    if want("lot") {
+        diff_lot(&*provider, engine, &mut g, n, &mut d).await?;
+    }
+    if want("clear") {
+        diff_clear(&*provider, engine, &mut g, n, &mut d).await?;
+    }
+    if want("preclose") {
+        diff_preclose(&*provider, engine, &mut g, n, &mut d).await?;
+    }
+    if want("closure") {
+        diff_closure(&*provider, engine, &mut g, n, &mut d).await?;
+    }
     let gas = if args.iter().any(|a| a == "--gas") {
         Some(gas_report(&*provider, engine, &mut g).await?)
     } else {

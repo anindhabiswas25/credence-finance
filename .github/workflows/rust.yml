@@ -36,6 +36,21 @@ jobs:
       - name: Engine ABI == IRiskEngine.sol
         run: make stylus-abi-check
 
+  stylus-repro:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - run: rustup show
+      - name: Pinned nightly for the on-chain build (ADR-0102)
+        run: rustup toolchain install nightly-2025-08-01 --profile minimal -c rust-src -t wasm32-unknown-unknown
+      - name: cargo-stylus
+        run: cargo install --locked cargo-stylus@0.10.9
+      - name: Two clones at different paths build byte-identical WASM (R-24)
+        run: make stylus-repro
+
   bindings:
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -73,12 +88,14 @@ jobs:
         run: cargo install --locked cargo-stylus@0.10.9
       - name: nitro-devnode (infra/docker-compose.yml, bootstrapped with the StylusDeployer)
         run: docker compose -f infra/docker-compose.yml up -d --wait devnode devnode-init
-      - name: cargo stylus check (activation + single-fragment size)
+      - name: cargo stylus check (activation + single-fragment size, both programs)
         run: make stylus-check
-      - name: Deploy + activate on the devnode
+      - name: Deploy + activate the split engine (router + PricingEngine + AuctionMath) on the devnode
         run: make devnode-deploy-engine
-      - name: Differential 10k per function, native vs on-chain (+ gas)
+      - name: Differential 10k per function (0 mismatches) + gas against the §8.9.3 CI limits
         run: make stylus-diff DIFF_N=10000
+      - name: Market ↔ Stylus engine integration (vs risk-cli)
+        run: make devnode-integration
       - if: failure()
         uses: actions/upload-artifact@v4
         with:

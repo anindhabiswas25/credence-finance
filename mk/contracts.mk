@@ -92,9 +92,10 @@ risk-fmt: ## Format the blockchain Rust crates
 stylus-test: ## Native unit tests of the Stylus Risk Engine (TestVM)
 	cargo test -p credence-risk-engine -p credence-auction-math
 
-stylus-check: ## cargo stylus check of the Risk Engine against the devnode (size ≤ 1 fragment + activation)
+stylus-check: ## cargo stylus check of both engine programs against the devnode (each ≤ 1 fragment + activation)
 	WS=$$(bash $(STYLUS_DIR)/scripts/stylus-ws.sh) && cd $$WS && \
-	  cargo stylus check --endpoint $(DEVNODE_RPC) --contract credence-risk-engine
+	  cargo stylus check --endpoint $(DEVNODE_RPC) --contract credence-risk-engine && \
+	  cargo stylus check --endpoint $(DEVNODE_RPC) --contract credence-auction-math
 
 devnode-integration: ## Market ↔ real Stylus engine on the devnode (dedicated engine + QE bundle + core), vs risk-cli
 	LOCAL_RPC=$(DEVNODE_RPC) PRIVATE_KEY=$(DEVNODE_KEY) bash $(CONTRACTS_DIR)/script/devnode_integration.sh
@@ -139,7 +140,8 @@ stylus-diff: ## Differential: $(DIFF_N) random inputs per function, native risk-
 	  if [ ! -f $$BOOK ] || [ -z "$$(cast code --rpc-url $(DEVNODE_RPC) $$(jq -r .shared.riskEngine $$BOOK) 2>/dev/null | sed 's/^0x$$//')" ]; then \
 	    ENGINE_BOOK=$(abspath .)/$$BOOK DEVNODE_RPC=$(DEVNODE_RPC) DEVNODE_KEY=$(DEVNODE_KEY) bash $(STYLUS_DIR)/scripts/deploy.sh; fi; \
 	  PRIVATE_KEY=$(DEVNODE_KEY) cargo run --release -p credence-risk-engine-diff -- --rpc $(DEVNODE_RPC) \
-	    --book $$BOOK --n $(DIFF_N) --gas --gas-check
+	    --book $$BOOK --n $(DIFF_N) $(if $(DIFF_ONLY),--only $(DIFF_ONLY)) $(if $(DIFF_SEED),--seed $(DIFF_SEED)) \
+	    $(if $(DIFF_NO_GAS),,--gas --gas-check)
 
 # Scenario-set files (ADR-0106). RISK_FILE / RISK_BUNDLE: a set, joint set or bundle; references resolve relative to
 # the bundle's directory. Default = the example bundle in contracts/test/fixtures/risk.

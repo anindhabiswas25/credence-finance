@@ -1,0 +1,49 @@
+# Nightly differential (owner: BE-chain). Build Guide §14.1 / §14.3: native risk-core vs the Stylus Risk Engine on a
+# devnode, bit-identical on 1M random inputs per function. Split into four jobs (the four groups of the harness) so
+# each fits a runner; a fresh seed per night, recorded in the job summary so a failure is reproducible.
+name: differential
+
+on:
+  schedule:
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+    inputs:
+      n:
+        description: inputs per function
+        default: "1000000"
+
+jobs:
+  diff:
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    strategy:
+      fail-fast: false
+      matrix:
+        group: [lot, preclose, clear, closure]
+    steps:
+      - uses: actions/checkout@v4
+      - run: rustup show
+      - name: Pinned nightly for the on-chain build (ADR-0102)
+        run: rustup toolchain install nightly-2025-08-01 --profile minimal -c rust-src -t wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+      - uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: v1.8.3
+      - name: cargo-stylus
+        run: cargo install --locked cargo-stylus@0.10.9
+      - name: nitro-devnode (infra/docker-compose.yml, bootstrapped with the StylusDeployer)
+        run: docker compose -f infra/docker-compose.yml up -d --wait devnode devnode-init
+      - name: Seed
+        id: seed
+        run: |
+          echo "seed=$(date +%Y%m%d)${{ strategy.job-index }}" >> "$GITHUB_OUTPUT"
+          echo "differential seed: $(date +%Y%m%d)${{ strategy.job-index }} (group ${{ matrix.group }})" >> "$GITHUB_STEP_SUMMARY"
+      - name: Differential, ${{ github.event.inputs.n || '1000000' }} per function
+        run: >
+          make stylus-diff DIFF_N=${{ github.event.inputs.n || '1000000' }} DIFF_ONLY=${{ matrix.group }}
+          DIFF_SEED=${{ steps.seed.outputs.seed }} DIFF_NO_GAS=1
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: stylus-diff-regressions-${{ matrix.group }}
+          path: crates/risk-core/tests/regressions/

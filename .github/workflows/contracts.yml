@@ -50,7 +50,7 @@ jobs:
         with:
           version: v1.8.3
       - run: make contracts-deps
-      - name: Coverage ≥ 95% lines on src/clock and src/oracle
+      - name: Coverage ≥ 95% lines on src/core, src/governance, src/clock and src/oracle
         run: make contracts-coverage
       - uses: actions/upload-artifact@v4
         with:
