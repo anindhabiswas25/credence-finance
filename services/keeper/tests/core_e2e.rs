@@ -387,7 +387,7 @@ async fn core_jobs_match_the_contracts() {
     let cals = load_calendars().unwrap();
     let assets = tracked(&["NVDA:XNAS".to_string()], &cals).unwrap();
     let metrics = Metrics::detached();
-    let rpc_c = Arc::new(Rpc::connect(&[rpc.clone()], None).unwrap());
+    let rpc_c = Arc::new(Rpc::connect(std::slice::from_ref(&rpc), None).unwrap());
     let signer: PrivateKeySigner = DEPLOYER.parse().unwrap();
     let tx = TxManager::new(
         rpc_c.clone(),
