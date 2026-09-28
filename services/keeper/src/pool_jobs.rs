@@ -6,6 +6,10 @@
 //!   `J9:<venue>:<epoch>:<step>`.
 //! * **J11**: `resellInventory(asset)` whenever the pool holds backstop inventory not yet in a GDA. Key
 //!   `J11:<asset>:<unlisted qty>:<cost>` (a new purchase makes a new key).
+//! * **J8 (pool)**: `releaseLossReserve(e, asset)` for settled epochs that still hold an R-11 reserve for an
+//!   asset whose REOPEN has since completed (the indexer's `epoch.pending_loss_reserve`). The pool's
+//!   `claimDeposit` / `claimWithdraw` pay `msg.sender` only, so the keeper cannot claim for underwriters: it
+//!   tells them instead (`withdrawal_claimable`, notifier).
 //! * **J5 completeReopen**: once an asset's REOPEN queue window is over, `completeReopen(asset)` (the
 //!   auction house ends the REOPEN when every tranche cleared, or when there was none).
 //!
@@ -96,6 +100,9 @@ impl Keeper {
             let ctx = read_ctx(self.rpc.primary(), m.market, m.id, None).await?;
             if let Err(e) = self.j9(conn, s, &ctx, rep).await {
                 tracing::warn!(stack = %s.stack, error = %format!("{e:#}"), "J9 failed");
+            }
+            if let Err(e) = self.j8_pool(conn, core, s, rep).await {
+                tracing::warn!(stack = %s.stack, error = %format!("{e:#}"), "J8 pool failed");
             }
             for mk in core.markets.iter().filter(|x| x.market == s.market) {
                 if let Err(e) = self.j11(conn, s, mk.asset.as_str(), rep, mk.id).await {
@@ -221,6 +228,61 @@ impl Keeper {
             )
             .await?;
         tracing::info!(asset = ticker, unlisted = %unlisted, result = ?r, "J11 GDA resale");
+        Ok(())
+    }
+
+    async fn j8_pool(
+        &self,
+        conn: &mut PgConnection,
+        core: &CoreJobs,
+        s: &AuctionStack,
+        rep: &mut TickReport,
+    ) -> Result<()> {
+        let q = format!(
+            "select epoch_id::text from {}.epoch where pool = $1 and status = 'settled' and pending_loss_reserve > 0",
+            core.indexer_schema
+        );
+        let epochs: Vec<String> = sqlx::query_scalar(sqlx::AssertSqlSafe(q))
+            .bind(format!("{:#x}", s.pool))
+            .fetch_all(&mut *conn)
+            .await
+            .unwrap_or_default();
+        let p = self.rpc.primary();
+        let pool = IUnderwriterPool::new(s.pool, p);
+        for e in epochs.iter().filter_map(|e| e.parse::<u64>().ok()) {
+            for mk in core.markets.iter().filter(|x| x.market == s.market) {
+                let asset = crate::core::abi::ICredenceMarket::new(s.market, p)
+                    .marketParams(mk.id)
+                    .call()
+                    .await?
+                    .assetId;
+                if pool.lossReserve(e, asset).call().await?.is_zero() {
+                    continue;
+                }
+                let data = Bytes::from(
+                    IUnderwriterPool::releaseLossReserveCall {
+                        epochId: e,
+                        assetId: asset,
+                    }
+                    .abi_encode(),
+                );
+                if !self.would_succeed(s.pool, &data).await {
+                    continue; // still HALTED, or its REOPEN lots not settled
+                }
+                let key = format!("J8:releaseLossReserve:{e}:{asset}");
+                let r = self
+                    .tx_job(
+                        conn,
+                        &key,
+                        &json!({ "asset": mk.asset }),
+                        s.pool,
+                        || Ok(data.clone()),
+                        rep,
+                    )
+                    .await?;
+                tracing::info!(epoch = e, asset = %mk.asset, result = ?r, "J8 releaseLossReserve");
+            }
+        }
         Ok(())
     }
 
