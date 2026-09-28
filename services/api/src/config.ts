@@ -16,6 +16,8 @@ const Env = z.object({
   SESSION_TTL_S: z.coerce.number().int().default(7 * 24 * 3600),
   /** Optional RPC for ERC-1271 / ERC-6492 smart-wallet SIWE signatures. */
   RPC_URL: z.string().optional(),
+  /** Comma-separated directories of ADR-0106 scenario-set files (relative to the repo root). */
+  SCENARIO_DIRS: z.string().default("calibration/out/scenarios,contracts/test/fixtures/risk"),
   RATE_LIMIT_PER_MIN: z.coerce.number().int().default(120),
   RATE_LIMIT_AUTH_PER_MIN: z.coerce.number().int().default(20),
   NODE_ENV: z.string().default("development"),
@@ -31,6 +33,7 @@ export type Config = {
   sessionSecret: string;
   sessionTtlS: number;
   rpcUrl?: string;
+  scenarioDirs: string[];
   rateLimitPerMin: number;
   rateLimitAuthPerMin: number;
   secureCookies: boolean;
@@ -49,6 +52,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     sessionSecret: e.SESSION_SECRET,
     sessionTtlS: e.SESSION_TTL_S,
     rpcUrl: e.RPC_URL,
+    scenarioDirs: e.SCENARIO_DIRS.split(",").map((s) => s.trim()).filter(Boolean),
     rateLimitPerMin: e.RATE_LIMIT_PER_MIN,
     rateLimitAuthPerMin: e.RATE_LIMIT_AUTH_PER_MIN,
     secureCookies: e.NODE_ENV === "production",

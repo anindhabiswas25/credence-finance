@@ -7,6 +7,8 @@
 import { ScenarioSet, bellStatus as wasmBellStatus, quoteCover, ready, safeLtvFromSet } from "@credence/risk-wasm";
 
 export { ready, ScenarioSet };
+/** Rates (F-4.6), straight from risk-core. */
+export { kinkedRate, seniorRate, utilization } from "@credence/risk-wasm";
 
 export const WAD = 10n ** 18n;
 

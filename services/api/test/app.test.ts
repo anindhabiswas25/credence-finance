@@ -22,6 +22,7 @@ const config: Config = {
   rateLimitPerMin: 1000,
   rateLimitAuthPerMin: 1000,
   secureCookies: true,
+  scenarioDirs: [],
 };
 
 function app(overrides: Partial<Config> = {}, nowMs = T0 * 1000) {

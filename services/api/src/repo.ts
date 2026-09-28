@@ -44,6 +44,74 @@ export interface ClockRepo {
   ping(): Promise<void>;
 }
 
+export interface MarketRow {
+  marketId: Hex;
+  stack: string;
+  marketAddress: Address;
+  assetId: Hex;
+  kind: number;
+  loanToken: Address;
+  collateralToken: Address;
+  params: Record<string, unknown>;
+  maxLtv: bigint;
+  lt: bigint;
+  supplyCap: bigint;
+  borrowCap: bigint;
+  totalSupplyAssets: bigint;
+  totalBorrowAssets: bigint;
+  totalBorrowShares: bigint;
+  poolFeeAccrued: bigint;
+  treasuryFeeAccrued: bigint;
+  totalCollateral: bigint;
+  updatedBlock: bigint;
+  updatedAt: bigint;
+}
+
+export interface PositionRow {
+  marketId: Hex;
+  owner: Address;
+  collateral: bigint;
+  borrowShares: bigint;
+  debtSnapshot: bigint;
+  coverClosureId: bigint;
+  lastBellClosureId: bigint;
+  auctionId: bigint;
+  autoCoverOptOut: boolean;
+  updatedBlock: bigint;
+  updatedAt: bigint;
+}
+
+export interface VaultRow {
+  stack: string;
+  vault: Address;
+  totalAssets: bigint;
+  totalSupply: bigint;
+  idle: bigint;
+  queueLength: bigint;
+  pendingRedeemShares: bigint;
+  claimableAssets: bigint;
+  updatedBlock: bigint;
+  updatedAt: bigint;
+}
+
+export interface VaultRequestRow {
+  requestId: bigint;
+  owner: Address;
+  shares: bigint;
+  assets: bigint | null;
+  status: string;
+  requestedAt: bigint;
+}
+
+export interface CoreRepo {
+  markets(): Promise<MarketRow[]>;
+  market(id: Hex): Promise<MarketRow | undefined>;
+  positionsOf(owner: Address): Promise<PositionRow[]>;
+  vault(stack: string): Promise<VaultRow | undefined>;
+  /** Open redeem requests (requested, not yet processed) in FIFO order. */
+  openRequests(stack: string, limit: number): Promise<VaultRequestRow[]>;
+}
+
 export interface AuthRepo {
   putNonce(nonce: string, expiresAt: Date): Promise<void>;
   /** Delete and return whether an unexpired nonce existed (single use). */
@@ -129,11 +197,98 @@ export function pgRepos(databaseUrl: string, indexerSchema: string) {
     },
   };
 
-  return { clock, auth, close: () => sql.end() };
+  const hx = (v: unknown) => bufToHex(v as Buffer) as Hex;
+  const toMarket = (r: postgres.Row): MarketRow => ({
+    marketId: hx(r.market_id),
+    stack: String(r.stack),
+    marketAddress: hx(r.market_address) as Address,
+    assetId: hx(r.asset_id),
+    kind: Number(r.kind),
+    loanToken: hx(r.loan_token) as Address,
+    collateralToken: hx(r.collateral_token) as Address,
+    params: r.params as Record<string, unknown>,
+    maxLtv: BigInt(r.max_ltv),
+    lt: BigInt(r.lt),
+    supplyCap: BigInt(r.supply_cap),
+    borrowCap: BigInt(r.borrow_cap),
+    totalSupplyAssets: BigInt(r.total_supply_assets),
+    totalBorrowAssets: BigInt(r.total_borrow_assets),
+    totalBorrowShares: BigInt(r.total_borrow_shares),
+    poolFeeAccrued: BigInt(r.pool_fee_accrued),
+    treasuryFeeAccrued: BigInt(r.treasury_fee_accrued),
+    totalCollateral: BigInt(r.total_collateral),
+    updatedBlock: BigInt(r.updated_block),
+    updatedAt: BigInt(r.updated_at),
+  });
+  const core: CoreRepo = {
+    async markets() {
+      return (await sql`select * from ${ix("market")} order by created_block, market_id`).map(toMarket);
+    },
+    async market(id) {
+      const [r] = await sql`select * from ${ix("market")} where market_id = ${id}`;
+      return r ? toMarket(r) : undefined;
+    },
+    async positionsOf(owner) {
+      const rows = await sql`select * from ${ix("position")} where owner = ${owner.toLowerCase()} order by market_id`;
+      return rows.map((r) => ({
+        marketId: hx(r.market_id),
+        owner: hx(r.owner) as Address,
+        collateral: BigInt(r.collateral),
+        borrowShares: BigInt(r.borrow_shares),
+        debtSnapshot: BigInt(r.debt_snapshot),
+        coverClosureId: BigInt(r.cover_closure_id),
+        lastBellClosureId: BigInt(r.last_bell_closure_id),
+        auctionId: BigInt(r.auction_id),
+        autoCoverOptOut: Boolean(r.auto_cover_opt_out),
+        updatedBlock: BigInt(r.updated_block),
+        updatedAt: BigInt(r.updated_at),
+      }));
+    },
+    async vault(stack) {
+      const [r] = await sql`select * from ${ix("vault_state")} where stack = ${stack}`;
+      if (!r) return undefined;
+      return {
+        stack: String(r.stack),
+        vault: hx(r.vault) as Address,
+        totalAssets: BigInt(r.total_assets),
+        totalSupply: BigInt(r.total_supply),
+        idle: BigInt(r.idle),
+        queueLength: BigInt(r.queue_length),
+        pendingRedeemShares: BigInt(r.pending_redeem_shares),
+        claimableAssets: BigInt(r.claimable_assets),
+        updatedBlock: BigInt(r.updated_block),
+        updatedAt: BigInt(r.updated_at),
+      };
+    },
+    async openRequests(stack, limit) {
+      const rows = await sql`select request_id, owner, shares, assets, status, requested_at from ${ix("vault_request")}
+                             where stack = ${stack} and status = 'requested' order by request_id limit ${limit}`;
+      return rows.map((r) => ({
+        requestId: BigInt(r.request_id),
+        owner: hx(r.owner) as Address,
+        shares: BigInt(r.shares),
+        assets: big(r.assets),
+        status: String(r.status),
+        requestedAt: BigInt(r.requested_at),
+      }));
+    },
+  };
+
+  return { clock, auth, core, sql, close: () => sql.end() };
 }
 
 /** In-memory repos (tests, and `API_MEMORY=1` demos). */
-export function memoryRepos(seed: { clocks?: ClockRow[]; transitions?: Record<string, TransitionRow[]>; prices?: Record<string, PriceRow[]> } = {}) {
+export function memoryRepos(
+  seed: {
+    clocks?: ClockRow[];
+    transitions?: Record<string, TransitionRow[]>;
+    prices?: Record<string, PriceRow[]>;
+    markets?: MarketRow[];
+    positions?: PositionRow[];
+    vaults?: VaultRow[];
+    requests?: Record<string, VaultRequestRow[]>;
+  } = {},
+) {
   const nonces = new Map<string, Date>();
   const sessions = new Map<string, { address: Address; expiresAt: Date }>();
   const clock: ClockRepo = {
@@ -168,5 +323,22 @@ export function memoryRepos(seed: { clocks?: ClockRow[]; transitions?: Record<st
       sessions.delete(id);
     },
   };
-  return { clock, auth, close: async () => {} };
+  const core: CoreRepo = {
+    async markets() {
+      return seed.markets ?? [];
+    },
+    async market(id) {
+      return seed.markets?.find((m) => m.marketId.toLowerCase() === id.toLowerCase());
+    },
+    async positionsOf(owner) {
+      return (seed.positions ?? []).filter((p) => p.owner.toLowerCase() === owner.toLowerCase());
+    },
+    async vault(stack) {
+      return seed.vaults?.find((v) => v.stack === stack);
+    },
+    async openRequests(stack, limit) {
+      return (seed.requests?.[stack] ?? []).filter((r) => r.status === "requested").slice(0, limit);
+    },
+  };
+  return { clock, auth, core, close: async () => {} };
 }

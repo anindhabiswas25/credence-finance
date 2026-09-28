@@ -7,6 +7,11 @@ import { loadConfig } from "./config.ts";
 import { pgRepos } from "./repo.ts";
 import { log } from "./log.ts";
 import { createMetrics } from "./metrics.ts";
+import { resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import { viemChainReader } from "./chain.ts";
+import { loadSetStore } from "./sets.ts";
+import { ready as riskReady } from "@credence/sdk/risk";
 
 const config = loadConfig();
 const repos = pgRepos(config.databaseUrl, config.indexerSchema);
@@ -14,12 +19,18 @@ const calendars = loadCalendars();
 const venues = assetVenues(
   (process.env.ASSETS ?? "NVDA:XNAS,AAPL:XNAS,TSLA:XNAS,COIN:XNAS,MSFT:XNAS,SPY:ARCX").split(",").concat("TBILL:USBANK"),
 );
+await riskReady;
+const repoRoot = resolve(fileURLToPath(new URL(".", import.meta.url)), "../../..");
+const publicClient = config.rpcUrl ? createPublicClient({ transport: http(config.rpcUrl) }) : undefined;
 const app = createApp({
   config,
   clock: repos.clock,
   auth: repos.auth,
   metrics: createMetrics(),
-  publicClient: config.rpcUrl ? createPublicClient({ transport: http(config.rpcUrl) }) : undefined,
+  core: repos.core,
+  chain: publicClient ? viemChainReader(publicClient) : undefined,
+  sets: loadSetStore(config.scenarioDirs.map((d) => resolve(repoRoot, d))),
+  publicClient,
   nextBoundaries: (id, now) => {
     const v = venues.get(id);
     const s = v ? calendars.get(v) : undefined;

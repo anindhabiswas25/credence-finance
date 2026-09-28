@@ -1,4 +1,5 @@
-// Credence API (Build Guide §10.4). Sprint 1: health, OpenAPI, GET /v1/clock/:assetId, SIWE sessions.
+// Credence API (Build Guide §10.4). S1: health, OpenAPI, GET /v1/clock/:assetId, SIWE sessions.
+// S2: markets, positions, /bell (core.ts), vault, notifications, testnet allowlist, /v1/stream.
 // Every input is validated with zod; the OpenAPI document is generated from the same schemas.
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { cors } from "hono/cors";
@@ -10,7 +11,10 @@ import { formatUnits, isHex, keccak256, stringToHex, verifyMessage, type Address
 import { parseSiweMessage, validateSiweMessage } from "viem/siwe";
 import { ClockState, ClosureType, clockStateName } from "@credence/sdk";
 import type { Config } from "./config.ts";
-import type { AuthRepo, ClockRepo } from "./repo.ts";
+import type { AuthRepo, ClockRepo, CoreRepo } from "./repo.ts";
+import type { ChainReader } from "./chain.ts";
+import type { SetStore } from "./sets.ts";
+import { registerCoreRoutes } from "./core.ts";
 import { FixedWindow, clientIp, rateLimit } from "./ratelimit.ts";
 import { SESSION_COOKIE, newNonce, newSessionId, signSession, verifySession } from "./session.ts";
 import { log } from "./log.ts";
@@ -26,6 +30,10 @@ export interface Deps {
   nextBoundaries?: (assetId: Hex, now: number) => { at: number; kind: string }[] | undefined;
   now?: () => number; // ms
   metrics?: ApiMetrics;
+  /** Markets, positions, vaults (indexer views); the core routes are mounted only when present. */
+  core?: CoreRepo;
+  chain?: ChainReader;
+  sets?: SetStore;
 }
 
 // ── schemas ──────────────────────────────────────────────────────────────────────────────────────
@@ -199,6 +207,8 @@ export function createApp(deps: Deps) {
       );
     },
   );
+
+  if (deps.core) registerCoreRoutes(app, { core: deps.core, clock: deps.clock, chain: deps.chain, sets: deps.sets });
 
   // SIWE
   app.openapi(
