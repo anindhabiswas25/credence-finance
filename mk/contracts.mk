@@ -130,9 +130,12 @@ devnode-down: ## Stop the local nitro-devnode container
 devnode-deploy-engine: ## Deploy + activate the Stylus Risk Engine on the devnode; records it in deployments/<chainId>.local.json
 	DEVNODE_RPC=$(DEVNODE_RPC) DEVNODE_KEY=$(DEVNODE_KEY) bash $(STYLUS_DIR)/scripts/deploy.sh
 
-stylus-diff: ## Differential test: $(DIFF_N) random inputs per function, native risk-core vs the deployed engine (+ gas)
-	PRIVATE_KEY=$(DEVNODE_KEY) cargo run --release -p credence-risk-engine-diff -- --rpc $(DEVNODE_RPC) \
-	  --n $(DIFF_N) --gas
+stylus-diff: ## Differential: $(DIFF_N) random inputs per function, native risk-core vs a DEDICATED engine on the devnode (+ gas vs §8.9.3 ceilings)
+	@CHAIN=$$(cast chain-id --rpc-url $(DEVNODE_RPC)); BOOK=deployments/$$CHAIN.diff.local.json; \
+	  if [ ! -f $$BOOK ] || [ -z "$$(cast code --rpc-url $(DEVNODE_RPC) $$(jq -r .shared.riskEngine $$BOOK) 2>/dev/null | sed 's/^0x$$//')" ]; then \
+	    ENGINE_BOOK=$(abspath .)/$$BOOK DEVNODE_RPC=$(DEVNODE_RPC) DEVNODE_KEY=$(DEVNODE_KEY) bash $(STYLUS_DIR)/scripts/deploy.sh; fi; \
+	  PRIVATE_KEY=$(DEVNODE_KEY) cargo run --release -p credence-risk-engine-diff -- --rpc $(DEVNODE_RPC) \
+	    --book $$BOOK --n $(DIFF_N) --gas --gas-check
 
 # Scenario-set files (ADR-0106). RISK_FILE / RISK_BUNDLE: a set, joint set or bundle; references resolve relative to
 # the bundle's directory. Default = the example bundle in contracts/test/fixtures/risk.

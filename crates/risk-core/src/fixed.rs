@@ -42,25 +42,36 @@ fn narrow(x: U512) -> MathResult<U256> {
     U256::uint_try_from(x).map_err(|_| MathError::Overflow)
 }
 
-/// ⌊a × b / d⌋ with a 512-bit intermediate.
-pub fn mul_div_down(a: U256, b: U256, d: U256) -> MathResult<U256> {
+/// ⌊a × b / d⌋ (and whether it was exact) with the cheapest exact intermediate: 256-bit when the product fits,
+/// else 512-bit. Both return the same quotient; the fast one only saves gas on-chain (the per-scenario loops of
+/// quoteCover / coverLossVector / poolCapacity always fit 256 bits).
+#[inline]
+fn mul_div_rem(a: U256, b: U256, d: U256) -> MathResult<(U256, bool)> {
     if d.is_zero() {
         return Err(MathError::DivisionByZero);
     }
+    if let Some(p) = a.checked_mul(b) {
+        let (q, r) = p.div_rem(d);
+        return Ok((q, !r.is_zero()));
+    }
     let prod: U512 = a.widening_mul(b);
-    narrow(prod / U512::from(d))
+    let (q, r) = prod.div_rem(U512::from(d));
+    Ok((narrow(q)?, !r.is_zero()))
 }
 
-/// ⌈a × b / d⌉ with a 512-bit intermediate.
+/// ⌊a × b / d⌋ with an exact intermediate (up to 512 bits).
+pub fn mul_div_down(a: U256, b: U256, d: U256) -> MathResult<U256> {
+    Ok(mul_div_rem(a, b, d)?.0)
+}
+
+/// ⌈a × b / d⌉ with an exact intermediate (up to 512 bits).
 pub fn mul_div_up(a: U256, b: U256, d: U256) -> MathResult<U256> {
-    if d.is_zero() {
-        return Err(MathError::DivisionByZero);
+    let (q, rem) = mul_div_rem(a, b, d)?;
+    if rem {
+        q.checked_add(U256::from(1u8)).ok_or(MathError::Overflow)
+    } else {
+        Ok(q)
     }
-    let prod: U512 = a.widening_mul(b);
-    let d512 = U512::from(d);
-    let (q, r) = prod.div_rem(d512);
-    let q = if r.is_zero() { q } else { q + U512::from(1u8) };
-    narrow(q)
 }
 
 /// ⌊a × b / 1e18⌋.

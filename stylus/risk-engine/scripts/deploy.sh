@@ -10,6 +10,7 @@
 #   DEVNODE_RPC      default http://127.0.0.1:8547
 #   DEVNODE_KEY      deployer key (default: the public nitro-devnode dev key); the router's timelock locally
 #   SIGMA_ORACLE     the router's σ writer (default: the deployer; DeployCoreLocal re-points it to its SigmaOracle)
+#   ENGINE_BOOK      address book to write (default the chain's book; `make stylus-diff` uses a separate one)
 #   STYLUS_DEPLOYER  default 0xcEcba2F1DC234f70Dd89F2041029807F8D03A990 (bootstrapped by infra/devnode/init.sh)
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
@@ -54,7 +55,7 @@ lc() { tr '[:upper:]' '[:lower:]'; }
 [ "$(cast call --rpc-url "$RPC" "$ROUTER" 'pricing()(address)' | lc)" = "$(echo "$PRICING" | lc)" ] \
   || { echo "wiring failed: router $ROUTER, pricing $PRICING" >&2; exit 1; }
 
-BOOK="$ROOT/deployments/$CHAIN_ID.local.json"
+BOOK="${ENGINE_BOOK:-$ROOT/deployments/$CHAIN_ID.local.json}"
 mkdir -p "$ROOT/deployments"
 [ -f "$BOOK" ] || printf '{ "chainId": %s, "startBlock": 0, "release": "local", "shared": {} }\n' "$CHAIN_ID" > "$BOOK"
 TMP="$(mktemp)"
@@ -74,5 +75,5 @@ jq --arg r "$ROUTER" --arg tc "$TC" \
                             wasmSha256: $psha}
     | .stylus.auctionMath = {address: $aa, deploymentTx: $atx, compressedSizeBytes: $as, toolchain: $tc,
                              wasmSha256: $asha}' "$BOOK" > "$TMP" && mv "$TMP" "$BOOK"
-rm -f "$ROOT/deployments/devnode.engine.json"   # retired (charter §2a): one address book per chain
+[ -z "${ENGINE_BOOK:-}" ] && rm -f "$ROOT/deployments/devnode.engine.json"   # retired (charter §2a): one address book per chain
 echo "risk engine router $ROUTER → PricingEngine $PRICING ($P_SIZE B) + AuctionMath $AUCTION ($A_SIZE B) → $BOOK"
