@@ -2481,6 +2481,7 @@ dependencies = [
  "chrono",
  "chrono-tz",
  "clap",
+ "credence-bindings",
  "credence-common",
  "futures",
  "prometheus",

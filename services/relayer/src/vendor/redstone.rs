@@ -214,6 +214,30 @@ pub fn derive_close(series: &[Aggregated], open: u64, close: u64) -> Option<&Agg
         .find(|a| a.at() < close + CLOSE_WINDOW_S && a.at() >= open)
 }
 
+/// RedStone's payload marker (the last 9 bytes of the calldata suffix).
+pub const REDSTONE_MARKER: [u8; 9] = [0x00, 0x00, 0x02, 0xed, 0x57, 0x01, 0x1e, 0x00, 0x00];
+
+/// The on-chain payload `RedStonePriceSource.submit` (and the RedStone connector) parses from the end:
+/// `(package ‖ signature)* ‖ packageCount (2 B) ‖ unsignedMetadata ‖ metadataSize (3 B) ‖ marker (9 B)`.
+pub fn payload(pkgs: &[GatewayPackage], unsigned_metadata: &[u8]) -> Option<Vec<u8>> {
+    let mut out = Vec::new();
+    for p in pkgs {
+        out.extend_from_slice(&package_bytes(p)?);
+        let sig = base64::engine::general_purpose::STANDARD
+            .decode(&p.signature)
+            .ok()?;
+        if sig.len() != 65 {
+            return None;
+        }
+        out.extend_from_slice(&sig);
+    }
+    out.extend_from_slice(&(pkgs.len() as u16).to_be_bytes());
+    out.extend_from_slice(unsigned_metadata);
+    out.extend_from_slice(&(unsigned_metadata.len() as u32).to_be_bytes()[1..]);
+    out.extend_from_slice(&REDSTONE_MARKER);
+    Some(out)
+}
+
 /// Every feed's packages at one timestamp.
 pub type Snapshot = HashMap<String, Vec<GatewayPackage>>;
 

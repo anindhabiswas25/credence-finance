@@ -12,6 +12,7 @@ path = "src/main.rs"
 
 [dependencies]
 credence-common = { path = "../../crates/credence-common" }
+credence-bindings = { path = "../../crates/credence-bindings" }
 alloy = { workspace = true, features = ["signer-local", "json-abi"] }
 tokio = { workspace = true }
 axum = { workspace = true }
