@@ -244,6 +244,14 @@ impl Keeper {
             .auction(id)
             .call()
             .await?;
+        if a.settled {
+            core.auctions
+                .lock()
+                .expect("auction book")
+                .finished
+                .insert((s.house, id));
+            return Ok(());
+        }
         let deadlines = a.deadlines.map(|d| d.to::<u64>());
         let asset = core
             .markets
@@ -336,24 +344,24 @@ impl Keeper {
     pub async fn unsettled(&self, s: &AuctionStack, id: u64) -> Result<Vec<Address>> {
         let p = self.rpc.primary();
         let topic = B256::from(U256::from(id));
-        let get = |sig: B256| {
+        let base = |sig: B256| {
             Filter::new()
                 .address(s.market)
                 .event_signature(sig)
-                .topic1(topic)
                 .from_block(0u64)
                 .to_block(BlockNumberOrTag::Latest)
         };
+        // LotReleased(uint64 indexed auctionId, …); v2 PositionSettled(marketId, borrower, uint64 indexed auctionId, …)
         let released = p
-            .get_logs(&get(ICredenceMarket::LotReleased::SIGNATURE_HASH))
+            .get_logs(&base(ICredenceMarket::LotReleased::SIGNATURE_HASH).topic1(topic))
             .await?;
         let settled = p
-            .get_logs(&get(ICredenceMarket::PositionSettled::SIGNATURE_HASH))
+            .get_logs(&base(ICredenceMarket::PositionSettled::SIGNATURE_HASH).topic3(topic))
             .await?;
         let done: BTreeSet<Address> = settled
             .iter()
             .filter_map(|l| ICredenceMarket::PositionSettled::decode_log_data(l.data()).ok())
-            .map(|e| e.owner)
+            .map(|e| e.borrower)
             .collect();
         let mut out: BTreeSet<Address> = BTreeSet::new();
         for l in released {

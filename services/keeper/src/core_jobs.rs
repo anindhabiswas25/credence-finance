@@ -156,6 +156,11 @@ impl Keeper {
                 ("J3", self.j3(conn, &core, m, &ctx, now, rep).await),
                 ("J4", self.j4(conn, &core, m, &ctx, now, rep).await),
                 ("J5", self.j5_flag(conn, &core, m, &ctx, rep).await),
+                (
+                    "J5",
+                    self.j5_complete_reopen(conn, &core, &m.asset, &ctx, rep)
+                        .await,
+                ),
             ] {
                 if let Err(e) = r {
                     tracing::warn!(job = name, market = %m.id, error = %e, "core job failed");
@@ -165,6 +170,9 @@ impl Keeper {
         }
         if let Err(e) = self.auctions_tick(conn, &core, rep).await {
             tracing::warn!(error = %e, "auction driver failed");
+        }
+        if let Err(e) = self.pools_tick(conn, &core, rep).await {
+            tracing::warn!(error = %e, "pool lifecycle failed");
         }
         if let Err(e) = self.j8(conn, &core, now).await {
             tracing::warn!(error = %e, "J8 failed");

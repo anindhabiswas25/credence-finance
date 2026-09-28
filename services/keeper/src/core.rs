@@ -88,6 +88,9 @@ pub struct RiskCtx {
     pub upcoming_closure_id: u64,
     /// The current / most recent closure (ClockData.closureId).
     pub closure_id: u64,
+    /// ClockData.bellWindowAt / nextCloseAt (J9: the venue's Bell window for the next close).
+    pub bell_window_at: u64,
+    pub next_close_at: u64,
     /// REOPEN: when the open print was written (0 = not yet), and the sequencer-gap extension (R-20).
     pub open_print_at: u64,
     pub phase_extension: u64,
@@ -373,6 +376,8 @@ pub async fn read_ctx(
         bell_at: info.bellAt.to::<u64>(),
         upcoming_closure_id: info.closureId + 1,
         closure_id: info.closureId,
+        bell_window_at: info.bellWindowAt.to::<u64>(),
+        next_close_at: info.nextCloseAt.to::<u64>(),
         open_print_at: info.openPrintAt.to::<u64>(),
         phase_extension: info.phaseExtension.to::<u64>(),
         venue_epoch: info.venueEpoch,
@@ -486,6 +491,8 @@ mod tests {
             bell_at: 0,
             upcoming_closure_id: 8,
             closure_id: 7,
+            bell_window_at: 0,
+            next_close_at: 0,
             open_print_at: 0,
             phase_extension: 0,
             venue_epoch: 0,
