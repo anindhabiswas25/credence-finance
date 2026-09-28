@@ -42,6 +42,16 @@ contract MockMarketClock {
         d[a].openPrintAt = at;
     }
 
+    mapping(bytes32 => ClockState) public restrictedState;
+    mapping(bytes32 => uint40) public restrictedUntil;
+
+    /// @dev Like AssetClock.restrict: a live restriction can only be extended, never shortened (INV-CLK-02).
+    function restrict(bytes32 a, ClockState s_, uint40 until) external {
+        require(until >= restrictedUntil[a] || restrictedUntil[a] <= block.timestamp, "shorter");
+        restrictedState[a] = s_;
+        restrictedUntil[a] = until;
+    }
+
     function setReverting(bool r) external {
         reverting = r;
     }

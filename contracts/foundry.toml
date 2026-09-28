@@ -32,6 +32,12 @@ runs = 256
 depth = 128
 fail_on_revert = false
 
+[profile.coverage]
+# coverage builds are unoptimized anyway; one compilation unit keeps the line mapping of the market and its
+# libraries exact (the size profile of the default build splits them into a second unit)
+additional_compiler_profiles = []
+compilation_restrictions = []
+
 [profile.ffi]
 ffi = true                      # tests that call crates/risk-cli for exact expected values
 

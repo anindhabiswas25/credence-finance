@@ -113,6 +113,17 @@ contract RiskEngineRouter is IRiskEngine {
         );
     }
 
+    /// @dev The capacity call's arguments in memory (one stack slot each), for stack depth.
+    struct Capacity {
+        uint256[] current;
+        uint256[] added;
+        bytes32[] assets;
+        uint256[] sigmas;
+        uint256[] collateral;
+        uint256[] safe;
+        uint256 equity;
+    }
+
     /// @inheritdoc IRiskEngine
     function poolCapacity(
         uint256[] calldata packedCurrent,
@@ -128,18 +139,15 @@ contract RiskEngineRouter is IRiskEngine {
         for (uint256 i; i < uncAssets.length; ++i) {
             sigmas[i] = pricing.sigma(uncAssets[i], uncClosureTypes[i]);
         }
+        return _capacity(
+            Capacity(packedCurrent, packedAdd, uncAssets, sigmas, uncCollateralValue, uncSafeLtv, equity)
+        );
+    }
+
+    function _capacity(Capacity memory c) internal view returns (bool, uint256, uint256) {
         RiskParams memory p = pricing.params();
         return auction.poolCapacity(
-            packedCurrent,
-            packedAdd,
-            uncAssets,
-            sigmas,
-            uncCollateralValue,
-            uncSafeLtv,
-            equity,
-            p.kappa,
-            p.uMax,
-            p.kStress
+            c.current, c.added, c.assets, c.sigmas, c.collateral, c.safe, c.equity, p.kappa, p.uMax, p.kStress
         );
     }
 
