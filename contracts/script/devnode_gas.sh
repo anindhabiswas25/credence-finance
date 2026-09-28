@@ -85,6 +85,7 @@ send "$SO" 'submit((bytes32,uint8,uint256,uint32,uint64),bytes[])' "$U" \
   "[$(cast wallet sign --no-hash --private-key "${SIGNER_KEYS[0]}" "$UD"),$(cast wallet sign --no-hash --private-key "${SIGNER_KEYS[1]}" "$UD")]"
 
 # 3. writeCover: one voluntary cover in the Bell window, before the deadline (NVDA, 72%)
+price "$NV" 180000000000000000000   # the clock is lazy: poke before reading its times
 WIN="$(cast call --json --rpc-url "$RPC" "$CLOCK" 'closureInfo(bytes32)((uint8,uint8,uint64,uint64,uint128,uint40,uint40,uint40,uint40,uint40,uint128,uint40,uint40,uint32,uint32,uint40,bool,bool))' "$NV" | jq -r 'flatten | .[6]')"
 say "waiting for the Bell window at $WIN"
 while [ "$(date +%s)" -le "$WIN" ]; do sleep 10; done
@@ -97,10 +98,13 @@ cast send --rpc-url "$RPC" --private-key "$KC" "$MARKET" 'addCollateral(bytes32,
 price "$NV" 180000000000000000000
 cast send --rpc-url "$RPC" --private-key "$KC" "$MARKET" 'borrow(bytes32,uint256,address)' "$NID" 12960000000 "$C" >/dev/null
 price "$NV" 180000000000000000000
-GAS_COVER="$(cast send --rpc-url "$RPC" --private-key "$KC" "$MARKET" 'buyCover(bytes32,uint256,bool)' "$NID" 1000000000 true --json | jq -r .gasUsed | cast to-dec)"
+RCV="$(cast send --rpc-url "$RPC" --private-key "$KC" "$MARKET" 'buyCover(bytes32,uint256,bool)' "$NID" 1000000000 true --json)"
+[ "$(echo "$RCV" | jq -r .status)" = 0x1 ] || { echo "buyCover failed: $RCV" >&2; exit 1; }
+GAS_COVER="$(echo "$RCV" | jq -r .gasUsed | cast to-dec)"
 say "buyCover (one writeCover through the pool and the Stylus engine): $GAS_COVER"
 
 # 4. enforceBell at the Bell deadline: estimates per batch size, then the largest batch within 24M for real
+price "$A" 200000000000000000000
 BELL_AT="$(cast call --json --rpc-url "$RPC" "$CLOCK" 'closureInfo(bytes32)((uint8,uint8,uint64,uint64,uint128,uint40,uint40,uint40,uint40,uint40,uint128,uint40,uint40,uint32,uint32,uint40,bool,bool))' "$A" | jq -r 'flatten | .[7]')"
 say "waiting for bellAt $BELL_AT"
 while [ "$(date +%s)" -le "$BELL_AT" ]; do sleep 5; done
