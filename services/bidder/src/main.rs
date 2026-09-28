@@ -17,7 +17,7 @@ use clap::Parser;
 use credence_bidder::{
     commitment, decide, kind_name, notional, size, Action, BidState, Book, Config, Profile,
 };
-use credence_bindings::{CredenceMarket, IAuctionHouse};
+use credence_bindings::{CredenceMarket, IAuctionHouse, ICompliance};
 use credence_common::{env, is_dev_chain, telemetry};
 
 sol! {
@@ -26,10 +26,6 @@ sol! {
         function approve(address spender, uint256 value) external returns (bool);
         function allowance(address owner, address spender) external view returns (uint256);
         function decimals() external view returns (uint8);
-    }
-    #[sol(rpc)]
-    interface ICompliance {
-        function canHold(address account) external view returns (bool);
     }
 }
 

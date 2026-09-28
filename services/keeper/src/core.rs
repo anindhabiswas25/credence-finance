@@ -17,20 +17,14 @@ use credence_risk_core::{
 };
 
 /// Contract bindings: `credence-bindings` (generated from `deployments/abis/v1`), under the names the
-/// keeper's jobs use. Declared here only: the ERC-20 `decimals` view, and `ComplianceRegistry` until
-/// `credence-bindings` exports it (BE-chain REQUEST, board 2026-09-28).
+/// keeper's jobs use. Declared here only: the ERC-20 `decimals` view.
 pub mod abi {
     #![allow(missing_docs)]
     pub use credence_bindings::{
-        AssetClock as IAssetClockV1, CredenceMarket as ICredenceMarket, IAuctionHouse, IRiskEngine,
-        IUnderwriterPool, OracleAdapter as IOracleAdapter, SeniorVault as ISeniorVault,
-        SigmaOracle as ISigmaOracle,
+        AssetClock as IAssetClockV1, ComplianceRegistry, CredenceMarket as ICredenceMarket,
+        IAuctionHouse, IRiskEngine, IUnderwriterPool, OracleAdapter as IOracleAdapter,
+        SeniorVault as ISeniorVault, SigmaOracle as ISigmaOracle,
     };
-    alloy::sol!(
-        #[sol(rpc)]
-        ComplianceRegistry,
-        "../../deployments/abis/v1/ComplianceRegistry.json"
-    );
     alloy::sol! {
         #[sol(rpc)]
         interface IERC20Decimals {
