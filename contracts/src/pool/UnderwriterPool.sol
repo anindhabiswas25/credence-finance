@@ -331,9 +331,9 @@ contract UnderwriterPool is ERC20, ReentrancyGuardTransient, IUnderwriterPool {
     /// @inheritdoc IUnderwriterPool
     function resellInventory(bytes32 assetId) external nonReentrant returns (uint64 gdaId) {
         Inventory storage inv = _inventory[assetId];
+        if (inv.gdaId != 0) revert GdaRunning(inv.gdaId);
         uint256 free = inv.qty - inv.inGda;
         if (free == 0) revert NoInventory(assetId);
-        if (inv.gdaId != 0) revert GdaRunning(inv.gdaId);
         uint256 v = _oracle().valuationPrice(assetId);
         uint256 k = v.mulDiv(GDA_START_MARKUP, WAD);
         uint256 emission = free / GDA_EMISSION_PERIOD;
