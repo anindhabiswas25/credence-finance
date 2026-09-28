@@ -97,6 +97,8 @@ async fn main() -> Result<()> {
         cfg.chain_id,
         metrics.clone(),
     );
+    let mut tx = tx;
+    tx.gas_x10 = credence_common::env::parse_or("KEEPER_GAS_MULTIPLIER_X10", 13)?;
     let mut keeper = Keeper::new(
         cfg.instance.clone(),
         rpc.clone(),

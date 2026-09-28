@@ -49,6 +49,8 @@ pub struct TxManager {
     metrics: Metrics,
     pub replace_after_blocks: u64,
     pub timeout: Duration,
+    /// Gas limit = estimate × this / 10 (§10.2: 13 = ×1.3; `KEEPER_GAS_MULTIPLIER_X10`).
+    pub gas_x10: u64,
 }
 
 impl TxManager {
@@ -68,6 +70,7 @@ impl TxManager {
             metrics,
             replace_after_blocks: 3,
             timeout: Duration::from_secs(120),
+            gas_x10: 13,
         }
     }
 
@@ -143,7 +146,7 @@ impl TxManager {
                 .clone()
                 .with_nonce(nonce)
                 .with_chain_id(self.chain_id)
-                .with_gas_limit(gas.saturating_mul(13) / 10)
+                .with_gas_limit(gas.saturating_mul(self.gas_x10) / 10)
                 .with_max_fee_per_gas(max_fee)
                 .with_max_priority_fee_per_gas(tip);
             let env: TxEnvelope =
