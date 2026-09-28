@@ -128,6 +128,13 @@ alloy::sol!(
     "../../deployments/abis/v2/Faucet.json"
 );
 
+// S3: the clean-room RedStone price source (local / testnet only until ADR-0009 D3)
+alloy::sol!(
+    #[sol(rpc, all_derives)]
+    RedStonePriceSource,
+    "../../deployments/abis/v2/RedStonePriceSource.json"
+);
+
 // BE-backend REQUEST 2026-09-28 22:20: the testnet allowlist (keeper sender) and the bidder bot's canHold pre-check.
 alloy::sol!(
     #[sol(rpc, all_derives)]
@@ -186,6 +193,14 @@ mod tests {
             "completeReopen(bytes32)"
         );
         assert_eq!(ICompliance::canHoldCall::SIGNATURE, "canHold(address)");
+        assert_eq!(
+            RedStonePriceSource::submitCall::SIGNATURE,
+            "submit(bytes,bytes32[])"
+        );
+        assert_eq!(
+            CredenceMarket::cancelLotCall::SIGNATURE,
+            "cancelLot(uint64)"
+        );
         assert_eq!(
             ComplianceRegistry::setAllowedCall::SIGNATURE,
             "setAllowed(address,bool)"
