@@ -116,6 +116,33 @@ fn deploy_clock(rpc: &str, tag: &str) -> (Address, B256, Address) {
     let v: serde_json::Value =
         serde_json::from_str(&std::fs::read_to_string(&out).unwrap()).unwrap();
     let _ = std::fs::remove_file(&out);
+    // Since ADR-0105 the clock-only script leaves the one-time wiring to DeployCoreLocal; a clock-only
+    // stack wires the clock to its oracle here (the deployer may call it once), as the S1 script did.
+    let clock = v["shared"]["clock"].as_str().unwrap();
+    let wired = std::process::Command::new("cast")
+        .args(["call", clock, "oracle()(address)", "--rpc-url", rpc])
+        .output()
+        .expect("cast must be installed");
+    if String::from_utf8_lossy(&wired.stdout).trim() == "0x0000000000000000000000000000000000000000"
+    {
+        let status = std::process::Command::new("cast")
+            .args([
+                "send",
+                clock,
+                "initializeWiring(address,address,address)",
+                v["shared"]["oracle"].as_str().unwrap(),
+                "0x0000000000000000000000000000000000000000",
+                "0x0000000000000000000000000000000000000000",
+                "--private-key",
+                ANVIL0,
+                "--rpc-url",
+                rpc,
+            ])
+            .stdout(Stdio::null())
+            .status()
+            .unwrap();
+        assert!(status.success(), "clock initializeWiring failed");
+    }
     (
         v["shared"]["clock"].as_str().unwrap().parse().unwrap(),
         v["assetIds"]["NVDA"].as_str().unwrap().parse().unwrap(),
@@ -238,6 +265,7 @@ async fn mined_pokes(pool: &PgPool) -> i64 {
 #[tokio::test]
 #[ignore = "needs anvil, forge, contracts/out and TEST_DATABASE_URL (make keeper-e2e)"]
 async fn j1_pokes_on_schedule() {
+    credence_common::telemetry::init("keeper-e2e");
     let anvil = anvil_at(OPEN - 300).await;
     let (clock_addr, nvda, feed_a) = deploy_clock(&anvil.rpc, "sched");
     let (url, pool) = db("credence_keeper_sched").await;
