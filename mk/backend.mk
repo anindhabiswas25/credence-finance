@@ -22,7 +22,7 @@ PNPM := pnpm
 .PHONY: backend-install backend-build backend-test backend-lint backend-fmt \
         infra-up infra-down infra-reset infra-ps db-migrate db-rollback calendar-gen calendar-test \
         relayer-dev relayer-smoke keeper-dev indexer-dev api-dev relayer-e2e keeper-e2e indexer-e2e services-up \
-        notifier-dev notifier-e2e r26-probe keeper-sigma-test keeper-j12-e2e keeper-j7-e2e keeper-core-e2e obs-up obs-down obs-check api-db-test api-engine-e2e
+        notifier-dev notifier-e2e r26-probe keeper-sigma-test keeper-j12-e2e keeper-j7-e2e keeper-core-e2e obs-up obs-down obs-check api-db-test api-engine-e2e indexer-core-e2e
 
 backend-install: ## Install backend deps: @credence/risk-wasm (wasm-pack, into target/be), pnpm workspace, uv calibration env, Rust crates fetched
 	CARGO_TARGET_DIR=$(BACKEND_TARGET_DIR) $(MAKE) --no-print-directory risk-wasm
@@ -97,6 +97,10 @@ indexer-e2e: ## Indexer + API e2e on the devnode: StateChanged/ReportAccepted �
 	@[ -f deployments/412346.local.json ] || $(MAKE) local-deploy-clock LOCAL_RPC=http://127.0.0.1:8547 ASSETS=NVDA,AAPL
 	$(PNPM) --filter @credence/sdk build
 	bash indexer/scripts/e2e.sh
+
+indexer-core-e2e: contracts-build ## Acceptance 6: DeployCoreLocal on a scratch anvil, scenario A's Friday (borrow → Bell → auto-cover) → Ponder → /v1/markets, /v1/vault/equity, /v1/positions
+	$(PNPM) --filter @credence/sdk build >/dev/null
+	bash indexer/scripts/core-e2e.sh
 
 indexer-dev: ## Run the Ponder indexer against the local devnode
 	$(PNPM) --filter @credence/indexer dev
