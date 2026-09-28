@@ -83,7 +83,9 @@ library MarketLib {
     uint256 internal constant WITHDRAW_MIN_HF = 1.05e18; // §12.2
     uint256 internal constant REOPEN_QUEUE = 120; // §8.4.3
     uint256 internal constant FALLBACK_CLOSURE_DAYS = 4; // R-07: a 3-day holiday weekend
-    uint256 internal constant MAX_LOT_POSITIONS = 256; // §8.7.1; beyond it, a tranche (v2)
+    /// @dev §8.7.1 allows up to 256; 128 keeps `fixLots` (one Stylus liquidationLot per position) and a whole-lot
+    ///      `settlePositions` well inside 24M gas (ADR-0110 §8). Beyond it, a tranche with the same schedule.
+    uint256 internal constant MAX_LOT_POSITIONS = 128;
     uint256 internal constant MAX_MARKETS = 64;
 
     // ───────────── wiring ─────────────

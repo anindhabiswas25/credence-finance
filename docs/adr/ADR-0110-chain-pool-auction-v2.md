@@ -11,6 +11,11 @@ frozen; `make abis-check` checks v0→v1 and v1→v2, and each break is listed w
 
 ## Decisions
 
+### 0. Addendum (same sprint)
+- `cancelLot(auctionId)` on the market (additive, v2): a lot that can no longer be fixed because the clock left the state its kind needs (an INTRADAY lot the keeper fixes after the close) is cancelled, and its positions are freed untouched. Without it they would keep `auctionId` forever.
+- `poolFeeReceivable()` on the market (additive, v2): the pool's NAV counts the fee receivable with interest accrued to now. Each market's stored `poolFeeAccrued` only updates when that market is touched.
+- Gap Cover is sold from the Bell window (close − 2 h) until `bellAt`. The epoch opens at the Bell window (§8.6.1), so a `buyCover` earlier in the session reverts `EpochNotOpen`, and the app offers cover from the Bell window on.
+
 ### 1. ABI v2 breaks (everything else is additive)
 - `PositionSettled(bytes32 indexed marketId, address indexed borrower, uint64 indexed auctionId, collateralSold,
   proceeds, penalty, shortfall, refund, debtAfter)` replaces v1's six-field event. `refund` is added to the brief's
@@ -77,9 +82,13 @@ completed (`clock.closureInfo(asset).reopenPending`) or its REOPEN lots have not
 held as `pendingLossReserve`. `releaseLossReserve(epoch, asset)` releases it later.
 
 ### 8. Auction house
-- **Tranches**: lots hold up to **256** positions (§8.7.1; S2's market used 200). When a lot fills, the market calls
-  `nextTranche(auctionId)`. The auction house marks the lot `full`, creates tranche+1 with the same schedule, and from
-  then on `getOrCreate` returns the new tranche.
+- **Tranches**: a lot holds at most **128** positions (§8.7.1 says "up to 256"; S2's market used 200). When a lot
+  fills, the market calls `nextTranche(auctionId)`. The auction house marks the lot `full`, creates tranche+1 with the
+  same schedule, and from then on `getOrCreate` returns the new tranche. **Why 128:** `fixLots` is one call per lot
+  and makes one Stylus `liquidationLot` per position (about 50k gas each through the router, measured on the devnode),
+  so a 256-position lot would come to about 23M gas: too close to the 24M cap for a call that cannot be split. At 128,
+  `fixLots` is about 12M and a whole-lot `settlePositions` about 10M (`RiskGasTest`). Positions beyond 128 are
+  handled by more tranches on the same schedule.
 - **REOPEN completion**: after the last REOPEN tranche of (asset, closure) clears, the auction house calls
   `clock.markReopenComplete`. The permissionless `completeReopen(asset)` does the same after the queue window when no
   REOPEN auction exists (otherwise the asset would sit in REOPEN forever).
