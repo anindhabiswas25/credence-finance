@@ -873,6 +873,8 @@ fn credence_risk(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(quote_cover, m)?)?;
     m.add_function(wrap_pyfunction!(cover_loss_vector, m)?)?;
     m.add_function(wrap_pyfunction!(pack_losses, m)?)?;
+    // the name QE's Engine protocol uses
+    m.add("loss_vector", m.getattr("cover_loss_vector")?)?;
     m.add_function(wrap_pyfunction!(pool_capacity, m)?)?;
     m.add_function(wrap_pyfunction!(liquidation_lot, m)?)?;
     m.add_function(wrap_pyfunction!(preclose_lot, m)?)?;

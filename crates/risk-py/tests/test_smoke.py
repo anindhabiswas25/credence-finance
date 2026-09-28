@@ -77,6 +77,7 @@ def test_sets_premium_capacity_against_cli():
     assert ltv == cr.safe_ltv(-9000, 4 * WAD // 100, 0, 3 * WAD // 100, 75 * WAD // 100)
     joint = [-8000, 300, -2000, 50]
     lv = cr.cover_loss_vector(joint, 18_000_000_000, 13_500_000_000, 4 * WAD // 100, 0, 3 * WAD // 100)
+    assert cr.loss_vector(joint, 18_000_000_000, 13_500_000_000, 4 * WAD // 100, 0, 3 * WAD // 100) == lv
     ref = cli("loss-vector", {"joint": joint, "collateralValue": "18000000000", "debtProjected": "13500000000",
                               "sigma": str(4 * WAD // 100), "kappa": str(3 * WAD // 100)})
     if ref:
