@@ -78,6 +78,20 @@ enum Cmd {
         #[arg(long, default_value_t = 500)]
         quote_sample_ms: u64,
     },
+    /// Record RedStone `redstone-primary-prod` packages from the gateway's history (about 24 h) into a
+    /// `PRINT_SOURCE=redstone` recording (ADR-0009 D1), e.g. around an open or a close.
+    RedstoneRecord {
+        /// Unix seconds (inclusive; 10 s grid)
+        #[arg(long)]
+        from: u64,
+        #[arg(long)]
+        to: u64,
+        /// Regular-session feed ids
+        #[arg(long, value_delimiter = ',', default_value = "NVDA,AAPL,TSLA,MSFT")]
+        feeds: Vec<String>,
+        #[arg(long)]
+        out: std::path::PathBuf,
+    },
     /// Hit every vendor endpoint once for one asset and report what the key is entitled to.
     Smoke {
         /// Asset to test (defaults to the first in ASSETS).
@@ -487,13 +501,34 @@ async fn main() -> Result<()> {
         );
         return Ok(());
     }
+    if let Cmd::RedstoneRecord {
+        from,
+        to,
+        feeds,
+        out,
+    } = &cli.cmd
+    {
+        use credence_relayer::vendor::redstone::{Gateway, HISTORY_GATEWAYS};
+        let g = Gateway::new(HISTORY_GATEWAYS.iter().map(|s| s.to_string()).collect());
+        let doc = g.record(feeds, *from, *to).await;
+        let n = doc["snapshots"].as_object().map_or(0, |m| {
+            m.values().filter(|v| v.get("error").is_none()).count()
+        });
+        std::fs::write(out, serde_json::to_string(&doc)?)?;
+        println!(
+            "wrote {n} RedStone snapshots ({}) to {}",
+            feeds.join(","),
+            out.display()
+        );
+        return Ok(());
+    }
     let common = Common::from_env()?;
     let ops = OpsState::new("credence-relayer");
     let metrics = Metrics::new(&ops.registry)?;
     let metrics_addr: SocketAddr = env::parse_or("METRICS_ADDR", "0.0.0.0:9101".parse()?)?;
 
     match cli.cmd {
-        Cmd::SampleReplay { .. } => unreachable!("handled above"),
+        Cmd::SampleReplay { .. } | Cmd::RedstoneRecord { .. } => unreachable!("handled above"),
         Cmd::Smoke { asset, out } => smoke(&common, asset, out).await,
         Cmd::Record {
             start,

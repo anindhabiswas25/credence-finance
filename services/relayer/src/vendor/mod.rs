@@ -7,6 +7,7 @@ pub mod alpaca_ws;
 pub mod halts;
 pub mod polygon;
 pub mod polygon_ws;
+pub mod redstone;
 pub mod replay;
 pub mod stream;
 
@@ -59,6 +60,9 @@ pub enum PrintSource {
     AuctionTrade,
     /// The vendor's daily bar open/close (official), timestamped at the scheduled session open/close.
     DailyBar,
+    /// Testnet only (ADR-0009 D1): derived from RedStone regular-session packages, timestamped with the
+    /// package time (`PRINT_SOURCE=redstone`, `vendor::redstone`). Not an official auction print.
+    OracleFirstRegular,
 }
 
 /// An official opening or closing auction print.

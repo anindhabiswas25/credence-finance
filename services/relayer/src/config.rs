@@ -9,6 +9,7 @@ use crate::{
         halts::{HaltFeed, NASDAQ_HALTS_URL},
         polygon::{Polygon, PolygonConfig},
         polygon_ws::PolygonStream,
+        redstone,
         replay::Replay,
         stream::{run_stream, StreamCache, StreamOptions, StreamProtocol, Streaming},
         DynVendor,
@@ -171,6 +172,54 @@ fn plans(common: &Common) -> std::collections::HashMap<String, crate::asset::Pla
 /// `stream` = `Some(metrics)` starts the vendor WebSocket (unless `RELAYER_STREAM=0`); `None` is
 /// REST only (smoke tests, recording).
 pub async fn build_vendor(
+    common: &Common,
+    stream: Option<Metrics>,
+) -> Result<(DynVendor, Arc<Calendar>)> {
+    let (v, cal) = build_data_vendor(common, stream).await?;
+    Ok((with_print_source(v, common.chain_id)?, cal))
+}
+
+/// `PRINT_SOURCE=vendor` (default): OPEN/CLOSE are the vendor's official auction prints (§10.1).
+/// `PRINT_SOURCE=redstone` (ADR-0009 D1, testnet only): OPEN/CLOSE are derived from RedStone packages,
+/// from the gateway's history, or from recordings (`REDSTONE_RECORDING=<file>[,<file>…]`, shifted by
+/// `REDSTONE_SHIFT_S` onto the calendar in use). LIVE and STATUS stay with `VENDOR`.
+pub fn with_print_source(inner: DynVendor, chain_id: u64) -> Result<DynVendor> {
+    match env::or("PRINT_SOURCE", "vendor").to_lowercase().as_str() {
+        "vendor" => Ok(inner),
+        "redstone" => {
+            if chain_id == 42_161 {
+                bail!("PRINT_SOURCE=redstone is a testnet-only print source (ADR-0009 D1)");
+            }
+            let recordings = env::list("REDSTONE_RECORDING");
+            let shift: i64 = env::parse_or("REDSTONE_SHIFT_S", 0)?;
+            let source: Arc<dyn redstone::PackageSource> = if recordings.is_empty() {
+                let urls = match env::list("REDSTONE_GATEWAYS") {
+                    v if v.is_empty() => redstone::HISTORY_GATEWAYS
+                        .iter()
+                        .map(|s| s.to_string())
+                        .collect(),
+                    v => v,
+                };
+                Arc::new(redstone::Gateway::new(urls))
+            } else {
+                let paths: Vec<PathBuf> = recordings.iter().map(PathBuf::from).collect();
+                let refs: Vec<&std::path::Path> = paths.iter().map(|p| p.as_path()).collect();
+                Arc::new(redstone::Recorded::load(&refs, shift)?)
+            };
+            let mut v = redstone::RedStonePrints::new(inner, source);
+            v.shift_s = shift;
+            tracing::info!(
+                recordings = recordings.len(),
+                shift,
+                "OPEN/CLOSE from RedStone packages (OracleFirstRegular)"
+            );
+            Ok(Arc::new(v))
+        }
+        other => bail!("PRINT_SOURCE={other} is not supported (vendor | redstone)"),
+    }
+}
+
+async fn build_data_vendor(
     common: &Common,
     stream: Option<Metrics>,
 ) -> Result<(DynVendor, Arc<Calendar>)> {
