@@ -191,13 +191,21 @@ contract DeployCoreLocal is DeployClockLocal {
         for (uint256 i; i < s.marketIds.length; ++i) {
             s.vault.setCap(s.marketIds[i], nav ? 5_000_000e6 : 2_000_000e6);
         }
-        s.vault.setSupplyQueue(s.marketIds);
         s.vault.setWithdrawQueue(s.marketIds);
 
+        // The seed is deposited with an empty supply queue (it stays idle) and then allocated evenly, so every market
+        // has liquidity (a queue deposit would fill the first market's cap and leave the others empty).
         uint256 seed = vm.envOr(nav ? "SEED_NAV" : "SEED_EQUITY", uint256(1_000_000e6));
         MockUSDC(usdc).mint(me, seed);
         MockUSDC(usdc).approve(address(s.vault), seed);
-        if (seed != 0) s.vault.deposit(seed, me);
+        if (seed != 0) {
+            s.vault.deposit(seed, me);
+            uint256 each = s.vault.idle() / s.marketIds.length;
+            for (uint256 i; i < s.marketIds.length && each != 0; ++i) {
+                s.vault.allocate(s.marketIds[i], each);
+            }
+        }
+        s.vault.setSupplyQueue(s.marketIds);
         MockUSDC(usdc).mint(address(s.tips), 1_000e6); // keeper tip budget
     }
 

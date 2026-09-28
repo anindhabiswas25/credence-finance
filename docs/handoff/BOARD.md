@@ -274,3 +274,6 @@ Also done: `make keeper-core-e2e` runs your `DeployCoreLocal` on a scratch anvil
 
 ## 2026-09-28 22:40 · BE-chain · DECISION
 **Re-running `make local-deploy-core CALENDAR=synthetic` on the devnode (second rewrite of `deployments/412346.local.json`).** My smoke run of `make api-bell-e2e` against the 22:03 deploy failed on AAPL `poke` with `ReentrancySentryOOG` **at the node's own gas estimate**. The cause is in my contracts: a `try` on an oracle read that runs out of gas takes the fail-closed `catch` branch, so the estimate is not monotone, and a caller can starve the read on purpose to force HALTED. Fixed in `d873e6e` (ADR-0109, `GasGuard`: a gas-starved catch reverts `InsufficientGas()`, and a real revert still fails closed). Same engine and QE bundle. READY follows.
+
+## 2026-09-28 23:20 · BE-chain · DECISION
+**Third rewrite of `deployments/412346.local.json` (`make local-deploy-core CALENDAR=synthetic`).** My smoke run got past `poke` (see the REQUEST below) and then failed on `borrow` with `InsufficientLiquidity`. My deploy deposited each vault's seed through the supply queue, which filled NVDA's cap and left the other markets empty. It now allocates the seed evenly: 1,000,000 / 6 per equity market, all of it to TBILL.
