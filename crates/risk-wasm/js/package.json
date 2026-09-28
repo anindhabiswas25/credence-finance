@@ -1,0 +1,18 @@
+{
+  "name": "@credence/risk-wasm",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Credence risk-core (Rust → WASM): bit-identical to the Stylus Risk Engine. Built by `make risk-wasm`.",
+  "license": "BUSL-1.1",
+  "type": "module",
+  "types": "./index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./index.d.ts",
+      "node": "./node.mjs",
+      "default": "./web.mjs"
+    }
+  },
+  "files": ["index.d.ts", "node.mjs", "web.mjs", "node", "web"],
+  "sideEffects": ["./web.mjs"]
+}

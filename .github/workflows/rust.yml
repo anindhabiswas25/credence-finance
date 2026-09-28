@@ -36,6 +36,26 @@ jobs:
       - name: Engine ABI == IRiskEngine.sol
         run: make stylus-abi-check
 
+  bindings:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - run: rustup show
+      - uses: Swatinem/rust-cache@v2
+      - uses: astral-sh/setup-uv@v6
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: wasm-pack 0.15.0
+        run: cargo install --locked wasm-pack@0.15.0
+      - name: risk-py (maturin, abi3) smoke test vs risk-cli
+        run: make risk-py-test
+      - name: risk-wasm (node + web builds) smoke test vs risk-cli
+        run: make risk-wasm-test
+      - name: ADR-0106 example bundle validates
+        run: make risk-validate-set
+
   stylus:
     runs-on: ubuntu-latest
     timeout-minutes: 60

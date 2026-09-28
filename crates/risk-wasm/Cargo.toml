@@ -1,0 +1,24 @@
+[package]
+name = "credence-risk-wasm"
+description = "risk-core for TypeScript (wasm-bindgen): Bell quotes in the API and previews in the web app"
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+
+[lib]
+name = "credence_risk_wasm"
+crate-type = ["cdylib", "rlib"]
+# The bindings only run inside a JS host; the tests are `make risk-wasm-test` (Node, against risk-cli).
+test = false
+doctest = false
+
+[dependencies]
+credence-risk-core = { path = "../risk-core", features = ["files"] }
+alloy-primitives = { workspace = true, features = ["std"] }
+serde_json = { workspace = true }
+wasm-bindgen = "=0.2.129"
+js-sys = "=0.3.106"
+
+[package.metadata.wasm-pack.profile.release]
+# the workspace release profile already runs lto + opt-level 3; wasm-opt shrinks further
+wasm-opt = ["-O3"]

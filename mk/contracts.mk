@@ -27,7 +27,7 @@ ABI_IMPLS ?= CalendarStore AssetClock CredencePriceFeed OracleAdapter SequencerH
 
 .PHONY: abis-check local-deploy-clock contracts-deps contracts-build contracts-test contracts-invariant contracts-coverage contracts-fmt \
   contracts-fmt-check contracts-snapshot contracts-clean abis-export risk-build risk-test risk-lint risk-fmt stylus-test stylus-abi-check \
-  stylus-check stylus-export-abi devnode-up devnode-down devnode-deploy-engine stylus-diff risk-validate-set risk-load-set risk-py-develop risk-py-test
+  stylus-check stylus-export-abi devnode-up devnode-down devnode-deploy-engine stylus-diff risk-validate-set risk-load-set risk-py-develop risk-py-test risk-wasm risk-wasm-test
 
 contracts-deps: ## Install pinned Solidity deps into contracts/lib (OZ, forge-std, solady) if missing
 	@cd $(CONTRACTS_DIR) && \
@@ -78,7 +78,7 @@ risk-build: ## Build risk-core and risk-cli (native, release)
 risk-test: ## Run risk-core golden vectors G-01..G-22, proptests, and risk-cli tests
 	cargo test -p credence-risk-core -p credence-risk-cli
 
-RISK_CRATES := -p credence-risk-core -p credence-risk-cli -p credence-risk-py -p credence-risk-engine -p credence-risk-engine-diff
+RISK_CRATES := -p credence-risk-core -p credence-risk-cli -p credence-risk-py -p credence-risk-wasm -p credence-risk-engine -p credence-risk-engine-diff
 
 risk-lint: ## rustfmt check + clippy -D warnings on the blockchain crates
 	cargo fmt $(RISK_CRATES) -- --check
@@ -151,3 +151,22 @@ risk-py-develop: ## Build crates/risk-py (release) and install `credence_risk` i
 risk-py-test: risk-py-develop ## risk-py smoke test (every function; cross-checked against risk-cli and the ADR-0106 example)
 	cargo build -q --release -p credence-risk-cli
 	RISK_CLI=$(abspath target/release/risk-cli) $(RISK_PY_VENV)/bin/python crates/risk-py/tests/test_smoke.py
+
+# risk-wasm (wasm-bindgen via wasm-pack 0.15.0). One package, two builds: `node` (CommonJS glue, sync load) for the
+# API / SDK tests and `web` (fetch + instantiate) for the web app, behind conditional exports. Output:
+# crates/risk-wasm/pkg = `@credence/risk-wasm` (git-ignored; BE-backend depends on it from packages/sdk).
+RISK_WASM_PKG := crates/risk-wasm/pkg
+
+risk-wasm: ## Build @credence/risk-wasm into crates/risk-wasm/pkg (node + web builds, conditional exports)
+	rm -rf $(RISK_WASM_PKG)
+	wasm-pack build crates/risk-wasm --release --no-pack --target nodejs --out-dir pkg/node --out-name credence_risk_wasm
+	wasm-pack build crates/risk-wasm --release --no-pack --target web --out-dir pkg/web --out-name credence_risk_wasm
+	cp crates/risk-wasm/js/package.json crates/risk-wasm/js/node.mjs crates/risk-wasm/js/web.mjs \
+	  crates/risk-wasm/js/index.d.ts $(RISK_WASM_PKG)/
+	echo '{ "type": "commonjs" }' > $(RISK_WASM_PKG)/node/package.json
+	rm -f $(RISK_WASM_PKG)/node/.gitignore $(RISK_WASM_PKG)/web/.gitignore
+	@ls -l $(RISK_WASM_PKG)/web/*.wasm
+
+risk-wasm-test: risk-wasm ## risk-wasm smoke test on Node (both builds; cross-checked against risk-cli)
+	cargo build -q --release -p credence-risk-cli
+	RISK_CLI=$(abspath target/release/risk-cli) node crates/risk-wasm/tests/smoke.mjs
