@@ -142,7 +142,7 @@ logdata() { # receipt-json event-signature → data of the first such log
 # the Bell window opens at close − 2 h: wait for it (the devnode clock cannot be warped)
 WIN="$(( $(cast call --json --rpc-url "$RPC" "$CLOCK" 'closureInfo(bytes32)((uint8,uint8,uint64,uint64,uint128,uint40,uint40,uint40,uint40,uint40,uint128,uint40,uint40,uint32,uint32,uint40,bool,bool))' "$ASSET" | jq -r 'flatten | .[6]') ))"
 echo "     waiting for the Bell window at $WIN ($(( WIN - $(date +%s) )) s)"
-while [ "$(date +%s)" -le "$WIN" ]; do sleep 10; done
+while [ "$(date +%s)" -le "$WIN" ]; do live; sleep 15; done   # keep the feeds fresh (a stale feed halts the asset)
 # 5a. buyCover → pool.writeCover: coverLossVector + poolCapacity over the 6 markets + quoteCover at u_after (Stylus)
 live
 RC="$(cast send --rpc-url "$RPC" --private-key "$KEY" "$MARKET" 'buyCover(bytes32,uint256,bool)' "$ID" 1000000000 false --json)"
@@ -184,7 +184,7 @@ LOT="$(field 12)"; [ "$LOT" != 0 ] || { echo "empty lot" >&2; exit 1; }
 BQ=$(python3 -c "print($LOT // 2)"); BP=178200000000000000000   # half the lot at 99% of $180
 send "$HOUSE" 'placeBid(uint64,uint128,uint128)' "$AID" "$BQ" "$BP"
 CLEAR_AT="$(field 11)"
-while [ "$(date +%s)" -le "$CLEAR_AT" ]; do sleep 2; done
+while [ "$(date +%s)" -le "$CLEAR_AT" ]; do ASSET="$A2" PRICE=180000000000000000000 live; sleep 10; done
 ASSET="$A2" PRICE=180000000000000000000 live
 RCL="$(cast send --rpc-url "$RPC" --private-key "$KEY" "$HOUSE" 'clear(uint64)' "$AID" --json)"
 [ "$(echo "$RCL" | jq -r .status)" = 0x1 ] || { echo "clear reverted: $RCL" >&2; exit 1; }

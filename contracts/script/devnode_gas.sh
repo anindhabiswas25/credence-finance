@@ -54,8 +54,12 @@ price() { # asset price: a LIVE regular print on both feeds (2-of-3 signed)
   done
   send "$CLOCK" 'poke(bytes32)' "$1"
 }
+# waits keep both feeds fresh (as the relayer does): a feed older than 60 s in REGULAR halts the asset (fail closed)
+declare -A PX
+wait_until() { while [ "$(date +%s)" -le "$1" ]; do for a in "${!PX[@]}"; do price "$a" "${PX[$a]}"; done; sleep 15; done; }
 A="$(jq -r .assetIds.AAPL "$BOOK")"; ID="$(jq -r .equity.markets.AAPL "$BOOK")"; T="$(jq -r .tokens.tAAPL "$BOOK")"
 NV="$(jq -r .assetIds.NVDA "$BOOK")"; NID="$(jq -r .equity.markets.NVDA "$BOOK")"; NT="$(jq -r .tokens.tNVDA "$BOOK")"
+PX[$A]=200000000000000000000; PX[$NV]=180000000000000000000
 
 # 2. N borrowers on AAPL at 72% (before the Bell window the limit is maxLtv), 64 funded bidders
 declare -a BK BA
@@ -88,7 +92,7 @@ send "$SO" 'submit((bytes32,uint8,uint256,uint32,uint64),bytes[])' "$U" \
 price "$NV" 180000000000000000000   # the clock is lazy: poke before reading its times
 WIN="$(cast call --json --rpc-url "$RPC" "$CLOCK" 'closureInfo(bytes32)((uint8,uint8,uint64,uint64,uint128,uint40,uint40,uint40,uint40,uint40,uint128,uint40,uint40,uint32,uint32,uint40,bool,bool))' "$NV" | jq -r 'flatten | .[6]')"
 say "waiting for the Bell window at $WIN"
-while [ "$(date +%s)" -le "$WIN" ]; do sleep 10; done
+wait_until "$WIN"
 price "$NV" 180000000000000000000
 KC="$(cast wallet new --json | jq -r '(.data // .)[0].private_key')"; C="$(cast wallet address --private-key "$KC")"
 cast send --rpc-url "$RPC" --private-key "$KEY" "$C" --value 0.2ether >/dev/null
@@ -107,7 +111,7 @@ say "buyCover (one writeCover through the pool and the Stylus engine): $GAS_COVE
 price "$A" 200000000000000000000
 BELL_AT="$(cast call --json --rpc-url "$RPC" "$CLOCK" 'closureInfo(bytes32)((uint8,uint8,uint64,uint64,uint128,uint40,uint40,uint40,uint40,uint40,uint128,uint40,uint40,uint32,uint32,uint40,bool,bool))' "$A" | jq -r 'flatten | .[7]')"
 say "waiting for bellAt $BELL_AT"
-while [ "$(date +%s)" -le "$BELL_AT" ]; do sleep 5; done
+wait_until "$BELL_AT"
 batch() { local s="["; for i in $(seq 0 $(($1 - 1))); do s="$s${BA[$i]},"; done; echo "${s%,}]"; }
 declare -A G
 best=0
@@ -139,6 +143,7 @@ cast send --rpc-url "$RPC" --private-key "$KL" "$MARKET" 'addCollateral(bytes32,
 price "$NV" 180000000000000000000
 cast send --rpc-url "$RPC" --private-key "$KL" "$MARKET" 'borrow(bytes32,uint256,address)' "$NID" 133000000000 "$L" >/dev/null
 price "$NV" 150000000000000000000
+PX[$NV]=150000000000000000000
 send "$MARKET" 'flagForAuction(bytes32,address[])' "$NID" "[$L]"
 AID=$(( $(cast call --rpc-url "$RPC" "$HOUSE" 'nextAuctionId()(uint64)') - 1 ))
 AT='(uint8,uint8,bytes32,bytes32,uint64,uint64,uint32,uint40[4],uint128,uint128,uint128,uint128,uint128,uint128,uint128,uint16,uint16,bool,bool)'
@@ -152,7 +157,7 @@ for i in $(seq 0 $((BIDS - 1))); do
   cast send --rpc-url "$RPC" --private-key "${XK[$i]}" "$HOUSE" 'placeBid(uint64,uint128,uint128)' "$AID" "$q" "$p" >/dev/null
 done
 say "$BIDS bids placed on lot $LOT"
-while [ "$(date +%s)" -le "$(field 11)" ]; do sleep 3; done
+wait_until "$(field 11)"
 price "$NV" 150000000000000000000
 RC="$(cast send --rpc-url "$RPC" --private-key "$KEY" --gas-limit 30000000 "$HOUSE" 'clear(uint64)' "$AID" --json)"
 GAS_CLEAR="$(echo "$RC" | jq -r .gasUsed | cast to-dec)"
