@@ -422,3 +422,15 @@ export const openPrint = onchainTable(
     pk: primaryKey({ columns: [table.assetId, table.closureId] }),
   }),
 );
+
+/** Pool share balances (the pool is an ERC-20: `Transfer` projections), for underwriter notifications. */
+export const poolHolder = onchainTable(
+  "pool_holder",
+  (t) => ({
+    pool: t.hex().notNull(),
+    owner: t.hex().notNull(),
+    shares: t.bigint().notNull(),
+    updatedAt: t.bigint().notNull(),
+  }),
+  (table) => ({ pk: primaryKey({ columns: [table.pool, table.owner] }) }),
+);

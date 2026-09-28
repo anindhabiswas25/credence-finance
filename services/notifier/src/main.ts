@@ -6,6 +6,10 @@ import { log } from "./log.ts";
 import { createMetrics } from "./metrics.ts";
 import { connect } from "./queue.ts";
 import { runOnce } from "./worker.ts";
+import { labelsFromBook, scan, type Labels } from "./producer.ts";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
 const cfg = loadConfig();
 const sql = connect(cfg.databaseUrl, cfg.batch + 2);
@@ -63,6 +67,35 @@ async function loop() {
 }
 
 await sql.listen("notification_job", () => wake());
+
+// indexer-triggered events (auto-cover, reopen queue, auction settled, epoch settled, withdrawal claimable)
+async function scanLoop() {
+  if (!cfg.scan.schema) return;
+  const root = resolve(
+    fileURLToPath(new URL(".", import.meta.url)),
+    "../../..",
+  );
+  let labels: Labels | null = null;
+  let since = BigInt(Math.floor(Date.now() / 1000) - cfg.scan.lookbackS);
+  while (!stopping) {
+    try {
+      labels ??= labelsFromBook(
+        JSON.parse(readFileSync(resolve(root, cfg.scan.bookFile), "utf8")),
+      );
+      const r = await scan(sql, cfg.scan.schema, since, labels);
+      since = r.maxTs; // inclusive: rows of the same second are re-read, their dedupe keys hold
+      if (r.enqueued > 0)
+        log.info(
+          { enqueued: r.enqueued },
+          "indexer-triggered notifications enqueued",
+        );
+    } catch (e) {
+      log.warn({ err: String(e) }, "indexer scan failed");
+    }
+    await new Promise((r) => setTimeout(r, cfg.scan.everyMs));
+  }
+}
+void scanLoop();
 
 createServer(async (req, res) => {
   if (req.url === "/healthz") return void res.writeHead(200).end("ok");

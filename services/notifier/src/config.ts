@@ -22,6 +22,15 @@ const Env = z.object({
     .positive()
     .default(6 * 3600),
   API_PUBLIC_ORIGIN: z.string().default("http://localhost:3000"),
+  /** Indexer-triggered events (producer.ts): Ponder's views schema; empty disables the scan. */
+  INDEXER_SCHEMA: z
+    .string()
+    .regex(/^[a-z0-9_]*$/)
+    .default("indexer"),
+  NOTIFIER_SCAN_MS: z.coerce.number().int().positive().default(5000),
+  NOTIFIER_SCAN_LOOKBACK_S: z.coerce.number().int().nonnegative().default(3600),
+  CHAIN_ID: z.coerce.number().int().default(412346),
+  DEPLOYMENTS_FILE: z.string().optional(),
   RESEND_API_KEY: z.string().optional(),
   RESEND_API_URL: z.string().default("https://api.resend.com"),
   NOTIFIER_EMAIL_FROM: z.string().default("Credence <alerts@credence.finance>"),
@@ -39,6 +48,8 @@ export interface Config {
   batch: number;
   pollMs: number;
   lockTimeoutS: number;
+  /** Indexer-triggered events (producer.ts). */
+  scan: { schema: string; everyMs: number; lookbackS: number; bookFile: string };
   worker: WorkerConfig;
 }
 
@@ -57,6 +68,12 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     batch: e.NOTIFIER_BATCH,
     pollMs: e.NOTIFIER_POLL_MS,
     lockTimeoutS: e.NOTIFIER_LOCK_TIMEOUT_S,
+    scan: {
+      schema: e.INDEXER_SCHEMA,
+      everyMs: e.NOTIFIER_SCAN_MS,
+      lookbackS: e.NOTIFIER_SCAN_LOOKBACK_S,
+      bookFile: e.DEPLOYMENTS_FILE ?? `deployments/${e.CHAIN_ID}.local.json`,
+    },
     worker: {
       email: resend
         ? {

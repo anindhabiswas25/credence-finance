@@ -11,6 +11,7 @@ import {
   pool,
   poolFlow,
   poolRequest,
+  poolHolder,
 } from "ponder:schema";
 import { indexerBook, stackOf } from "./book";
 
@@ -551,4 +552,18 @@ ponder.on("AuctionHouse:GdaClosed", async ({ event, context }) => {
   await context.db
     .update(gda, { gdaId: event.args.gdaId })
     .set({ unsold: event.args.unsold, status: "closed" });
+});
+
+const ZERO_ADDR = "0x0000000000000000000000000000000000000000";
+async function moveShares(context: Context, event: Ev, owner: Hex, delta: bigint) {
+  if (owner.toLowerCase() === ZERO_ADDR) return;
+  const key = { pool: lc(event.log.address), owner: lc(owner) };
+  const row = await context.db.find(poolHolder, key);
+  const shares = (row?.shares ?? 0n) + delta;
+  await context.db.insert(poolHolder).values({ ...key, shares, updatedAt: event.block.timestamp }).onConflictDoUpdate({ shares, updatedAt: event.block.timestamp });
+}
+ponder.on("Pool:Transfer", async ({ event, context }) => {
+  const { from, to, value } = event.args;
+  await moveShares(context, event, from, -value);
+  await moveShares(context, event, to, value);
 });
