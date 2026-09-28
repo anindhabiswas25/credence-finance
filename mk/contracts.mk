@@ -24,11 +24,12 @@ ABI_CONTRACTS := ICredenceErrors ICalendarStore IAssetClock IPriceSource INavSou
 # Implementations built this sprint (their ABIs add admin functions and constructor args to the interfaces).
 ABI_IMPLS ?= CalendarStore AssetClock CredencePriceFeed OracleAdapter SequencerHealth UniV3TwapSource \
   CredenceStockToken CredenceTreasuryFund ComplianceRegistry Faucet CredenceMarket SeniorVault SigmaOracle \
-  KeeperTips Treasury ProtocolReserve CredenceGuardian CredenceTimelock RiskEngineRouter
+  KeeperTips Treasury ProtocolReserve CredenceGuardian CredenceTimelock RiskEngineRouter \
+  UnderwriterPool AuctionHouse RedStonePriceSource
 
 .PHONY: abis-check local-deploy-clock contracts-deps contracts-build contracts-test contracts-invariant contracts-coverage contracts-fmt \
   contracts-fmt-check contracts-snapshot contracts-clean abis-export risk-build risk-test risk-lint risk-fmt stylus-test stylus-abi-check \
-  stylus-check stylus-export-abi devnode-up devnode-down devnode-deploy-engine stylus-diff risk-validate-set risk-load-set risk-py-develop risk-py-test risk-wasm risk-wasm-test local-deploy-core stylus-repro devnode-integration
+  stylus-check stylus-export-abi devnode-up devnode-down devnode-deploy-engine stylus-diff risk-validate-set risk-load-set risk-py-develop risk-py-test risk-wasm risk-wasm-test local-deploy-core stylus-repro devnode-integration devnode-gas
 
 contracts-deps: ## Install pinned Solidity deps into contracts/lib (OZ, forge-std, solady) if missing
 	@cd $(CONTRACTS_DIR) && \
@@ -45,12 +46,12 @@ contracts-test: contracts-deps ## Run every Solidity test: unit, fuzz, invariant
 contracts-invariant: contracts-deps ## Run only the invariant suites
 	cd $(CONTRACTS_DIR) && forge test --match-path 'test/invariant/*'
 
-contracts-coverage: contracts-deps ## Line coverage (lcov); fails if src/core, src/governance, src/clock or src/oracle is below 95%
+contracts-coverage: contracts-deps ## Line coverage (lcov); fails if src/core, governance, clock, oracle, pool or auction is below 95%
 	@mkdir -p $(CONTRACTS_DIR)/coverage
 	@rm -f $(CONTRACTS_DIR)/lcov.info   # a stale report must never pass the gate
 	cd $(CONTRACTS_DIR) && FOUNDRY_PROFILE=coverage forge coverage --ir-minimum --skip script --report summary --report lcov \
 	  --no-match-coverage '(test|script|lib)/' | tee coverage/summary.txt
-	python3 $(CONTRACTS_DIR)/script/check_coverage.py $(CONTRACTS_DIR)/lcov.info src/core src/governance src/clock src/oracle 95
+	python3 $(CONTRACTS_DIR)/script/check_coverage.py $(CONTRACTS_DIR)/lcov.info src/core src/governance src/clock src/oracle src/pool src/auction 95
 
 contracts-fmt: ## Format Solidity sources
 	cd $(CONTRACTS_DIR) && forge fmt
@@ -100,6 +101,9 @@ stylus-check: ## cargo stylus check of both engine programs against the devnode 
 
 devnode-integration: ## Market ↔ real Stylus engine on the devnode (dedicated engine + QE bundle + core), vs risk-cli
 	LOCAL_RPC=$(DEVNODE_RPC) PRIVATE_KEY=$(DEVNODE_KEY) bash $(CONTRACTS_DIR)/script/devnode_integration.sh
+
+devnode-gas: ## S3 gas on the devnode (own engine + book): enforceBell with auto-cover per batch size → the J3 batch within 24M, writeCover, clear with 64 bids (~30 min)
+	LOCAL_RPC=$(DEVNODE_RPC) PRIVATE_KEY=$(DEVNODE_KEY) bash $(CONTRACTS_DIR)/script/devnode_gas.sh
 
 stylus-repro: ## Build both Stylus programs from two fresh clones of HEAD and require identical WASM sha256 (R-24)
 	bash $(STYLUS_DIR)/scripts/repro.sh

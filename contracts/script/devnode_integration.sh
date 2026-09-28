@@ -40,9 +40,12 @@ ENGINE="$(jq -r .shared.riskEngine "$BOOK")"
   RISK_BUNDLE_DIR="$(dirname "$BUNDLE")" bash contracts/script/load_risk_bundle.sh | tail -1)
 
 # 2. a synthetic calendar centred on the devnode's clock (it cannot be warped): today's session runs from now − 2 h
-#    to now + 4 h and is followed by a WEEKEND closure, so the market is in REGULAR with live prices
+#    to now + 2 h 24 min and is followed by a WEEKEND closure, so the market is in REGULAR with live prices. The pool
+#    is deployed BEFORE the Bell window (close − 2 h): a pool that starts inside a window sells cover from the next
+#    closure only (§8.6.3). Phase 5 waits for the window.
 mkdir -p "$FIX"
-python3 "$ROOT/contracts/script/synthetic_calendar.py" "$NOW" "$FIX" --after 7 --regular-hours 4 >/dev/null
+python3 "$ROOT/contracts/script/synthetic_calendar.py" "$(cast block latest --field timestamp --rpc-url "$RPC")" "$FIX" \
+  --after 7 --regular-hours 2.4 >/dev/null
 XNYS="$FIX/XNYS-synthetic.json"; USBANK="$FIX/USBANK-synthetic.json"
 (cd "$ROOT/contracts" && OUT="$BOOK" RISK_ENGINE="$ENGINE" PRIVATE_KEY="$KEY" RELAYER_A_SIGNERS="$SIGNERS" \
   RELAYER_B_SIGNERS="$SIGNERS" XNYS_CALENDAR="$XNYS" USBANK_CALENDAR="$USBANK" SEED_EQUITY=100000000000 \
@@ -73,6 +76,16 @@ send "$CLOCK" 'poke(bytes32)' "$ASSET"
 STATE="$(cast call --rpc-url "$RPC" "$CLOCK" 'state(bytes32)(uint8)' "$ASSET")"
 echo "ok   clock state $STATE (0 REGULAR, 1 EXTENDED, 2 CLOSED)"
 
+# a real position: 100 tNVDA, borrow 13,000 USDC (72%: allowed at maxLtv before the Bell window; the borrow calls
+# engine.safeLtv on-chain); the σ update below puts it above the weekend safe LTV at the Bell
+send "$TOKEN" 'mint(address,uint256)' "$ME" 100000000000000000000
+send "$TOKEN" 'approve(address,uint256)' "$MARKET" 100000000000000000000
+send "$MARKET" 'addCollateral(bytes32,address,uint256)' "$ID" "$ME" 100000000000000000000
+live   # the borrow's cross-check needs both feeds fresh (60 s in REGULAR)
+send "$MARKET" 'borrow(bytes32,uint256,address)' "$ID" 13000000000 "$ME"
+live
+echo "ok   borrow of 13,000 USDC through the market (safeLtv checked by the Stylus engine)"
+
 # σ through the real J7 path: a 2-of-3 EIP-712 SigmaUpdate to SigmaOracle, which writes the engine (R-15):
 # NVDA WEEKEND σ → 4%, so the weekend safe LTV drops below 75%
 SO="$(jq -r .shared.sigmaOracle "$BOOK")"
@@ -82,15 +95,6 @@ send "$SO" 'submit((bytes32,uint8,uint256,uint32,uint64),bytes[])' "$U" \
   "[$(cast wallet sign --no-hash --private-key "${SIGNER_KEYS[0]}" "$UD"),$(cast wallet sign --no-hash --private-key "${SIGNER_KEYS[1]}" "$UD")]"
 check "σ written through SigmaOracle" "$(cast call --rpc-url "$RPC" "$ENGINE" 'sigma(bytes32,uint8)(uint256)' "$ASSET" 2 | cut -d' ' -f1)" 40000000000000000
 
-# a real position: 100 tNVDA, borrow 13,000 USDC (72%: allowed at maxLtv before the Bell window; the borrow calls
-# engine.safeLtv on-chain), which is above the weekend safe LTV at the Bell
-send "$TOKEN" 'mint(address,uint256)' "$ME" 100000000000000000000
-send "$TOKEN" 'approve(address,uint256)' "$MARKET" 100000000000000000000
-send "$MARKET" 'addCollateral(bytes32,address,uint256)' "$ID" "$ME" 100000000000000000000
-live   # the borrow's cross-check needs both feeds fresh (60 s in REGULAR)
-send "$MARKET" 'borrow(bytes32,uint256,address)' "$ID" 13000000000 "$ME"
-live
-echo "ok   borrow of 13,000 USDC through the market (safeLtv checked by the Stylus engine)"
 
 # 4. compare with risk-cli on the same set
 CT="$(cast call --rpc-url "$RPC" "$CLOCK" 'closureWindow(bytes32)(uint40,uint40,uint8)' "$ASSET" | tail -1)"
@@ -102,8 +106,8 @@ PARAMS="$(cast call --rpc-url "$RPC" "$ENGINE" 'params()((uint64,uint64,uint64,u
 IFS=, read -r ALPHA KAPPA THETA COC ETA BETA UMAX MINP KSTRESS <<< "$PARAMS"
 Z="$(jq -c .z "$SETFILE")"
 
-MKT_LIMIT="$(cast call --rpc-url "$RPC" "$MARKET" 'borrowLimitLtv(bytes32,address)(uint256)' "$ID" "$ME" | cut -d' ' -f1)"
 CLI_SAFE="$("$CLI" safe-ltv-from-set "{\"set\":$Z,\"alpha\":\"$ALPHA\",\"sigma\":\"$SIGMA\",\"kappa\":\"$KAPPA\",\"maxLtv\":\"750000000000000000\"}" | jq -r .safeLtv)"
+MKT_LIMIT="$(cast call --rpc-url "$RPC" "$MARKET" 'borrowLimitLtv(bytes32,address)(uint256)' "$ID" "$ME" | cut -d' ' -f1)"
 check "market.borrowLimitLtv before the Bell window (§8.2.2: maxLtv)" "$MKT_LIMIT" 750000000000000000
 ENGINE_SAFE="$(cast call --rpc-url "$RPC" "$ENGINE" 'safeLtv(bytes32,uint8,uint256,uint256)(uint256)' "$ASSET" "$CT" 750000000000000000 0 | cut -d' ' -f1)"
 check "safeLtv (engine, NVDA closure type $CT)" "$ENGINE_SAFE" "$CLI_SAFE"
@@ -127,5 +131,77 @@ read -r PREM EL ES < <(cast call --rpc-url "$RPC" "$ENGINE" \
 CLI_Q="$("$CLI" quote-cover "{\"set\":$Z,\"sigma\":\"$SIGMA\",\"kappa\":\"$KAPPA\",\"collateralValue\":\"$C\",\"debtProjected\":\"$DPROJ\",\"closureDays\":$DAYS,\"utilAfter\":\"200000000000000000\",\"theta\":\"$THETA\",\"costOfCap\":\"$COC\",\"eta\":\"$ETA\",\"beta\":\"$BETA\",\"minPremium\":\"$MINP\"}")"
 check "quoteCover (engine, market inputs)" "$PREM $EL $ES" "$(echo "$CLI_Q" | jq -r '[.premium,.expectedLoss,.expectedShortfall] | join(" ")')"
 
-[ $fail = 0 ] && echo "devnode integration: market ↔ Stylus engine == risk-cli"
+# ═══ 5. S3: a real Gap Cover through the UnderwriterPool, and a real auction clear, on the Stylus engine ═══
+POOL="$(jq -r .equity.pool "$BOOK")"; HOUSE="$(jq -r .equity.auctionHouse "$BOOK")"; USDC="$(jq -r .tokens.usdc "$BOOK")"
+send "$USDC" 'mint(address,uint256)' "$ME" 1000000000000
+send "$USDC" 'approve(address,uint256)' "$MARKET" 1000000000000
+send "$USDC" 'approve(address,uint256)' "$HOUSE" 1000000000000
+logdata() { # receipt-json event-signature → data of the first such log
+  echo "$1" | jq -r --arg t "$(cast keccak "$2")" '[.logs[] | select(.topics[0]==$t)][0].data'
+}
+# the Bell window opens at close − 2 h: wait for it (the devnode clock cannot be warped)
+WIN="$(( $(cast call --json --rpc-url "$RPC" "$CLOCK" 'closureInfo(bytes32)((uint8,uint8,uint64,uint64,uint128,uint40,uint40,uint40,uint40,uint40,uint128,uint40,uint40,uint32,uint32,uint40,bool,bool))' "$ASSET" | jq -r 'flatten | .[6]') ))"
+echo "     waiting for the Bell window at $WIN ($(( WIN - $(date +%s) )) s)"
+while [ "$(date +%s)" -le "$WIN" ]; do sleep 10; done
+# 5a. buyCover → pool.writeCover: coverLossVector + poolCapacity over the 6 markets + quoteCover at u_after (Stylus)
+live
+RC="$(cast send --rpc-url "$RPC" --private-key "$KEY" "$MARKET" 'buyCover(bytes32,uint256,bool)' "$ID" 1000000000 false --json)"
+[ "$(echo "$RC" | jq -r .status)" = 0x1 ] || { echo "buyCover reverted: $RC" >&2; exit 1; }
+BN="$(echo "$RC" | jq -r .blockNumber | cast to-dec)"
+GAS_COVER="$(echo "$RC" | jq -r .gasUsed | cast to-dec)"
+read -r EP _ PREMIUM UAFTER WORST < <(cast abi-decode 'f()(uint64,bytes32,uint256,uint256,uint256)' \
+  "$(logdata "$RC" 'CoverWritten(uint64,bytes32,address,uint64,bytes32,uint256,uint256,uint256)')" | cut -d' ' -f1 | paste -sd' ')
+DPROJ_B="$(cast call --rpc-url "$RPC" --block "$BN" "$MARKET" 'projectedDebt(bytes32,address)(uint256)' "$ID" "$ME" | cut -d' ' -f1)"
+VAL_B="$(cast call --rpc-url "$RPC" --block "$BN" "$(jq -r .shared.oracle "$BOOK")" 'valuationPrice(bytes32)(uint256)' "$ASSET" | cut -d' ' -f1)"
+C_B="$("$CLI" value "{\"qty\":\"100000000000000000000\",\"price\":\"$VAL_B\"}" | jq -r .collateralValue)"
+CLI_P="$("$CLI" quote-cover "{\"set\":$Z,\"sigma\":\"$SIGMA\",\"kappa\":\"$KAPPA\",\"collateralValue\":\"$C_B\",\"debtProjected\":\"$DPROJ_B\",\"closureDays\":$DAYS,\"utilAfter\":\"$UAFTER\",\"theta\":\"$THETA\",\"costOfCap\":\"$COC\",\"eta\":\"$ETA\",\"beta\":\"$BETA\",\"minPremium\":\"$MINP\"}" | jq -r .premium)"
+check "pool.writeCover premium (Stylus quoteCover at the pool's u_after $UAFTER)" "$PREMIUM" "$CLI_P"
+EP_PREM="$(cast call --rpc-url "$RPC" "$POOL" 'epoch(uint64)((uint64,uint40,uint40,uint40,uint40,uint8,uint32,uint128,uint128,uint128,uint128,int128,uint128,uint128,uint128,uint128,uint128,uint128,uint128,uint128,uint128,uint128))' "$EP" --json | jq -r 'flatten | .[7]')"
+check "pool epoch $EP premiums" "$EP_PREM" "$PREMIUM"
+check "market.bellStatus after cover (COVERED)" "$(cast call --rpc-url "$RPC" "$MARKET" 'bellStatus(bytes32,address)(uint8,uint256,uint256,uint256)' "$ID" "$ME" | head -1)" 2
+[ "$(echo "$UAFTER" | cut -d' ' -f1)" -le 500000000000000000 ] || { echo "u_after above u_max" >&2; fail=1; }
+
+# 5b. an INTRADAY auction on AAPL: a second borrower at 74%, AAPL −10% → HF < 1 → flag → fix → bid → clear (Stylus
+#     engine.clear) with the pool backstop → settle
+K2="$(cast wallet new --json | jq -r '.[0].private_key')"; B2="$(cast wallet address --private-key "$K2")"
+cast send --rpc-url "$RPC" --private-key "$KEY" "$B2" --value 1ether >/dev/null
+A2="$(jq -r .assetIds.AAPL "$BOOK")"; ID2="$(jq -r .equity.markets.AAPL "$BOOK")"; T2="$(jq -r .tokens.tAAPL "$BOOK")"
+send "$T2" 'mint(address,uint256)' "$B2" 100000000000000000000
+cast send --rpc-url "$RPC" --private-key "$K2" "$T2" 'approve(address,uint256)' "$MARKET" 100000000000000000000 >/dev/null
+cast send --rpc-url "$RPC" --private-key "$K2" "$MARKET" 'addCollateral(bytes32,address,uint256)' "$ID2" "$B2" 100000000000000000000 >/dev/null
+ASSET="$A2" PRICE=200000000000000000000 live
+cast send --rpc-url "$RPC" --private-key "$K2" "$MARKET" 'borrow(bytes32,uint256,address)' "$ID2" 14800000000 "$B2" >/dev/null
+ASSET="$A2" PRICE=180000000000000000000 live
+send "$MARKET" 'flagForAuction(bytes32,address[])' "$ID2" "[$B2]"
+AID=$(( $(cast call --rpc-url "$RPC" "$HOUSE" 'nextAuctionId()(uint64)') - 1 ))
+AT='(uint8,uint8,bytes32,bytes32,uint64,uint64,uint32,uint40[4],uint128,uint128,uint128,uint128,uint128,uint128,uint128,uint16,uint16,bool,bool)'
+field() { cast call --json --rpc-url "$RPC" "$HOUSE" "auction(uint64)($AT)" "$AID" | jq -r "flatten | .[$(($1 - 1))]"; }
+sleep 16
+ASSET="$A2" PRICE=180000000000000000000 live
+RF="$(cast send --rpc-url "$RPC" --private-key "$KEY" "$HOUSE" 'fixLots(uint64)' "$AID" --json)"
+GAS_FIX="$(echo "$RF" | jq -r .gasUsed | cast to-dec)"
+LOT="$(field 12)"; [ "$LOT" != 0 ] || { echo "empty lot" >&2; exit 1; }
+BQ=$(python3 -c "print($LOT // 2)"); BP=178200000000000000000   # half the lot at 99% of $180
+send "$HOUSE" 'placeBid(uint64,uint128,uint128)' "$AID" "$BQ" "$BP"
+CLEAR_AT="$(field 11)"
+while [ "$(date +%s)" -le "$CLEAR_AT" ]; do sleep 2; done
+ASSET="$A2" PRICE=180000000000000000000 live
+RCL="$(cast send --rpc-url "$RPC" --private-key "$KEY" "$HOUSE" 'clear(uint64)' "$AID" --json)"
+[ "$(echo "$RCL" | jq -r .status)" = 0x1 ] || { echo "clear reverted: $RCL" >&2; exit 1; }
+GAS_CLEAR="$(echo "$RCL" | jq -r .gasUsed | cast to-dec)"
+read -r PSTAR FILLED QPOOL PROCEEDS BLENDED RES < <(cast abi-decode 'f()(uint256,uint256,uint256,uint256,uint256,uint256)' \
+  "$(logdata "$RCL" 'AuctionCleared(uint64,uint256,uint256,uint256,uint256,uint256,uint256)')" | cut -d' ' -f1 | paste -sd' ')
+TIE="$(cast keccak "$(cast abi-encode 'f(uint64,address)' "$AID" "$ME")")"
+CLI_C="$("$CLI" clear "{\"qtys\":[\"$BQ\"],\"prices\":[\"$BP\"],\"tieKeys\":[\"$TIE\"],\"lot\":\"$LOT\",\"reserve\":\"$RES\"}")"
+check "clear p* (Stylus engine.clear)" "$PSTAR" "$(echo "$CLI_C" | jq -r .pStar)"
+check "clear fills" "$FILLED" "$(echo "$CLI_C" | jq -r '.fills[0]')"
+check "clear qPool → pool backstop" "$QPOOL" "$(echo "$CLI_C" | jq -r .qPool)"
+check "pool inventory (AAPL)" "$(cast call --rpc-url "$RPC" "$POOL" 'inventory(bytes32)((address,uint128,uint128,uint128,uint64))' "$A2" --json | jq -r 'flatten | .[1]')" "$QPOOL"
+RS="$(cast send --rpc-url "$RPC" --private-key "$KEY" "$MARKET" 'settlePositions(uint64,address[])' "$AID" "[$B2]" --json)"
+GAS_SETTLE="$(echo "$RS" | jq -r .gasUsed | cast to-dec)"
+check "auction settled" "$(field 22)" true
+send "$HOUSE" 'claim(uint64)' "$AID"
+echo "gas: buyCover (writeCover) $GAS_COVER, fixLots (1 position) $GAS_FIX, clear (1 bid, backstop) $GAS_CLEAR, settlePositions (1) $GAS_SETTLE"
+
+[ $fail = 0 ] && echo "devnode integration: market ↔ Stylus engine == risk-cli; real writeCover and clear through the pool and auction house"
 exit $fail
