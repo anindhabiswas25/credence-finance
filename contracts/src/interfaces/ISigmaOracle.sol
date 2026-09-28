@@ -22,4 +22,6 @@ interface ISigmaOracle is ISigmaOracleEvents, ICredenceErrors {
     /// @notice The EIP-712 digest the committee signs for `u` (for keeper J7 cross-checks).
     function hashUpdate(SigmaUpdate calldata u) external view returns (bytes32);
     function timelock() external view returns (address);
+    /// @notice v1 (S2): once, by the deployer. The engine's constructor needs this oracle's address first.
+    function initializeWiring(address engine) external;
 }

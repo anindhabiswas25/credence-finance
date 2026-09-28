@@ -36,6 +36,9 @@ library LocalBook {
         address reserve;
         address treasury;
         address tips;
+        address pool; // S2: a local stand-in until the S3 UnderwriterPool
+        address auctionHouse; // equity (S2: local stand-in)
+        address settlement; // NAV (S2: local stand-in)
         string[] tickers; // market name (ticker) → marketId
         bytes32[] marketIds;
     }
@@ -158,7 +161,10 @@ library LocalBook {
             _opt("vault", x.vault),
             _opt("reserve", x.reserve),
             _opt("treasury", x.treasury),
-            _opt("tips", x.tips)
+            _opt("tips", x.tips),
+            _opt("pool", x.pool),
+            _opt("auctionHouse", x.auctionHouse),
+            _opt("settlement", x.settlement)
         );
         return string.concat(s, ', "markets": ', _b32Map(x.tickers, x.marketIds), " }");
     }

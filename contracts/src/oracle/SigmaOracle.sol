@@ -20,20 +20,29 @@ contract SigmaOracle is ISigmaOracle, EIP712 {
         keccak256("SigmaUpdate(bytes32 assetId,uint8 closureType,uint256 sigma,uint32 asOfDay,uint64 nonce)");
 
     address public immutable timelock;
-    address public immutable engine;
+    address internal immutable deployer;
+    address public engine;
 
     address[] internal _signers;
     mapping(address => bool) public isSigner;
     uint8 public threshold;
     mapping(bytes32 key => uint32) internal _lastAsOfDay; // key = keccak256(assetId, closureType)
 
-    constructor(address timelock_, address engine_, address[] memory signers, uint8 threshold_)
-        EIP712("CredenceSigmaOracle", "1")
-    {
-        if (timelock_ == address(0) || engine_ == address(0)) revert ZeroAddress();
+    /// @dev The engine is wired once afterwards (`initializeWiring`): the Stylus engine's constructor needs this
+    ///      contract's address as its only σ writer, so the oracle is deployed first.
+    constructor(address timelock_, address[] memory signers, uint8 threshold_) EIP712("CredenceSigmaOracle", "1") {
+        if (timelock_ == address(0)) revert ZeroAddress();
         timelock = timelock_;
-        engine = engine_;
+        deployer = msg.sender;
         _setCommittee(signers, threshold_);
+    }
+
+    /// @inheritdoc ISigmaOracle
+    function initializeWiring(address engine_) external {
+        if (msg.sender != deployer) revert Unauthorized();
+        if (engine != address(0)) revert AlreadyWired();
+        if (engine_ == address(0)) revert ZeroAddress();
+        engine = engine_;
     }
 
     /// @inheritdoc ISigmaOracle
@@ -44,6 +53,7 @@ contract SigmaOracle is ISigmaOracle, EIP712 {
 
     /// @inheritdoc ISigmaOracle
     function submit(SigmaUpdate calldata u, bytes[] calldata signatures) external {
+        if (engine == address(0)) revert NotWired();
         _verify(hashUpdate(u), signatures);
         bytes32 key = keccak256(abi.encodePacked(u.assetId, u.closureType));
         uint32 last = _lastAsOfDay[key];

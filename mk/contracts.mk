@@ -27,7 +27,7 @@ ABI_IMPLS ?= CalendarStore AssetClock CredencePriceFeed OracleAdapter SequencerH
 
 .PHONY: abis-check local-deploy-clock contracts-deps contracts-build contracts-test contracts-invariant contracts-coverage contracts-fmt \
   contracts-fmt-check contracts-snapshot contracts-clean abis-export risk-build risk-test risk-lint risk-fmt stylus-test stylus-abi-check \
-  stylus-check stylus-export-abi devnode-up devnode-down devnode-deploy-engine stylus-diff risk-validate-set risk-load-set risk-py-develop risk-py-test risk-wasm risk-wasm-test
+  stylus-check stylus-export-abi devnode-up devnode-down devnode-deploy-engine stylus-diff risk-validate-set risk-load-set risk-py-develop risk-py-test risk-wasm risk-wasm-test local-deploy-core
 
 contracts-deps: ## Install pinned Solidity deps into contracts/lib (OZ, forge-std, solady) if missing
 	@cd $(CONTRACTS_DIR) && \
@@ -111,6 +111,11 @@ local-deploy-clock: contracts-build ## Deploy the clock + price stack and test a
 	cd $(CONTRACTS_DIR) && PRIVATE_KEY=$(DEVNODE_KEY) RELAYER_A_SIGNERS=$(RELAYER_A_SIGNERS) \
 	  RELAYER_B_SIGNERS=$(RELAYER_B_SIGNERS) XNYS_CALENDAR=../$(XNYS_CALENDAR) USBANK_CALENDAR=../$(USBANK_CALENDAR) \
 	  forge script script/DeployClockLocal.s.sol:DeployClockLocal --rpc-url $(LOCAL_RPC) --broadcast --slow
+
+local-deploy-core: contracts-build ## Deploy the whole S2 protocol (clock, 6 equity markets + TBILL, vaults seeded) to LOCAL_RPC; writes deployments/<chainId>.local.json
+	cd $(CONTRACTS_DIR) && PRIVATE_KEY=$(DEVNODE_KEY) RELAYER_A_SIGNERS=$(RELAYER_A_SIGNERS) \
+	  RELAYER_B_SIGNERS=$(RELAYER_B_SIGNERS) XNYS_CALENDAR=../$(XNYS_CALENDAR) USBANK_CALENDAR=../$(USBANK_CALENDAR) \
+	  forge script script/DeployCoreLocal.s.sol:DeployCoreLocal --rpc-url $(LOCAL_RPC) --broadcast --slow
 
 devnode-up: ## Ensure a local nitro-devnode answers on :8547 (delegates to `make infra-up`)
 	@bash $(STYLUS_DIR)/scripts/devnode.sh up
