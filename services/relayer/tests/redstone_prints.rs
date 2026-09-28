@@ -217,6 +217,27 @@ async fn close_is_the_last_package_before_close_plus_60s() {
         let a = aggregate(f, &pk, &PRIMARY_PROD_SIGNERS, 3).unwrap();
         assert_eq!(c.price_wad, a.value_wad());
     }
+    // the regular feed freezes after the close: the CLOSE print is the value the feed holds through the
+    // closure, which is why the next OPEN compares against the last package before it (module docs)
+    for f in FEEDS {
+        let c = aggregate(
+            f,
+            &r.at(f, CLOSE + 50).await.unwrap().unwrap(),
+            &PRIMARY_PROD_SIGNERS,
+            3,
+        )
+        .unwrap();
+        for t in [CLOSE + 60, CLOSE + 90] {
+            let later = aggregate(
+                f,
+                &r.at(f, t).await.unwrap().unwrap(),
+                &PRIMARY_PROD_SIGNERS,
+                3,
+            )
+            .unwrap();
+            assert_eq!(later.value8, c.value8, "{f}@close+{}", t - CLOSE);
+        }
+    }
     // not final until close + 60 s
     assert!(prints(0, CLOSE + 59)
         .official_close(&asset("NVDA"), &session(0))
