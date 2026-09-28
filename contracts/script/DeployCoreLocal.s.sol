@@ -37,6 +37,7 @@ contract DeployCoreLocal is DeployClockLocal {
         SigmaOracle sigmaOracle;
         address engine;
         bool localEngine;
+        address listingEngine; // what markets are listed against (a Solidity stand-in when the engine is Stylus)
     }
 
     struct StackOut {
@@ -62,7 +63,7 @@ contract DeployCoreLocal is DeployClockLocal {
         Core memory k;
         k.guardian = new CredenceGuardian(me, me);
         ClockStack memory c = _deployClockStack(me, address(k.guardian));
-        (k.sigmaOracle, k.engine, k.localEngine) = _risk(me, engine);
+        (k.sigmaOracle, k.engine, k.localEngine, k.listingEngine) = _risk(me, engine);
         StackOut memory eq = _stack(me, k, c, MarketKind.EQUITY, "Credence Senior USDC (equity)", "csUSDC-EQ");
         StackOut memory nav = _stack(me, k, c, MarketKind.NAV, "Credence Senior USDC (funds)", "csUSDC-NAV");
         address[] memory markets = new address[](2);
@@ -100,20 +101,25 @@ contract DeployCoreLocal is DeployClockLocal {
         if (e.code.length == 0) e = address(0);
     }
 
-    function _risk(address me, address engine) internal returns (SigmaOracle so, address e, bool local) {
+    /// @dev forge cannot execute Stylus WASM, so nothing here may call into a Stylus engine: markets are listed
+    ///      against a Solidity stand-in with the §12.2 params (createMarket reads κ) and then pointed at the real
+    ///      engine with `setEngine` (a plain setter). The Stylus engine's own params come from `make risk-load-set`.
+    function _risk(address me, address engine)
+        internal
+        returns (SigmaOracle so, address e, bool local, address listing)
+    {
         address[] memory signers = _sorted(vm.envOr("SIGMA_SIGNERS", ",", vm.envAddress("RELAYER_A_SIGNERS", ",")));
         so = new SigmaOracle(me, signers, uint8(vm.envOr("SIGMA_THRESHOLD", uint256(2))));
         e = engine;
         if (e == address(0)) {
             e = address(new MockRiskEngine(me, address(so)));
             local = true;
+            listing = e;
+        } else {
+            listing = address(new MockRiskEngine(me, me));
         }
         so.initializeWiring(e);
-        // §12.2 launch parameters; the deployer is the engine's timelock on local chains
-        try IRiskEngine(e).setParams(RiskParams(0.001e18, 0.03e18, 1e18, 0.15e18, 4e18, 0.975e18, 0.5e18, 0.5e6, 256)) {}
-        catch {
-            console2.log("engine params not set (the deployer is not the engine's timelock)");
-        }
+        MockRiskEngine(listing).setParams(RiskParams(0.001e18, 0.03e18, 1e18, 0.15e18, 4e18, 0.975e18, 0.5e18, 0.5e6, 256));
         // the Stylus engine's router takes its σ writer from the timelock (the deployer on local chains)
         if (!local && IRiskEngine(e).sigmaOracle() != address(so)) {
             try RiskEngineRouter(e).setSigmaOracle(address(so)) {}
@@ -146,7 +152,7 @@ contract DeployCoreLocal is DeployClockLocal {
             MarketWiring({
                 clock: address(c.clock),
                 oracle: address(c.oracle),
-                engine: k.engine,
+                engine: k.listingEngine,
                 vault: address(s.vault),
                 pool: address(s.pool),
                 auctionHouse: nav ? address(0) : address(s.auctionHouse),
@@ -181,6 +187,7 @@ contract DeployCoreLocal is DeployClockLocal {
                 s.marketIds[i] = s.market.createMarket(_equityParams(usdc, address(c.stocks[i]), c.assetIds[i], spy));
             }
         }
+        if (k.listingEngine != k.engine) s.market.setEngine(k.engine);
         for (uint256 i; i < s.marketIds.length; ++i) {
             s.vault.setCap(s.marketIds[i], nav ? 5_000_000e6 : 2_000_000e6);
         }

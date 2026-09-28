@@ -28,7 +28,7 @@ ABI_IMPLS ?= CalendarStore AssetClock CredencePriceFeed OracleAdapter SequencerH
 
 .PHONY: abis-check local-deploy-clock contracts-deps contracts-build contracts-test contracts-invariant contracts-coverage contracts-fmt \
   contracts-fmt-check contracts-snapshot contracts-clean abis-export risk-build risk-test risk-lint risk-fmt stylus-test stylus-abi-check \
-  stylus-check stylus-export-abi devnode-up devnode-down devnode-deploy-engine stylus-diff risk-validate-set risk-load-set risk-py-develop risk-py-test risk-wasm risk-wasm-test local-deploy-core stylus-repro
+  stylus-check stylus-export-abi devnode-up devnode-down devnode-deploy-engine stylus-diff risk-validate-set risk-load-set risk-py-develop risk-py-test risk-wasm risk-wasm-test local-deploy-core stylus-repro devnode-integration
 
 contracts-deps: ## Install pinned Solidity deps into contracts/lib (OZ, forge-std, solady) if missing
 	@cd $(CONTRACTS_DIR) && \
@@ -95,6 +95,9 @@ stylus-test: ## Native unit tests of the Stylus Risk Engine (TestVM)
 stylus-check: ## cargo stylus check of the Risk Engine against the devnode (size ≤ 1 fragment + activation)
 	WS=$$(bash $(STYLUS_DIR)/scripts/stylus-ws.sh) && cd $$WS && \
 	  cargo stylus check --endpoint $(DEVNODE_RPC) --contract credence-risk-engine
+
+devnode-integration: ## Market ↔ real Stylus engine on the devnode (dedicated engine + QE bundle + core), vs risk-cli
+	LOCAL_RPC=$(DEVNODE_RPC) PRIVATE_KEY=$(DEVNODE_KEY) bash $(CONTRACTS_DIR)/script/devnode_integration.sh
 
 stylus-repro: ## Build both Stylus programs from two fresh clones of HEAD and require identical WASM sha256 (R-24)
 	bash $(STYLUS_DIR)/scripts/repro.sh
