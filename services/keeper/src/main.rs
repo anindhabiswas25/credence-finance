@@ -111,6 +111,11 @@ async fn main() -> Result<()> {
     keeper.watch_wallets = cfg.watch_wallets.clone();
     keeper.min_balance_wei = cfg.min_balance_wei;
     keeper.core = credence_keeper::config::core_jobs(cfg.chain_id)?.map(std::sync::Arc::new);
+    keeper.sigma = credence_keeper::config::sigma_runner(
+        cfg.chain_id,
+        &credence_keeper::config::load_calendars()?,
+    )?
+    .map(std::sync::Arc::new);
     if let Some(c) = &keeper.core {
         tracing::info!(
             markets = c.markets.len(),

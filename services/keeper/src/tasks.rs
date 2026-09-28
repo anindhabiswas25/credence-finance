@@ -46,6 +46,8 @@ pub struct Keeper {
     pub stylus_programs: Vec<(String, Address)>,
     /// Lending-core jobs (J2, J3/J4 dry-run, J8, allowlist) once a core stack is in the address book.
     pub core: Option<crate::core_jobs::SharedCore>,
+    /// J7 σ updates (snapshot, committee, SigmaOracle), once the oracle is in the address book.
+    pub sigma: Option<Arc<crate::sigma_runner::SigmaRunner>>,
     http: reqwest::Client,
 }
 
@@ -84,6 +86,7 @@ impl Keeper {
             min_balance_wei: 0,
             stylus_programs: Vec::new(),
             core: None,
+            sigma: None,
             http: reqwest::Client::builder()
                 .timeout(std::time::Duration::from_secs(5))
                 .build()
@@ -97,6 +100,9 @@ impl Keeper {
         self.j1(conn, &mut rep).await?;
         if let Err(e) = self.j12(conn, &mut rep).await {
             tracing::warn!(error = %e, "J12 housekeeping failed");
+        }
+        if let Err(e) = self.j7(conn, &mut rep).await {
+            tracing::warn!(error = %e, "J7 failed");
         }
         if let Err(e) = self.core_tick(conn, &mut rep).await {
             tracing::warn!(error = %e, "core jobs failed");

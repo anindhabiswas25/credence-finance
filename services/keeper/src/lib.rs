@@ -19,5 +19,6 @@ pub mod rpc;
 pub mod schedule;
 pub mod sigma;
 pub mod sigma_job;
+pub mod sigma_runner;
 pub mod tasks;
 pub mod tx;

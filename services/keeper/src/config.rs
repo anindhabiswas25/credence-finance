@@ -108,6 +108,75 @@ pub fn core_jobs(chain_id: u64) -> Result<Option<crate::core_jobs::CoreJobs>> {
     Ok(Some(c))
 }
 
+/// J7 from env and the address book: `SIGMA_ORACLE_ADDRESS` (else `shared.sigmaOracle`), the engine,
+/// `SIGMA_SNAPSHOT` (else the newest `calibration/out/sigma/sigma-*.json`) and the committee keys
+/// `SIGMA_COMMITTEE_KEYS` (comma-separated; KMS signers replace them before testnet). `None` if any is
+/// missing: J7 then stays off and says why.
+pub fn sigma_runner(
+    chain_id: u64,
+    calendars: &HashMap<String, Arc<Calendar>>,
+) -> Result<Option<crate::sigma_runner::SigmaRunner>> {
+    let why = |m: &str| {
+        tracing::info!(reason = m, "J7 disabled");
+        Ok(None)
+    };
+    let Some(oracle) = book_address(chain_id, "SIGMA_ORACLE_ADDRESS", "/shared/sigmaOracle")
+        .ok()
+        .flatten()
+    else {
+        return why("no sigmaOracle in the address book");
+    };
+    let Some(engine) = risk_engine_address(chain_id)? else {
+        return why("no riskEngine in the address book");
+    };
+    let keys = env::list("SIGMA_COMMITTEE_KEYS");
+    if keys.is_empty() {
+        return why("SIGMA_COMMITTEE_KEYS not set");
+    }
+    let committee = keys
+        .iter()
+        .map(|k| {
+            k.parse::<alloy::signers::local::PrivateKeySigner>()
+                .context("SIGMA_COMMITTEE_KEYS")
+        })
+        .collect::<Result<Vec<_>>>()?;
+    let snap_path = match env::optional("SIGMA_SNAPSHOT") {
+        Some(p) => PathBuf::from(p),
+        None => {
+            let mut files: Vec<PathBuf> = std::fs::read_dir("calibration/out/sigma")?
+                .flatten()
+                .map(|e| e.path())
+                .filter(|p| {
+                    p.file_name()
+                        .and_then(|n| n.to_str())
+                        .is_some_and(|n| n.starts_with("sigma-") && n.ends_with(".json"))
+                })
+                .collect();
+            files.sort_by_key(|p| std::fs::metadata(p).and_then(|m| m.modified()).ok());
+            files
+                .pop()
+                .context("no calibration/out/sigma/sigma-*.json")?
+        }
+    };
+    let snapshot = crate::sigma::Snapshot::load(&snap_path)?;
+    let xnys = calendars.get("XNYS").cloned().context("XNYS calendar")?;
+    let from_block = address_book(chain_id)
+        .ok()
+        .and_then(|b| b.get("startBlock").and_then(|v| v.as_u64()))
+        .unwrap_or(0);
+    tracing::info!(snapshot = %snap_path.display(), grade = %snapshot.data_grade, assets = snapshot.assets.len(), committee = committee.len(), "J7 enabled");
+    Ok(Some(crate::sigma_runner::SigmaRunner {
+        oracle,
+        engine,
+        chain_id,
+        snapshot,
+        committee,
+        xnys,
+        indexer_schema: env::or("INDEXER_SCHEMA", "indexer"),
+        from_block,
+    }))
+}
+
 /// `RISK_ENGINE_ADDRESS`, else `shared.riskEngine`; `None` before the engine is deployed.
 pub fn risk_engine_address(chain_id: u64) -> Result<Option<Address>> {
     match book_address(chain_id, "RISK_ENGINE_ADDRESS", "/shared/riskEngine") {
