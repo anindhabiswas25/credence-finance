@@ -68,6 +68,46 @@ pub fn clock_address(chain_id: u64) -> Result<Address> {
         .context("no clock address in the address book")
 }
 
+/// Lending-core jobs from the address book (`equity`/`nav` markets and vaults, `shared.registry`), or
+/// `None` before a core stack is deployed or with `KEEPER_CORE=0`.
+pub fn core_jobs(chain_id: u64) -> Result<Option<crate::core_jobs::CoreJobs>> {
+    if env::or("KEEPER_CORE", "1") == "0" {
+        return Ok(None);
+    }
+    let Ok(book) = address_book(chain_id) else {
+        return Ok(None);
+    };
+    let (markets, vaults) = crate::core_jobs::from_book(&book);
+    if markets.is_empty() {
+        return Ok(None);
+    }
+    let dirs: Vec<PathBuf> = env::or(
+        "SCENARIO_DIRS",
+        "calibration/out/scenarios,contracts/test/fixtures/risk",
+    )
+    .split(',')
+    .filter(|s| !s.trim().is_empty())
+    .map(|s| PathBuf::from(s.trim()))
+    .collect();
+    let sets = crate::core::SetStore::load(&dirs)?;
+    let mut c = crate::core_jobs::CoreJobs::new(
+        markets,
+        vaults,
+        sets,
+        env::or("INDEXER_SCHEMA", "indexer"),
+    );
+    c.j3_live = env::or("KEEPER_J3_LIVE", "0") == "1";
+    c.j4_live = env::or("KEEPER_J4_LIVE", "0") == "1";
+    // testnet self-service allowlist: never on Arbitrum One
+    if chain_id != 42_161 {
+        c.registry = book
+            .pointer("/shared/registry")
+            .and_then(|v| v.as_str())
+            .and_then(|v| v.parse().ok());
+    }
+    Ok(Some(c))
+}
+
 /// `RISK_ENGINE_ADDRESS`, else `shared.riskEngine`; `None` before the engine is deployed.
 pub fn risk_engine_address(chain_id: u64) -> Result<Option<Address>> {
     match book_address(chain_id, "RISK_ENGINE_ADDRESS", "/shared/riskEngine") {

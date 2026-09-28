@@ -110,6 +110,17 @@ async fn main() -> Result<()> {
     keeper.alert_webhook = cfg.alert_webhook.clone();
     keeper.watch_wallets = cfg.watch_wallets.clone();
     keeper.min_balance_wei = cfg.min_balance_wei;
+    keeper.core = credence_keeper::config::core_jobs(cfg.chain_id)?.map(std::sync::Arc::new);
+    if let Some(c) = &keeper.core {
+        tracing::info!(
+            markets = c.markets.len(),
+            vaults = c.vaults.len(),
+            sets = c.sets.len(),
+            j3_live = c.j3_live,
+            j4_live = c.j4_live,
+            "core jobs enabled"
+        );
+    }
     keeper.stylus_programs = cfg
         .risk_engine
         .map(|a| vec![("riskEngine".to_owned(), a)])

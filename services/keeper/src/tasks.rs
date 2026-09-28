@@ -44,6 +44,8 @@ pub struct Keeper {
     pub min_balance_wei: u128,
     /// Stylus programs whose activation J12 watches: (label, address), e.g. ("riskEngine", shared.riskEngine).
     pub stylus_programs: Vec<(String, Address)>,
+    /// Lending-core jobs (J2, J3/J4 dry-run, J8, allowlist) once a core stack is in the address book.
+    pub core: Option<crate::core_jobs::SharedCore>,
     http: reqwest::Client,
 }
 
@@ -81,6 +83,7 @@ impl Keeper {
             watch_wallets: Vec::new(),
             min_balance_wei: 0,
             stylus_programs: Vec::new(),
+            core: None,
             http: reqwest::Client::builder()
                 .timeout(std::time::Duration::from_secs(5))
                 .build()
@@ -94,6 +97,9 @@ impl Keeper {
         self.j1(conn, &mut rep).await?;
         if let Err(e) = self.j12(conn, &mut rep).await {
             tracing::warn!(error = %e, "J12 housekeeping failed");
+        }
+        if let Err(e) = self.core_tick(conn, &mut rep).await {
+            tracing::warn!(error = %e, "core jobs failed");
         }
         Ok(rep)
     }

@@ -12,7 +12,7 @@ path = "src/main.rs"
 
 [dependencies]
 credence-common = { path = "../../crates/credence-common" }
-credence-risk-core = { path = "../../crates/risk-core", features = ["std"] }
+credence-risk-core = { path = "../../crates/risk-core", features = ["std", "files"] }
 alloy = { workspace = true, features = ["signer-local"] }
 tokio = { workspace = true }
 axum = { workspace = true }

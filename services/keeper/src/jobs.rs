@@ -112,3 +112,19 @@ pub async fn exists(conn: &mut PgConnection, key: &str) -> Result<bool> {
     .await?
         > 0)
 }
+
+/// Attach a result (e.g. a dry-run plan) to a job's payload.
+pub async fn set_payload(
+    conn: &mut PgConnection,
+    key: &str,
+    payload: &serde_json::Value,
+) -> Result<()> {
+    sqlx::query(
+        "update ops.keeper_job set payload = payload || $2, updated_at = now() where key = $1",
+    )
+    .bind(key)
+    .bind(payload)
+    .execute(&mut *conn)
+    .await?;
+    Ok(())
+}
