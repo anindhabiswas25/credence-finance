@@ -23,6 +23,9 @@ const config: Config = {
   rateLimitAuthPerMin: 1000,
   secureCookies: true,
   scenarioDirs: [],
+  publicApiUrl: "http://localhost:8787",
+  allowlistEnabled: true,
+  allowlistPerIpPerHour: 5,
 };
 
 function app(overrides: Partial<Config> = {}, nowMs = T0 * 1000) {

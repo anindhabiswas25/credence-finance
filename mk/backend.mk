@@ -22,7 +22,7 @@ PNPM := pnpm
 .PHONY: backend-install backend-build backend-test backend-lint backend-fmt \
         infra-up infra-down infra-reset infra-ps db-migrate db-rollback calendar-gen calendar-test \
         relayer-dev relayer-smoke keeper-dev indexer-dev api-dev relayer-e2e keeper-e2e indexer-e2e services-up \
-        notifier-dev notifier-e2e r26-probe keeper-sigma-test keeper-j12-e2e obs-up obs-down obs-check
+        notifier-dev notifier-e2e r26-probe keeper-sigma-test keeper-j12-e2e obs-up obs-down obs-check api-db-test
 
 backend-install: ## Install backend deps: @credence/risk-wasm (wasm-pack, into target/be), pnpm workspace, uv calibration env, Rust crates fetched
 	CARGO_TARGET_DIR=$(BACKEND_TARGET_DIR) $(MAKE) --no-print-directory risk-wasm
@@ -138,6 +138,9 @@ keeper-sigma-test: ## J7 σ: reproduce QE's calibration/docs/sigma-vectors.json 
 	$(CARGO) test --locked -p credence-keeper --lib sigma_job
 
 PROMTOOL := docker run --rm -v $(CURDIR)/infra/prometheus:/etc/prometheus:ro -w /etc/prometheus --entrypoint promtool prom/prometheus:v3.6.0
+
+api-db-test: ## API Postgres repositories (me/notifications, allowlist queue) against the migrated app schema (needs infra-up db-migrate)
+	TEST_DATABASE_URL=$(TEST_DATABASE_URL) $(PNPM) --filter @credence/api exec vitest run test/pg.test.ts
 
 obs-up: ## Prometheus (:9090) + Grafana (:3001, dashboards and alert rules from infra/) for the local stack, then obs-check
 	$(COMPOSE) --profile obs up -d --wait prometheus grafana

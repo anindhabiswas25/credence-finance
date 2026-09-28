@@ -15,6 +15,7 @@ import type { AuthRepo, ClockRepo, CoreRepo } from "./repo.ts";
 import type { ChainReader } from "./chain.ts";
 import type { SetStore } from "./sets.ts";
 import { registerCoreRoutes } from "./core.ts";
+import { registerMeRoutes, type MeRepo } from "./me.ts";
 import { FixedWindow, clientIp, rateLimit } from "./ratelimit.ts";
 import { SESSION_COOKIE, newNonce, newSessionId, signSession, verifySession } from "./session.ts";
 import { log } from "./log.ts";
@@ -34,6 +35,8 @@ export interface Deps {
   core?: CoreRepo;
   chain?: ChainReader;
   sets?: SetStore;
+  /** Account settings and the testnet allowlist; mounted only when present. */
+  me?: MeRepo;
 }
 
 // ── schemas ──────────────────────────────────────────────────────────────────────────────────────
@@ -209,6 +212,18 @@ export function createApp(deps: Deps) {
   );
 
   if (deps.core) registerCoreRoutes(app, { core: deps.core, clock: deps.clock, chain: deps.chain, sets: deps.sets });
+  if (deps.me) {
+    registerMeRoutes(app, {
+      auth: deps.auth,
+      me: deps.me,
+      sessionSecret: config.sessionSecret,
+      publicApiOrigin: config.publicApiUrl,
+      now,
+      allowlistEnabled: config.allowlistEnabled,
+      allowlistPerIpPerHour: config.allowlistPerIpPerHour,
+      ipOf,
+    });
+  }
 
   // SIWE
   app.openapi(

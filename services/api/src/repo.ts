@@ -1,7 +1,8 @@
 // Data access. The API reads Ponder's views (read-only) and owns the `app` schema (§11.2).
 // Repositories are interfaces so route tests run without a database.
 import postgres from "postgres";
-import type { Address, Hex } from "viem";
+import { getAddress, type Address, type Hex } from "viem";
+import type { AccountView, MeRepo, Pref, PushSub } from "./me.ts";
 
 export interface ClockRow {
   assetId: Hex;
@@ -190,7 +191,7 @@ export function pgRepos(databaseUrl: string, indexerSchema: string) {
     },
     async getSession(id, now) {
       const [r] = await sql`select address, expires_at from app.siwe_session where id = ${id} and expires_at > ${now}`;
-      return r ? { address: bufToHex(r.address) as Address, expiresAt: new Date(r.expires_at) } : undefined;
+      return r ? { address: getAddress(bufToHex(r.address)), expiresAt: new Date(r.expires_at) } : undefined;
     },
     async deleteSession(id) {
       await sql`delete from app.siwe_session where id = ${id}`;
@@ -274,7 +275,82 @@ export function pgRepos(databaseUrl: string, indexerSchema: string) {
     },
   };
 
-  return { clock, auth, core, sql, close: () => sql.end() };
+  const addr = (a: Address) => hexToBuf(a.toLowerCase());
+  const ensure = (tx: postgres.Sql | postgres.TransactionSql, a: Address) =>
+    tx`insert into app.account (address) values (${addr(a)}) on conflict (address) do nothing`;
+  const me: MeRepo = {
+    async account(a) {
+      const [acct] = await sql`select email, email_verified_at, telegram_chat_id, testnet_attested_at from app.account where address = ${addr(a)}`;
+      const push = await sql`select endpoint from app.push_subscription where address = ${addr(a)} order by id`;
+      const prefs = await sql`select event, channel, enabled from app.notification_pref where address = ${addr(a)}`;
+      const [al] = await sql`select status, tx_hash from app.allowlist_request where address = ${addr(a)}`;
+      return {
+        email: acct?.email ?? null,
+        emailVerified: !!acct?.email_verified_at,
+        telegramChatId: acct?.telegram_chat_id ?? null,
+        push: push.map((r) => ({ endpoint: String(r.endpoint) })),
+        prefs: prefs.map((r) => ({ event: r.event, channel: r.channel, enabled: Boolean(r.enabled) }) as Pref),
+        testnetAttestedAt: acct?.testnet_attested_at ? new Date(acct.testnet_attested_at) : null,
+        allowlist: al ? { status: String(al.status), txHash: al.tx_hash ? bufToHex(al.tx_hash) : null } : null,
+      } satisfies AccountView;
+    },
+    async setEmail(a, email, tokenHash, expiresAt) {
+      return sql.begin(async (tx) => {
+        await ensure(tx, a);
+        const [cur] = await tx`select email from app.account where address = ${addr(a)} for update`;
+        if ((cur?.email ?? null) === email) return false;
+        await tx`update app.account set email = ${email}, email_verified_at = null where address = ${addr(a)}`;
+        await tx`delete from app.email_verification where address = ${addr(a)}`;
+        if (email && tokenHash) {
+          await tx`insert into app.email_verification (token_hash, address, email, expires_at) values (${tokenHash}, ${addr(a)}, ${email}, ${expiresAt})`;
+        }
+        return true;
+      });
+    },
+    async verifyEmail(tokenHash, now) {
+      return sql.begin(async (tx) => {
+        const [v] = await tx`delete from app.email_verification where token_hash = ${tokenHash} returning address, email, expires_at`;
+        if (!v || new Date(v.expires_at) <= now) return null;
+        const r = await tx`update app.account set email_verified_at = ${now} where address = ${v.address} and email = ${v.email} returning address`;
+        return r[0] ? getAddress(bufToHex(r[0].address)) : null;
+      });
+    },
+    async setTelegram(a, chatId) {
+      await ensure(sql, a);
+      await sql`update app.account set telegram_chat_id = ${chatId} where address = ${addr(a)}`;
+    },
+    async addPush(a, s: PushSub) {
+      await ensure(sql, a);
+      await sql`insert into app.push_subscription (address, endpoint, p256dh, auth) values (${addr(a)}, ${s.endpoint}, ${s.p256dh}, ${s.auth})
+                on conflict (endpoint) do update set address = excluded.address, p256dh = excluded.p256dh, auth = excluded.auth`;
+    },
+    async removePush(a, endpoint) {
+      await sql`delete from app.push_subscription where address = ${addr(a)} and endpoint = ${endpoint}`;
+    },
+    async setPrefs(a, prefs) {
+      await ensure(sql, a);
+      for (const p of prefs) {
+        await sql`insert into app.notification_pref (address, event, channel, enabled) values (${addr(a)}, ${p.event}, ${p.channel}, ${p.enabled})
+                  on conflict (address, event, channel) do update set enabled = excluded.enabled`;
+      }
+    },
+    async enqueue(j) {
+      await sql`insert into app.notification_job (dedupe_key, address, event, payload) values (${j.dedupeKey}, ${addr(j.address)}, ${j.event}, ${sql.json(j.payload as postgres.JSONValue)})
+                on conflict (dedupe_key) do nothing`;
+    },
+    async requestAllowlist(a, now) {
+      return sql.begin(async (tx) => {
+        await ensure(tx, a);
+        await tx`update app.account set testnet_attested_at = coalesce(testnet_attested_at, ${now}) where address = ${addr(a)}`;
+        const ins = await tx`insert into app.allowlist_request (address, requested_at) values (${addr(a)}, ${now}) on conflict (address) do nothing returning status`;
+        if (ins[0]) return { status: String(ins[0].status), created: true };
+        const [r] = await tx`select status from app.allowlist_request where address = ${addr(a)}`;
+        return { status: String(r!.status), created: false };
+      });
+    },
+  };
+
+  return { clock, auth, core, me, sql, close: () => sql.end() };
 }
 
 /** In-memory repos (tests, and `API_MEMORY=1` demos). */
@@ -340,5 +416,61 @@ export function memoryRepos(
       return (seed.requests?.[stack] ?? []).filter((r) => r.status === "requested").slice(0, limit);
     },
   };
-  return { clock, auth, core, close: async () => {} };
+  const accounts = new Map<string, { email: string | null; verified: boolean; telegram: string | null; push: Map<string, PushSub>; prefs: Pref[]; attested: Date | null; allowlist: string | null }>();
+  const acct = (a: Address) => {
+    const k = a.toLowerCase();
+    let x = accounts.get(k);
+    if (!x) accounts.set(k, (x = { email: null, verified: false, telegram: null, push: new Map(), prefs: [], attested: null, allowlist: null }));
+    return x;
+  };
+  const tokens = new Map<string, { address: Address; email: string; expiresAt: Date }>();
+  const jobs: { dedupeKey: string; address: Address; event: string; payload: object }[] = [];
+  const me: MeRepo = {
+    async account(a) {
+      const x = acct(a);
+      return { email: x.email, emailVerified: x.verified, telegramChatId: x.telegram, push: [...x.push.keys()].map((endpoint) => ({ endpoint })), prefs: x.prefs, testnetAttestedAt: x.attested, allowlist: x.allowlist ? { status: x.allowlist, txHash: null } : null };
+    },
+    async setEmail(a, email, tokenHash, expiresAt) {
+      const x = acct(a);
+      if (x.email === email) return false;
+      x.email = email;
+      x.verified = false;
+      for (const [k, v] of tokens) if (v.address.toLowerCase() === a.toLowerCase()) tokens.delete(k);
+      if (email && tokenHash) tokens.set(tokenHash.toString("hex"), { address: a, email, expiresAt });
+      return true;
+    },
+    async verifyEmail(tokenHash, now) {
+      const v = tokens.get(tokenHash.toString("hex"));
+      tokens.delete(tokenHash.toString("hex"));
+      if (!v || v.expiresAt <= now) return null;
+      const x = acct(v.address);
+      if (x.email !== v.email) return null;
+      x.verified = true;
+      return v.address;
+    },
+    async setTelegram(a, chatId) {
+      acct(a).telegram = chatId;
+    },
+    async addPush(a, s) {
+      acct(a).push.set(s.endpoint, s);
+    },
+    async removePush(a, endpoint) {
+      acct(a).push.delete(endpoint);
+    },
+    async setPrefs(a, prefs) {
+      const x = acct(a);
+      for (const p of prefs) x.prefs = [...x.prefs.filter((q) => !(q.event === p.event && q.channel === p.channel)), p];
+    },
+    async enqueue(j) {
+      if (!jobs.some((x) => x.dedupeKey === j.dedupeKey)) jobs.push(j);
+    },
+    async requestAllowlist(a, now) {
+      const x = acct(a);
+      x.attested ??= now;
+      if (x.allowlist) return { status: x.allowlist, created: false };
+      x.allowlist = "pending";
+      return { status: "pending", created: true };
+    },
+  };
+  return { clock, auth, core, me, jobs, close: async () => {} };
 }

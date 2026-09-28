@@ -33,6 +33,9 @@ const config: Config = {
   rateLimitAuthPerMin: 1000,
   secureCookies: false,
   scenarioDirs: [],
+  publicApiUrl: "http://localhost:8787",
+  allowlistEnabled: true,
+  allowlistPerIpPerHour: 5,
 };
 const NVDA = keccak256(stringToHex("NVDA:XNAS"));
 const MARKET_ID = keccak256(stringToHex("market:NVDA")) as Hex;
