@@ -180,3 +180,14 @@ Blocked on two things in your area: (1) the devnode is down (`:8547` does not an
 
 ## 2026-09-28 12:50 · BE-backend · DECISION
 **BE-backend resumed S2 (wave 2, alongside BE-chain).** The 11:06 entry is void (PM 11:50). Relayer WS (`c498692`) and notifier (`4e78ea8`) stay as they are. Order: (1) R-26 licensing ADR-0009 (free on-chain-licensed feeds first: Pyth, RedStone, Chainlink on Arbitrum Sepolia; paid plans only in the cost table) with a prototype reader run against Sepolia; (2) keeper J7 σ per `calibration/docs/sigma.md`, reproducing `sigma-vectors.json`, resuming from `calibration/out/sigma/sigma-84d3ee7a661db5f3.json`, then an ANSWER to QE; the SigmaOracle submit is wired once `credence-bindings` is READY; (3) section B against what is READY (SDK v1 ABIs + `@credence/risk-wasm`, API `/bell`, indexer, keeper J2/J3/J4 dry-run/J8/J12); (4) address book off the flat keys; (5) observability (`make obs-up`). `CARGO_TARGET_DIR=target/be`. I will run `make infra-up db-migrate` when I need the devnode and post before any `infra-down`/`infra-reset`.
+
+## 2026-09-28 13:10 · BE-backend · DECISION
+**R-26 · ADR-0009 (proposed): RedStone pull is the free public-testnet price source. The relayer on free keys becomes a monitoring shadow only.** Commit `660a74c`; re-run the evidence with `make r26-probe` (reader in `packages/feeds`). Measured on Arbitrum Sepolia:
+- **RedStone `redstone-primary-prod`:** free, no key, 3-of-5 signers. It covers NVDA, AAPL, TSLA and MSFT but **not COIN or SPY**. RedStone's own verifier accepted a live payload on Sepolia state, and a tampered value reverted.
+- **Chainlink:** Sepolia has only the SPY/USD push feed (24 h heartbeat). Data Streams are paid, with no free tier.
+- **Pyth:** paid since 2026-08-26 (Hermes returns 401; US equities cost $5k/month), and the Sepolia equity prices have been frozen since 2026-08-26.
+
+**PM / user decisions needed** (ADR-0009): **D1:** no free feed carries the official open/close auction print, so the proposal is to use the first RedStone regular package after the open (a testnet-only deviation from §10.1). **D2:** COIN and SPY: ask RedStone to list them, or swap the tickers (QE recalibration). **D3:** get written confirmation from RedStone that relaying to a public testnet is permitted. Their site terms reserve commercial use, and the connector is BUSL-1.1.
+
+## 2026-09-28 13:10 · BE-backend · REQUEST
+**To BE-chain (S3, not blocking S2):** a `RedStonePriceSource : IPriceSource` adapter that verifies the RedStone pull payload. The rules: signers and threshold as in `PrimaryProdDataServiceConsumerBase` (3 of 5), a 180 s delay window and a 60 s ahead window, the median, and 8-decimal → WAD scaling. The relayer will submit the payloads. The byte-layout reference is `packages/feeds/src/redstone.ts` plus its fixture test. Hold until the PM rules on ADR-0009 D3 (licence).
