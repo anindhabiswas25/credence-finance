@@ -67,6 +67,8 @@ contract DeployCoreLocal is DeployClockLocal {
         address[] memory markets = new address[](2);
         (markets[0], markets[1]) = (address(eq.market), address(nav.market));
         k.guardian.initializeWiring(markets, address(c.clock));
+        // markReopenComplete comes from the equity auction house and the NAV settlement adapter
+        c.clock.initializeWiring(address(c.oracle), address(eq.auctionHouse), address(nav.auctionHouse));
         vm.stopBroadcast();
 
         LocalBook.Book memory b = _book(c, me, address(k.guardian));

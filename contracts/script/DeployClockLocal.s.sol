@@ -56,6 +56,8 @@ contract DeployClockLocal is Script {
         address me = vm.addr(pk);
         vm.startBroadcast(pk);
         ClockStack memory c = _deployClockStack(me, me);
+        // clock-only stack: no auction house / settlement adapter yet (DeployCoreLocal wires its own)
+        c.clock.initializeWiring(address(c.oracle), address(0), address(0));
         vm.stopBroadcast();
         string memory path = vm.envOr("OUT", LocalBook.defaultPath());
         LocalBook.Book memory b = _book(c, me, me);
