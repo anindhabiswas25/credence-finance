@@ -29,7 +29,7 @@ cal-test: ## QE: calibration unit tests (offline)
 	$(CAL) pytest -q
 
 cal-sample: ## QE: rebuild every output from the committed synthetic sample into calibration/out-sample (CI)
-	$(CAL) python -m credence_cal.pipeline all --vendor sample --out out-sample
+	$(CAL) python -m credence_cal.pipeline core --vendor sample --out out-sample
 
 cal-risk-cli: ## QE: build risk-cli into target/quant (engine math for the backtest fallback and validate-set)
 	$(QE_CARGO) build --release -p credence-risk-cli

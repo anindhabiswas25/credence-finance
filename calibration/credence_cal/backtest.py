@@ -106,11 +106,12 @@ def build_year_sets(eng: Engine, z: pd.DataFrame, daily: dict[str, list[dict]], 
 
 
 def run(eng: Engine, gaps: pd.DataFrame, z: pd.DataFrame, daily: dict[str, list[dict]], p: Params, synth: dict,
-        years_cache: dict | None = None) -> dict:
+        years_cache: dict | None = None, start: str = f"{START_YEAR}-01-01", end: str = "9999-12-31") -> dict:
     """One full replay. `gaps` holds the listed assets with the ex-ante `sigma` column (sigma.replay);
-    `synth` the synthetic stress levels {horizon: basket z} of the full-sample joint set."""
+    `synth` the synthetic stress levels {horizon: basket z} of the full-sample joint set. A pre-filled
+    `years_cache` ({year: YearSets}) replaces the walk-forward sets (the in-sample replay)."""
     g = gaps[gaps["symbol"].isin(list(LISTED)) & gaps["sigma"].notna()].copy()
-    g = g[g["date"] >= f"{START_YEAR}-01-01"]
+    g = g[(g["date"] >= start) & (g["date"] <= end)]
     closures = sorted(set(zip(g["date"], g["type"])))
     by = {(s, d): row for s, d, row in zip(g["symbol"], g["date"], g.itertuples(index=False))}
     cache = years_cache if years_cache is not None else {}
@@ -293,12 +294,12 @@ SENSITIVITY = {
 }
 
 
-def sensitivity(eng: Engine, gaps, z, daily, base: Params, synth: dict, cache: dict) -> list[dict]:
+def sensitivity(eng: Engine, gaps, z, daily, base: Params, synth: dict, cache: dict, **kw) -> list[dict]:
     out = []
     for name, vals in SENSITIVITY.items():
         for v in vals:
             p = replace(base, **{name: v})
-            s = summarize(run(eng, gaps, z, daily, p, synth, cache))
+            s = summarize(run(eng, gaps, z, daily, p, synth, cache, **kw))
             out.append({"param": name, "value": v, "breachRate": s["breach"]["total"]["rate"],
                         "breaches": s["breach"]["total"]["breaches"], "trials": s["breach"]["total"]["trials"],
                         "annualReturnOnJ0": s["pool"]["annualReturnOnJ0"], "worstEpochUsd": s["pool"]["worstEpoch"]["pnlUsd"],
@@ -306,3 +307,70 @@ def sensitivity(eng: Engine, gaps, z, daily, base: Params, synth: dict, cache: d
                         "premiumsUsd": s["pool"]["premiumsUsd"], "shortfallsUsd": s["pool"]["shortfallsUsd"],
                         "seniorLossEvents": len(s["seniorLossEvents"])})
     return out
+
+
+def full_sample_cache(eng: Engine, z: pd.DataFrame, daily: dict[str, list[dict]], synth: dict, years: range) -> dict:
+    """The in-sample replay: every year uses the sets, joint set and floors built from all the data."""
+    ys = build_year_sets(eng, z, daily, 9999, synth)
+    return {y: ys for y in years}
+
+
+def params_doc(p: Params) -> dict:
+    return {k: v for k, v in p.__dict__.items()}
+
+
+def book_doc() -> dict:
+    return {"loansPerMarket": N_LOANS, "borrowCapUsdPerMarket": BORROW_CAP_USD, "atLimitShare": 0.3,
+            "ltvOtherwise": "uniform on [0.40, LTV_max], seeded per (closure, asset)",
+            "coverRule": "above the safe LTV at the Bell: at-the-limit loans buy cover; others buy cover if their index "
+                         "is even, else cure to the safe LTV; a cover refused by pool_capacity cures",
+            "reopen": "liquidation lot sized and cleared at R = (1 - kappa) x open; the pool pays every shortfall",
+            "poolEquity": "held at J0 every epoch; a senior loss is an epoch whose shortfalls exceed J0"}
+
+
+def _ci(b: dict) -> str:
+    if not b.get("trials"):
+        return "—"
+    return f"{b['breaches']} / {b['trials']} = {b['rate']:.4%} [{b['ci95'][0]:.4%}, {b['ci95'][1]:.4%}], Kupiec p {b['kupiecP']}"
+
+
+def markdown(doc: dict, fname: str) -> str:
+    p = doc["params"]
+    L = [f"# Backtest ({doc['vendor']}, data grade `{doc['dataGrade']}`, through {doc['end']})", "",
+         f"Machine-readable: `{fname}`. Every safe LTV, premium, loss vector, capacity check, lot and settlement is "
+         f"risk-core output through `credence_cal.engine` ({doc['engine']}); this report only counts and sums. "
+         f"Method: `credence_cal/backtest.py` (module docstring). Base parameters: α {p['alpha']:.2%}, κ {p['kappa']:.0%}, "
+         f"θ {p['theta']:.0%}, c {p['cost_of_cap']:.0%}, η {p['eta']:g}, β {p['beta']:.1%}, u_max {p['u_max']:.0%}, "
+         f"pool equity ${p['pool_equity_usd']:,.0f}. Synthetic stress levels (ADR-0204): {doc['syntheticStressLevels']}.", ""]
+    for name, key in (("Walk-forward (headline, out of sample)", "walkForward"), ("In-sample (every closure since the data start)", "inSample")):
+        s = doc[key]
+        pool = s["pool"]
+        L += [f"## {name}, from {s['from']}", "",
+              f"Breach frequency vs α (a breach: the realised open factor (1 + r)(1 − κ) below the α-quantile safe factor g_α): "
+              f"**{_ci(s['breach']['total'])}**, expected {s['breach']['total'].get('expected', 0)}.", "",
+              "| Closure type | breaches / trials, 95% CI, Kupiec |", "| --- | --- |"]
+        for t, b in s["breach"]["byType"].items():
+            L.append(f"| {t} | {_ci(b)} |")
+        L += ["", "| Asset:type | breaches / trials, 95% CI, Kupiec |", "| --- | --- |"]
+        for k, b in s["breach"]["byAssetType"].items():
+            L.append(f"| {k} | {_ci(b)} |")
+        wy, we = pool["worstYear"], pool["worstEpoch"]
+        L += ["", f"Pool: {pool['epochs']} epochs; mean epoch P&L ${pool['meanEpochPnlUsd']:,.2f} (sd ${pool['sdEpochPnlUsd']:,.2f}); "
+              f"total ${pool['totalPnlUsd']:,.2f}; mean annual return on J0 {pool['annualReturnOnJ0']:.2%}; premiums ${pool['premiumsUsd']:,.2f}; "
+              f"shortfalls ${pool['shortfallsUsd']:,.2f}; liquidations {pool['liquidations']}.", "",
+              f"Epoch P&L quantiles (USD): {pool['quantilesUsd']}.", "",
+              f"Worst epoch: {we['date']} ({we['type']}) ${we['pnlUsd']:,.2f}, shortfall ${we['shortfallUsd']:,.2f} ({we['shareOfJ0']:.2%} of J0). "
+              f"Worst year: {wy['year']} ${wy['pnlUsd']:,.2f}.", "",
+              f"Capacity binding rate (epochs with at least one cover refused): {pool['capacityBindingRate']:.2%} "
+              f"(weekend and holiday closures only: {pool['capacityBindingRateNonOvernight']:.2%}); "
+              f"{pool['coverRefused']} of {pool['coverRequests']} cover requests refused.", "",
+              f"Senior-loss events: {len(s['seniorLossEvents'])}" + (": " + ", ".join(f"{e['date']} (${e['seniorLossUsd']:,.2f})" for e in s["seniorLossEvents"]) if s["seniorLossEvents"] else " (none)."), "",
+              "Largest shortfall epochs: " + (", ".join(f"{e['date']} {e['type']} ${e['shortfallUsd']:,.2f}" for e in s["worstShortfallEpochs"]) or "none") + ".", ""]
+    L += ["## Sensitivity (walk-forward; one parameter moved from the base at a time)", "",
+          "| Parameter | value | breaches / trials | rate | annual return on J0 | premiums | shortfalls | worst epoch | worst year | capacity binding | senior-loss events |",
+          "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |"]
+    for r in doc["sensitivity"]:
+        L.append(f"| {r['param']} | {r['value']:g} | {r['breaches']} / {r['trials']} | {r['breachRate']:.4%} | {r['annualReturnOnJ0']:.2%} | "
+                 f"${r['premiumsUsd']:,.0f} | ${r['shortfallsUsd']:,.0f} | ${r['worstEpochUsd']:,.0f} | ${r['worstYearUsd']:,.0f} | "
+                 f"{r['capacityBindingRate']:.2%} | {r['seniorLossEvents']} |")
+    return "\n".join(L) + "\n"

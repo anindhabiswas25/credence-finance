@@ -1,7 +1,8 @@
 """The calibration pipeline driver (§10.6). `make cal-all` = `python -m credence_cal.pipeline all`.
 
-    python -m credence_cal.pipeline all      [--vendor alpaca|tiingo|sample] [--out DIR]
-    python -m credence_cal.pipeline <stage>  (gaps | sigma | sets | validation)
+    python -m credence_cal.pipeline all      [--vendor alpaca|tiingo|sample] [--out DIR]   (every stage)
+    python -m credence_cal.pipeline core     [...]   (gaps, sigma, sets, validation: fast; the CI sample check)
+    python -m credence_cal.pipeline <stage>  (gaps | sigma | sets | validation | backtest)
 
 Stages read the pinned raw data (checked against the committed manifest first) and write
 content-addressed JSON under `--out` (default `calibration/out`). Intermediate tables go to
@@ -201,7 +202,49 @@ def stage_validation(c: Ctx) -> None:
     print(f"validation: {len(doc['sets'])} sets vs t3 -> {p.name}")
 
 
-STAGES = {"gaps": stage_gaps, "sigma": stage_sigma, "sets": stage_sets, "validation": stage_validation}
+def backtest_inputs(c: Ctx) -> tuple[pd.DataFrame, dict, dict]:
+    """(pooled z table with the ex-ante σ, per-asset daily σ series, synthetic stress levels)."""
+    from . import sets as sets_mod
+
+    z = _pooled_z(c)
+    gaps = pd.read_parquet(c.work / "gaps.parquet")
+    daily = {}
+    for a in LISTED:
+        gs = gaps[gaps["symbol"] == a].sort_values("date").reset_index(drop=True)
+        daily[a] = sigma_mod.replay(gs)[2]
+    _, jinfo = sets_mod.joint(z)
+    synth = {h: v["basketZ"] for h, v in jinfo["synthetic"]["levels"].items()}
+    return z, daily, synth
+
+
+def stage_backtest(c: Ctx, end: str = "9999-12-31") -> None:
+    """§10.6 step 7 through risk-core (credence_cal.engine): walk-forward from START_YEAR (headline), an
+    in-sample replay of every closure since the data start, and the parameter sensitivity."""
+    from . import backtest as bt
+    from .engine import default_engine
+
+    eng = default_engine()
+    z, daily, synth = backtest_inputs(c)
+    base = bt.Params()
+    cache: dict = {}
+    wf = bt.run(eng, z, z, daily, base, synth, cache, end=end)
+    first = str(z.loc[z["symbol"].isin(list(LISTED)) & z["sigma"].notna(), "date"].min())
+    ins_cache = bt.full_sample_cache(eng, z, daily, synth, range(int(first[:4]), int(c.end[:4]) + 1))
+    ins = bt.run(eng, z, z, daily, base, synth, ins_cache, start=first, end=end)
+    sens = bt.sensitivity(eng, z, z, daily, base, synth, cache, end=end)
+    doc = {"kind": "credence.backtest.v1", "dataGrade": c.grade, "vendor": c.vendor, "end": c.end,
+           "engine": type(eng).__name__, "params": bt.params_doc(base), "syntheticStressLevels": synth,
+           "book": bt.book_doc(), "walkForward": {"from": f"{bt.START_YEAR}-01-01", **bt.summarize(wf)},
+           "inSample": {"from": first, **bt.summarize(ins)}, "sensitivity": sens}
+    p, _ = write_addressed(c.out / "backtest", "backtest", doc)
+    (c.out / "backtest" / "README.md").write_text(bt.markdown(doc, p.name))
+    print(f"backtest: {doc['walkForward']['pool']['epochs']} walk-forward epochs, "
+          f"{doc['inSample']['pool']['epochs']} in-sample -> {p.name}")
+
+
+STAGES = {"gaps": stage_gaps, "sigma": stage_sigma, "sets": stage_sets, "validation": stage_validation,
+          "backtest": stage_backtest}
+CORE = ("gaps", "sigma", "sets", "validation")  # fast; the CI sample check runs these
 
 
 def hashes(c: Ctx) -> None:
@@ -212,15 +255,15 @@ def hashes(c: Ctx) -> None:
 
 def main(argv: list[str] | None = None) -> None:
     ap = argparse.ArgumentParser(prog="credence_cal.pipeline")
-    ap.add_argument("stage", choices=["all", *STAGES])
+    ap.add_argument("stage", choices=["all", "core", *STAGES])
     ap.add_argument("--vendor", default="alpaca")
     ap.add_argument("--out", type=Path, default=None)
     a = ap.parse_args(argv)
     c = Ctx.make(a.vendor, a.out)
     for name, fn in STAGES.items():
-        if a.stage in ("all", name):
+        if a.stage == "all" or (a.stage == "core" and name in CORE) or a.stage == name:
             fn(c)
-    if a.stage == "all":
+    if a.stage in ("all", "core"):
         hashes(c)
 
 

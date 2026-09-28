@@ -1,0 +1,375 @@
+{
+ "checked": 36,
+ "kind": "credence.crosscheck.v1",
+ "matched": 36,
+ "maxAbsGapDiffBps": 0.0,
+ "maxAbsPriceRelDiff": 0.0,
+ "primary": "alpaca (SIP daily bars)",
+ "reference": "polygon /v1/open-close (official, unadjusted)",
+ "rows": [
+  {
+   "date": "2025-01-27",
+   "gapDiffBps": 0.0,
+   "openRelDiff": 0.0,
+   "prev": "2025-01-24",
+   "prevCloseRelDiff": 0.0,
+   "status": "OK",
+   "symbol": "NVDA",
+   "type": 2
+  },
+  {
+   "date": "2025-04-07",
+   "gapDiffBps": 0.0,
+   "openRelDiff": 0.0,
+   "prev": "2025-04-04",
+   "prevCloseRelDiff": 0.0,
+   "status": "OK",
+   "symbol": "NVDA",
+   "type": 2
+  },
+  {
+   "date": "2025-05-12",
+   "gapDiffBps": 0.0,
+   "openRelDiff": 0.0,
+   "prev": "2025-05-09",
+   "prevCloseRelDiff": 0.0,
+   "status": "OK",
+   "symbol": "NVDA",
+   "type": 2
+  },
+  {
+   "date": "2025-02-03",
+   "gapDiffBps": 0.0,
+   "openRelDiff": 0.0,
+   "prev": "2025-01-31",
+   "prevCloseRelDiff": 0.0,
+   "status": "OK",
+   "symbol": "NVDA",
+   "type": 2
+  },
+  {
+   "date": "2025-02-18",
+   "gapDiffBps": 0.0,
+   "openRelDiff": 0.0,
+   "prev": "2025-02-14",
+   "prevCloseRelDiff": 0.0,
+   "status": "OK",
+   "symbol": "NVDA",
+   "type": 3
+  },
+  {
+   "date": "2025-10-27",
+   "gapDiffBps": 0.0,
+   "openRelDiff": 0.0,
+   "prev": "2025-10-24",
+   "prevCloseRelDiff": 0.0,
+   "status": "OK",
+   "symbol": "NVDA",
+   "type": 2
+  },
+  {
+   "date": "2025-04-14",
+   "gapDiffBps": 0.0,
+   "openRelDiff": 0.0,
+   "prev": "2025-04-11",
+   "prevCloseRelDiff": 0.0,
+   "status": "OK",
+   "symbol": "AAPL",
+   "type": 2
+  },
+  {
+   "date": "2025-05-12",
+   "gapDiffBps": 0.0,
+   "openRelDiff": 0.0,
+   "prev": "2025-05-09",
+   "prevCloseRelDiff": 0.0,
+   "status": "OK",
+   "symbol": "AAPL",
+   "type": 2
+  },
+  {
+   "date": "2025-04-07",
+   "gapDiffBps": 0.0,
+   "openRelDiff": 0.0,
+   "prev": "2025-04-04",
+   "prevCloseRelDiff": 0.0,
+   "status": "OK",
+   "symbol": "AAPL",
+   "type": 2
+  },
+  {
+   "date": "2025-01-21",
+   "gapDiffBps": 0.0,
+   "openRelDiff": 0.0,
+   "prev": "2025-01-17",
+   "prevCloseRelDiff": 0.0,
+   "status": "OK",
+   "symbol": "AAPL",
+   "type": 3
+  },
+  {
+   "date": "2024-11-11",
+   "gapDiffBps": 0.0,
+   "openRelDiff": 0.0,
+   "prev": "2024-11-08",
+   "prevCloseRelDiff": 0.0,
+   "status": "OK",
+   "symbol": "AAPL",
+   "type": 2
+  },
+  {
+   "date": "2025-12-29",
+   "gapDiffBps": 0.0,
+   "openRelDiff": 0.0,
+   "prev": "2025-12-26",
+   "prevCloseRelDiff": 0.0,
+   "status": "OK",
+   "symbol": "AAPL",
+   "type": 2
+  },
+  {
+   "date": "2025-05-12",
+   "gapDiffBps": 0.0,
+   "openRelDiff": 0.0,
+   "prev": "2025-05-09",
+   "prevCloseRelDiff": 0.0,
+   "status": "OK",
+   "symbol": "TSLA",
+   "type": 2
+  },
+  {
+   "date": "2024-11-11",
+   "gapDiffBps": 0.0,
+   "openRelDiff": 0.0,
+   "prev": "2024-11-08",
+   "prevCloseRelDiff": 0.0,
+   "status": "OK",
+   "symbol": "TSLA",
+   "type": 2
+  },
+  {
+   "date": "2025-07-07",
+   "gapDiffBps": 0.0,
+   "openRelDiff": 0.0,
+   "prev": "2025-07-03",
+   "prevCloseRelDiff": 0.0,
+   "status": "OK",
+   "symbol": "TSLA",
+   "type": 3
+  },
+  {
+   "date": "2025-09-15",
+   "gapDiffBps": 0.0,
+   "openRelDiff": 0.0,
+   "prev": "2025-09-12",
+   "prevCloseRelDiff": 0.0,
+   "status": "OK",
+   "symbol": "TSLA",
+   "type": 2
+  },
+  {
+   "date": "2025-08-04",
+   "gapDiffBps": 0.0,
+   "openRelDiff": 0.0,
+   "prev": "2025-08-01",
+   "prevCloseRelDiff": 0.0,
+   "status": "OK",
+   "symbol": "TSLA",
+   "type": 2
+  },
+  {
+   "date": "2025-09-22",
+   "gapDiffBps": 0.0,
+   "openRelDiff": 0.0,
+   "prev": "2025-09-19",
+   "prevCloseRelDiff": 0.0,
+   "status": "OK",
+   "symbol": "TSLA",
+   "type": 2
+  },
+  {
+   "date": "2024-11-11",
+   "gapDiffBps": 0.0,
+   "openRelDiff": 0.0,
+   "prev": "2024-11-08",
+   "prevCloseRelDiff": 0.0,
+   "status": "OK",
+   "symbol": "COIN",
+   "type": 2
+  },
+  {
+   "date": "2025-04-07",
+   "gapDiffBps": 0.0,
+   "openRelDiff": 0.0,
+   "prev": "2025-04-04",
+   "prevCloseRelDiff": 0.0,
+   "status": "OK",
+   "symbol": "COIN",
+   "type": 2
+  },
+  {
+   "date": "2025-03-03",
+   "gapDiffBps": 0.0,
+   "openRelDiff": 0.0,
+   "prev": "2025-02-28",
+   "prevCloseRelDiff": 0.0,
+   "status": "OK",
+   "symbol": "COIN",
+   "type": 2
+  },
+  {
+   "date": "2026-06-15",
+   "gapDiffBps": 0.0,
+   "openRelDiff": 0.0,
+   "prev": "2026-06-12",
+   "prevCloseRelDiff": 0.0,
+   "status": "OK",
+   "symbol": "COIN",
+   "type": 2
+  },
+  {
+   "date": "2025-09-15",
+   "gapDiffBps": 0.0,
+   "openRelDiff": 0.0,
+   "prev": "2025-09-12",
+   "prevCloseRelDiff": 0.0,
+   "status": "OK",
+   "symbol": "COIN",
+   "type": 2
+  },
+  {
+   "date": "2026-03-30",
+   "gapDiffBps": 0.0,
+   "openRelDiff": 0.0,
+   "prev": "2026-03-27",
+   "prevCloseRelDiff": 0.0,
+   "status": "OK",
+   "symbol": "COIN",
+   "type": 2
+  },
+  {
+   "date": "2025-01-27",
+   "gapDiffBps": 0.0,
+   "openRelDiff": 0.0,
+   "prev": "2025-01-24",
+   "prevCloseRelDiff": 0.0,
+   "status": "OK",
+   "symbol": "MSFT",
+   "type": 2
+  },
+  {
+   "date": "2026-06-01",
+   "gapDiffBps": 0.0,
+   "openRelDiff": 0.0,
+   "prev": "2026-05-29",
+   "prevCloseRelDiff": 0.0,
+   "status": "OK",
+   "symbol": "MSFT",
+   "type": 2
+  },
+  {
+   "date": "2025-04-07",
+   "gapDiffBps": 0.0,
+   "openRelDiff": 0.0,
+   "prev": "2025-04-04",
+   "prevCloseRelDiff": 0.0,
+   "status": "OK",
+   "symbol": "MSFT",
+   "type": 2
+  },
+  {
+   "date": "2026-08-03",
+   "gapDiffBps": 0.0,
+   "openRelDiff": 0.0,
+   "prev": "2026-07-31",
+   "prevCloseRelDiff": 0.0,
+   "status": "OK",
+   "symbol": "MSFT",
+   "type": 2
+  },
+  {
+   "date": "2024-11-04",
+   "gapDiffBps": 0.0,
+   "openRelDiff": 0.0,
+   "prev": "2024-11-01",
+   "prevCloseRelDiff": 0.0,
+   "status": "OK",
+   "symbol": "MSFT",
+   "type": 2
+  },
+  {
+   "date": "2025-03-03",
+   "gapDiffBps": 0.0,
+   "openRelDiff": 0.0,
+   "prev": "2025-02-28",
+   "prevCloseRelDiff": 0.0,
+   "status": "OK",
+   "symbol": "MSFT",
+   "type": 2
+  },
+  {
+   "date": "2025-04-07",
+   "gapDiffBps": 0.0,
+   "openRelDiff": 0.0,
+   "prev": "2025-04-04",
+   "prevCloseRelDiff": 0.0,
+   "status": "OK",
+   "symbol": "SPY",
+   "type": 2
+  },
+  {
+   "date": "2025-05-12",
+   "gapDiffBps": 0.0,
+   "openRelDiff": 0.0,
+   "prev": "2025-05-09",
+   "prevCloseRelDiff": 0.0,
+   "status": "OK",
+   "symbol": "SPY",
+   "type": 2
+  },
+  {
+   "date": "2025-01-27",
+   "gapDiffBps": 0.0,
+   "openRelDiff": 0.0,
+   "prev": "2025-01-24",
+   "prevCloseRelDiff": 0.0,
+   "status": "OK",
+   "symbol": "SPY",
+   "type": 2
+  },
+  {
+   "date": "2025-04-14",
+   "gapDiffBps": 0.0,
+   "openRelDiff": 0.0,
+   "prev": "2025-04-11",
+   "prevCloseRelDiff": 0.0,
+   "status": "OK",
+   "symbol": "SPY",
+   "type": 2
+  },
+  {
+   "date": "2025-11-03",
+   "gapDiffBps": 0.0,
+   "openRelDiff": 0.0,
+   "prev": "2025-10-31",
+   "prevCloseRelDiff": 0.0,
+   "status": "OK",
+   "symbol": "SPY",
+   "type": 2
+  },
+  {
+   "date": "2025-11-28",
+   "gapDiffBps": 0.0,
+   "openRelDiff": 0.0,
+   "prev": "2025-11-26",
+   "prevCloseRelDiff": 0.0,
+   "status": "OK",
+   "symbol": "SPY",
+   "type": 3
+  }
+ ],
+ "window": {
+  "end": "2026-09-25",
+  "start": "2024-10-05"
+ }
+}

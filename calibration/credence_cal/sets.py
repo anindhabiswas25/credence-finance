@@ -167,8 +167,11 @@ def joint(z: pd.DataFrame, k: int = K_STRESS, synthetic: bool | dict = True) -> 
     for a in LISTED:
         if a == INDEX:
             continue
+        if a not in wide.columns:  # no z at all yet (a walk-forward year before the listing)
+            wide[a] = np.nan
         both = wide[[a, INDEX]].dropna()
-        betas[a] = float((both[a] * both[INDEX]).sum() / (both[INDEX] ** 2).sum())
+        # β = 1 when there is no overlap: the asset then has no closures of its own to replay either
+        betas[a] = float((both[a] * both[INDEX]).sum() / (both[INDEX] ** 2).sum()) if len(both) else 1.0
         miss = wide[a].isna()
         filled[a] = int(miss.sum())
         wide.loc[miss, a] = betas[a] * zi[miss]
