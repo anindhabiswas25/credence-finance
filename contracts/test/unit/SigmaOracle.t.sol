@@ -53,14 +53,11 @@ contract SigmaOracleTest is Test {
 
     function test_digestIsEip712() public view {
         SigmaUpdate memory u = _u(0.04e18, 20_000);
-        bytes32 structHash =
-            keccak256(abi.encode(so.SIGMA_TYPEHASH(), u.assetId, u.closureType, u.sigma, u.asOfDay, u.nonce));
+        bytes32 structHash = keccak256(abi.encode(so.SIGMA_TYPEHASH(), u.assetId, u.closureType, u.sigma, u.asOfDay, u.nonce));
         assertEq(so.hashUpdate(u), keccak256(abi.encodePacked("\x19\x01", so.domainSeparator(), structHash)));
         assertEq(
             so.SIGMA_TYPEHASH(),
-            keccak256(
-                "SigmaUpdate(bytes32 assetId,uint8 closureType,uint256 sigma,uint32 asOfDay,uint64 nonce)"
-            )
+            keccak256("SigmaUpdate(bytes32 assetId,uint8 closureType,uint256 sigma,uint32 asOfDay,uint64 nonce)")
         );
         (address[] memory c, uint8 t) = so.committee();
         assertEq(c.length, 3);

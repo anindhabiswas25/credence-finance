@@ -56,9 +56,7 @@ contract CredenceTreasuryFund is INavFund, IssuerRoles, ERC20, ERC20Permit {
         address reserveWallet_,
         uint256 initialNav
     ) ERC20(name_, symbol_) ERC20Permit(name_) IssuerRoles(issuer_) {
-        if (registry_ == address(0) || asset_ == address(0) || reserveWallet_ == address(0)) {
-            revert ZeroAddress();
-        }
+        if (registry_ == address(0) || asset_ == address(0) || reserveWallet_ == address(0)) revert ZeroAddress();
         registry = registry_;
         asset = asset_;
         _assetDec = IERC20Metadata(asset_).decimals();

@@ -142,9 +142,7 @@ contract GovernanceTest is CoreFixture {
         guardianC.haltAsset(NVDA, uint40(block.timestamp));
         uint40 tooLate = uint40(block.timestamp + 8 days);
         vm.expectRevert(
-            abi.encodeWithSelector(
-                ICredenceErrors.UntilTooLate.selector, tooLate, uint40(block.timestamp + 7 days)
-            )
+            abi.encodeWithSelector(ICredenceErrors.UntilTooLate.selector, tooLate, uint40(block.timestamp + 7 days))
         );
         guardianC.haltAsset(NVDA, tooLate);
         guardianC.haltAsset(NVDA, uint40(block.timestamp + 2 days));

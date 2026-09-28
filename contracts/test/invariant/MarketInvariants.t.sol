@@ -49,32 +49,14 @@ contract MarketInvariantsTest is CoreFixture {
         // liquidation and settlement paths, not only deposits and attacks
         bytes4[] memory w = new bytes4[](36);
         bytes4[12] memory heavy = [
-            h.borrow.selector,
-            h.borrow.selector,
-            h.borrow.selector,
-            h.advance.selector,
-            h.advance.selector,
-            h.shock.selector,
-            h.buyCover.selector,
-            h.enforceBell.selector,
-            h.flag.selector,
-            h.auction.selector,
-            h.auction.selector,
-            h.repay.selector
+            h.borrow.selector, h.borrow.selector, h.borrow.selector, h.advance.selector, h.advance.selector,
+            h.shock.selector, h.buyCover.selector, h.enforceBell.selector, h.flag.selector, h.auction.selector,
+            h.auction.selector, h.repay.selector
         ];
         bytes4[12] memory light = [
-            h.deposit.selector,
-            h.withdraw.selector,
-            h.requestRedeem.selector,
-            h.processQueue.selector,
-            h.claimRedeem.selector,
-            h.rebalance.selector,
-            h.addCollateral.selector,
-            h.withdrawCollateral.selector,
-            h.claimFees.selector,
-            h.fundBackstops.selector,
-            h.guardianAct.selector,
-            h.attack.selector
+            h.deposit.selector, h.withdraw.selector, h.requestRedeem.selector, h.processQueue.selector,
+            h.claimRedeem.selector, h.rebalance.selector, h.addCollateral.selector, h.withdrawCollateral.selector,
+            h.claimFees.selector, h.fundBackstops.selector, h.guardianAct.selector, h.attack.selector
         ];
         for (uint256 i; i < 12; ++i) {
             w[i] = heavy[i];
@@ -83,7 +65,7 @@ contract MarketInvariantsTest is CoreFixture {
         }
         bytes4[] memory rest = new bytes4[](4);
         (rest[0], rest[1], rest[2], rest[3]) =
-        (h.recover.selector, h.repayWhileBroken.selector, h.setAutoCover.selector, h.shock.selector);
+            (h.recover.selector, h.repayWhileBroken.selector, h.setAutoCover.selector, h.shock.selector);
         bytes4[] memory all = new bytes4[](40);
         for (uint256 i; i < 36; ++i) {
             all[i] = w[i];
@@ -118,10 +100,7 @@ contract MarketInvariantsTest is CoreFixture {
         bytes32[3] memory ids = _ids();
         for (uint256 i; i < 3; ++i) {
             MarketState memory st = market.marketState(ids[i]);
-            assertLe(
-                st.totalBorrowAssets,
-                uint256(st.totalSupplyAssets) + st.poolFeeAccrued + st.treasuryFeeAccrued
-            );
+            assertLe(st.totalBorrowAssets, uint256(st.totalSupplyAssets) + st.poolFeeAccrued + st.treasuryFeeAccrued);
         }
     }
 
@@ -185,20 +164,9 @@ contract MarketInvariantsTest is CoreFixture {
     function afterInvariant() external view {
         console2.log(
             string.concat(
-                "depth: borrows ",
-                vm.toString(h.okBorrows()),
-                ", covers ",
-                vm.toString(h.okCovers()),
-                ", bells ",
-                vm.toString(h.okBells()),
-                ", flags ",
-                vm.toString(h.okFlags()),
-                ", settles ",
-                vm.toString(h.okSettles()),
-                ", withdraws ",
-                vm.toString(h.okWithdraws()),
-                ", senior losses ",
-                vm.toString(h.ghostSeniorLosses())
+                "depth: borrows ", vm.toString(h.okBorrows()), ", covers ", vm.toString(h.okCovers()), ", bells ",
+                vm.toString(h.okBells()), ", flags ", vm.toString(h.okFlags()), ", settles ", vm.toString(h.okSettles()),
+                ", withdraws ", vm.toString(h.okWithdraws()), ", senior losses ", vm.toString(h.ghostSeniorLosses())
             )
         );
     }

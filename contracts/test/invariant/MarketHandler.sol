@@ -376,8 +376,7 @@ contract MarketHandler is Test {
             if (logs[j].topics[0] != ICredenceMarketEvents.Flagged.selector) continue;
             (, AuctionKind fk) = abi.decode(logs[j].data, (uint64, AuctionKind));
             address owner = address(uint160(uint256(logs[j].topics[2])));
-            if (fk == AuctionKind.EMERGENCY && s.market.position(s.ids[i], owner).coverClosureId == closureId)
-            {
+            if (fk == AuctionKind.EMERGENCY && s.market.position(s.ids[i], owner).coverClosureId == closureId) {
                 ++ghostLiqViolations;
             }
         }
@@ -495,23 +494,13 @@ contract MarketHandler is Test {
         vm.startPrank(attacker);
         uint256 w = bound(what, 0, 6);
         bool ok;
-        if (w == 0) {
-            (ok,) = address(s.market).call(abi.encodeCall(s.market.setCaps, (id, 1, 1)));
-        } else if (w == 1) {
-            (ok,) =
-                address(s.market).call(abi.encodeCall(s.market.setRiskParams, (id, 0.5e18, 0.6e18, 0.01e18)));
-        } else if (w == 2) {
-            (ok,) = address(s.market).call(abi.encodeCall(s.market.setFeeSplit, (id, 0, 0)));
-        } else if (w == 3) {
-            (ok,) = address(s.market).call(abi.encodeCall(s.market.setEngine, (attacker)));
-        } else if (w == 4) {
-            (ok,) = address(s.vault).call(abi.encodeCall(s.vault.setCap, (id, 0)));
-        } else if (w == 5) {
-            (ok,) = address(s.market)
-                .call(abi.encodeCall(s.market.applyOverlay, (id, GuardianOverlay(0, 0, false, false))));
-        } else {
-            (ok,) = address(s.reserve).call(abi.encodeCall(s.reserve.setTargetSize, (0)));
-        }
+        if (w == 0) (ok,) = address(s.market).call(abi.encodeCall(s.market.setCaps, (id, 1, 1)));
+        else if (w == 1) (ok,) = address(s.market).call(abi.encodeCall(s.market.setRiskParams, (id, 0.5e18, 0.6e18, 0.01e18)));
+        else if (w == 2) (ok,) = address(s.market).call(abi.encodeCall(s.market.setFeeSplit, (id, 0, 0)));
+        else if (w == 3) (ok,) = address(s.market).call(abi.encodeCall(s.market.setEngine, (attacker)));
+        else if (w == 4) (ok,) = address(s.vault).call(abi.encodeCall(s.vault.setCap, (id, 0)));
+        else if (w == 5) (ok,) = address(s.market).call(abi.encodeCall(s.market.applyOverlay, (id, GuardianOverlay(0, 0, false, false))));
+        else (ok,) = address(s.reserve).call(abi.encodeCall(s.reserve.setTargetSize, (0)));
         if (ok) ++ghostGovViolations;
         vm.stopPrank();
     }
