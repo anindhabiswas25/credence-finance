@@ -93,6 +93,8 @@ interface IRiskEngine is IRiskEngineEvents {
     function sigma(bytes32 assetId, uint8 closureType) external view returns (uint256);
     function params() external view returns (RiskParams memory);
     function scenarioHash(bytes32 assetId, uint8 closureType) external view returns (bytes32);
+    /// @dev Added in v1 (additive, ADR-0106): keccak256 of the packed joint column last set by `setJointColumn`.
+    function jointHash(bytes32 assetId) external view returns (bytes32);
     /// @dev Added after v0 (additive): the two writers the engine trusts.
     function timelock() external view returns (address);
     function sigmaOracle() external view returns (address);

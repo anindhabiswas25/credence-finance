@@ -24,6 +24,8 @@ pub mod premium;
 pub mod rates;
 pub mod safe_ltv;
 pub mod scenarios;
+#[cfg(feature = "files")]
+pub mod setfile;
 
 pub use alloy_primitives::U256;
 pub use capacity::{loss_vector, pool_capacity, uncovered_bound, CapacityResult, UncoveredMarket};

@@ -27,7 +27,7 @@ ABI_IMPLS ?= CalendarStore AssetClock CredencePriceFeed OracleAdapter SequencerH
 
 .PHONY: abis-check local-deploy-clock contracts-deps contracts-build contracts-test contracts-invariant contracts-coverage contracts-fmt \
   contracts-fmt-check contracts-snapshot contracts-clean abis-export risk-build risk-test risk-lint risk-fmt stylus-test stylus-abi-check \
-  stylus-check stylus-export-abi devnode-up devnode-down devnode-deploy-engine stylus-diff
+  stylus-check stylus-export-abi devnode-up devnode-down devnode-deploy-engine stylus-diff risk-validate-set risk-load-set
 
 contracts-deps: ## Install pinned Solidity deps into contracts/lib (OZ, forge-std, solady) if missing
 	@cd $(CONTRACTS_DIR) && \
@@ -124,3 +124,17 @@ devnode-deploy-engine: ## Deploy + activate the Stylus Risk Engine on the devnod
 stylus-diff: ## Differential test: $(DIFF_N) random inputs per function, native risk-core vs the deployed engine (+ gas)
 	PRIVATE_KEY=$(DEVNODE_KEY) cargo run --release -p credence-risk-engine-diff -- --rpc $(DEVNODE_RPC) \
 	  --n $(DIFF_N) --gas
+
+# Scenario-set files (ADR-0106). RISK_FILE / RISK_BUNDLE: a set, joint set or bundle; references resolve relative to
+# the bundle's directory. Default = the example bundle in contracts/test/fixtures/risk.
+RISK_BUNDLE ?= contracts/test/fixtures/risk/example-bundle.json
+RISK_FILE   ?= $(RISK_BUNDLE)
+
+risk-validate-set: ## Validate a scenario-set / joint-set / risk-bundle file (RISK_FILE=…) with risk-cli
+	cargo run -q --release -p credence-risk-cli -- validate-set $(RISK_FILE)
+
+risk-load-set: ## Validate RISK_BUNDLE, then load it into the engine on LOCAL_RPC (RISK_ENGINE= or the address book)
+	cargo run -q --release -p credence-risk-cli -- validate-set $(RISK_BUNDLE) > /dev/null
+	cd $(CONTRACTS_DIR) && PRIVATE_KEY=$(DEVNODE_KEY) RISK_BUNDLE=$(abspath $(RISK_BUNDLE)) \
+	  RISK_BUNDLE_DIR=$(abspath $(dir $(RISK_BUNDLE))) \
+	  forge script script/LoadScenarioSet.s.sol:LoadScenarioSet --rpc-url $(LOCAL_RPC) --broadcast --slow

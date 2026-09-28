@@ -10,7 +10,7 @@ name = "risk-cli"
 path = "src/main.rs"
 
 [dependencies]
-credence-risk-core = { path = "../risk-core", features = ["std"] }
+credence-risk-core = { path = "../risk-core", features = ["files"] }
 alloy-primitives = { workspace = true, features = ["std", "serde"] }
 serde = { workspace = true }
 serde_json = { workspace = true }

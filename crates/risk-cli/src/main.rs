@@ -7,12 +7,21 @@
 //! strings or 0x-hex strings. Output is a JSON object whose integers are decimal strings, or with `--abi` the
 //! 0x-hex ABI encoding of the outputs in declaration order (for `vm.ffi` in Foundry, profile `ffi`).
 //! Errors print `{"error": "...", "code": n}` and exit with status 1 (JSON) or 2 (usage).
+//!
+//! Scenario-set files (ADR-0106):
+//! ```text
+//! risk-cli validate-set <file>   # a scenario set, joint set or risk bundle; exit 0 = valid
+//! risk-cli build-set  [json|-]   # {asset, closureType, z, meta?} -> canonical scenario-set file
+//! risk-cli build-joint [json|-]  # {columns: [{asset, z}], meta?} -> canonical joint-set file
+//! ```
 
 use alloy_primitives::{B256, U256};
 use credence_risk_core as core;
 use credence_risk_core::fixed::{collateral_value, health_factor_down, ltv_up, pack_i16, pack_u64};
+use credence_risk_core::setfile;
 use serde_json::{json, Map, Value};
 use std::io::Read;
+use std::path::Path;
 use std::process::ExitCode;
 
 const COMMANDS: &[&str] = &[
@@ -37,6 +46,9 @@ const COMMANDS: &[&str] = &[
     "sigma-min-allowed",
     "value",
     "pack-z",
+    "validate-set",
+    "build-set",
+    "build-joint",
 ];
 
 #[derive(Debug)]
@@ -504,6 +516,60 @@ fn run(cmd: &str, i: &Input) -> R<Vec<(&'static str, Out)>> {
     })
 }
 
+// ───────────── scenario-set files (ADR-0106) ─────────────
+
+/// Validate a set / joint / bundle file; a bundle's references resolve relative to its directory.
+fn validate_file(path: &Path) -> Result<Value, setfile::FileError> {
+    let read = |p: &Path| -> Result<Value, String> {
+        let raw = std::fs::read_to_string(p).map_err(|e| format!("{}: {e}", p.display()))?;
+        serde_json::from_str(&raw).map_err(|e| format!("{}: invalid JSON: {e}", p.display()))
+    };
+    let v = read(path).map_err(|msg| setfile::FileError {
+        path: ".".into(),
+        msg,
+    })?;
+    let dir = path.parent().unwrap_or(Path::new(".")).to_path_buf();
+    setfile::validate(&v, |rel| read(&dir.join(rel)))
+}
+
+fn build_file(cmd: &str, i: &Input) -> Result<Value, String> {
+    let meta = i.0.get("meta").cloned();
+    match cmd {
+        "build-set" => {
+            let asset = i
+                .get("asset")
+                .map_err(|e| e.0)?
+                .as_str()
+                .ok_or("`asset` must be a string like \"NVDA:XNAS\"")?;
+            let ty: u8 = i.small("closureType").map_err(|e| e.0)?;
+            let z = i.z_vec("z").map_err(|e| e.0)?;
+            let s = setfile::build_set(asset, ty, &z).map_err(|e| e.to_string())?;
+            Ok(setfile::set_to_json(&s, meta))
+        }
+        _ => {
+            let mut cols = Vec::new();
+            for (k, c) in i.arr("columns").map_err(|e| e.0)?.iter().enumerate() {
+                let ci = Input(
+                    c.as_object()
+                        .ok_or(format!("columns[{k}] must be an object"))?
+                        .clone(),
+                );
+                let asset = ci
+                    .get("asset")
+                    .map_err(|e| e.0)?
+                    .as_str()
+                    .ok_or(format!("columns[{k}].asset must be a string"))?
+                    .to_string();
+                cols.push((asset, ci.z_vec("z").map_err(|e| e.0)?));
+            }
+            let refs: Vec<(&str, Vec<i16>)> =
+                cols.iter().map(|(a, z)| (a.as_str(), z.clone())).collect();
+            let j = setfile::build_joint(&refs).map_err(|e| e.to_string())?;
+            Ok(setfile::joint_to_json(&j, meta))
+        }
+    }
+}
+
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let abi = args.iter().any(|a| a == "--abi");
@@ -515,6 +581,22 @@ fn main() -> ExitCode {
         );
         return ExitCode::from(2);
     };
+    if cmd.as_str() == "validate-set" {
+        let Some(file) = pos.get(1) else {
+            eprintln!("usage: risk-cli validate-set <file>");
+            return ExitCode::from(2);
+        };
+        return match validate_file(Path::new(file.as_str())) {
+            Ok(summary) => {
+                println!("{summary}");
+                ExitCode::SUCCESS
+            }
+            Err(e) => {
+                println!("{}", json!({"ok": false, "path": e.path, "error": e.msg}));
+                ExitCode::from(1)
+            }
+        };
+    }
     let raw = match pos.get(1) {
         Some(j) if j.as_str() != "-" => (*j).clone(),
         _ => {
@@ -543,6 +625,18 @@ fn main() -> ExitCode {
         );
         return ExitCode::from(1);
     };
+    if matches!(cmd.as_str(), "build-set" | "build-joint") {
+        return match build_file(cmd, &Input(obj.clone())) {
+            Ok(v) => {
+                println!("{}", serde_json::to_string_pretty(&v).expect("json"));
+                ExitCode::SUCCESS
+            }
+            Err(msg) => {
+                println!("{}", json!({"error": msg, "code": 0}));
+                ExitCode::from(1)
+            }
+        };
+    }
     match run(cmd, &Input(obj.clone())) {
         Ok(fields) => {
             println!("{}", render(fields, abi));
@@ -622,6 +716,51 @@ mod tests {
             json!({"qty": "100000000000000000000", "price": "180000000000000000000"}),
         );
         assert_eq!(r["collateralValue"], "18000000000");
+    }
+
+    #[test]
+    fn set_files_build_and_validate() {
+        let dir = std::env::temp_dir().join(format!("risk-cli-setfile-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let set = build_file(
+            "build-set",
+            &Input(
+                json!({"asset": "NVDA:XNAS", "closureType": 2, "z": [-900, -5, 0, 7]})
+                    .as_object()
+                    .unwrap()
+                    .clone(),
+            ),
+        )
+        .unwrap();
+        let joint = build_file(
+            "build-joint",
+            &Input(
+                json!({"columns": [{"asset": "NVDA:XNAS", "z": [3, -2, 1, 0]}]})
+                    .as_object()
+                    .unwrap()
+                    .clone(),
+            ),
+        )
+        .unwrap();
+        std::fs::write(dir.join("s.json"), set.to_string()).unwrap();
+        std::fs::write(dir.join("j.json"), joint.to_string()).unwrap();
+        let bundle = json!({"format": setfile::BUNDLE_FORMAT, "scenarioSets": ["s.json"], "jointSet": "j.json",
+            "params": {"alpha": "1000000000000000", "kappa": "30000000000000000", "theta": "1000000000000000000",
+                "costOfCap": "150000000000000000", "eta": "4000000000000000000", "beta": "975000000000000000",
+                "uMax": "500000000000000000", "minPremium": 500000, "kStress": 4}});
+        std::fs::write(dir.join("b.json"), bundle.to_string()).unwrap();
+        let v = validate_file(&dir.join("s.json")).unwrap();
+        assert_eq!(v["n"], 4);
+        assert_eq!(
+            validate_file(&dir.join("b.json")).unwrap()["jointColumns"],
+            1
+        );
+        let mut bad = set.clone();
+        bad["packed"][0] = json!(format!("0x{}", "00".repeat(32)));
+        std::fs::write(dir.join("bad.json"), bad.to_string()).unwrap();
+        assert!(validate_file(&dir.join("bad.json")).is_err());
+        assert!(validate_file(&dir.join("missing.json")).is_err());
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 
     #[test]

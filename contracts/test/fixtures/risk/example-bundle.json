@@ -1,0 +1,44 @@
+{
+  "format": "credence.risk-bundle/v1",
+  "params": {
+    "alpha": "1000000000000000",
+    "kappa": "30000000000000000",
+    "theta": "1000000000000000000",
+    "costOfCap": "150000000000000000",
+    "eta": "4000000000000000000",
+    "beta": "975000000000000000",
+    "uMax": "500000000000000000",
+    "minPremium": "500000",
+    "kStress": 256
+  },
+  "scenarioSets": [
+    "NVDA-XNAS-2-63c7ce73.json"
+  ],
+  "jointSet": "joint-256adcb5.json",
+  "sigmaFloors": {
+    "assetIds": [
+      "0x2ba7fe0221993f0b564e6bd78704eab0e0162888663625d7124a5d01aa95c620"
+    ],
+    "closureTypes": [
+      2
+    ],
+    "floors": [
+      "20000000000000000"
+    ]
+  },
+  "sigmas": {
+    "assetIds": [
+      "0x2ba7fe0221993f0b564e6bd78704eab0e0162888663625d7124a5d01aa95c620"
+    ],
+    "closureTypes": [
+      2
+    ],
+    "values": [
+      "40000000000000000"
+    ]
+  },
+  "meta": {
+    "example": true,
+    "note": "synthetic: 1.3 x standard-normal quantiles; not calibrated (ADR-0106 example)"
+  }
+}

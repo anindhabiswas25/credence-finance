@@ -588,7 +588,9 @@ async fn main() -> Result<()> {
             )?;
             v.pointer("/shared/riskEngine")
                 .and_then(|x| x.as_str())
-                .ok_or_else(|| anyhow!("no .shared.riskEngine in {book}: run make devnode-deploy-engine"))?
+                .ok_or_else(|| {
+                    anyhow!("no .shared.riskEngine in {book}: run make devnode-deploy-engine")
+                })?
                 .parse()?
         }
     };
