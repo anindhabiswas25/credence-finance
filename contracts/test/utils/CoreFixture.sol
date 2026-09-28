@@ -120,7 +120,7 @@ abstract contract CoreFixture is Test {
         usdc.mint(address(tips), 1_000e6);
     }
 
-    function _rate() internal pure returns (RateParams memory) {
+    function _rate() internal pure virtual returns (RateParams memory) {
         return RateParams({r0: 0.02e18, s1: 0.06e18, s2: 0.8e18, uKink: 0.9e18});
     }
 
