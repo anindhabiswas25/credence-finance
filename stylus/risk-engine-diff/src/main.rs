@@ -4,14 +4,17 @@
 //! credence-risk-engine-diff --rpc http://127.0.0.1:8547 --n 10000 [--book deployments/<chainId>.local.json | --engine 0x…] \
 //!     [--seed 42] [--gas]
 //! ```
-//! For each function in the S1 spike (`safeLtv`, `liquidationLot`, `clear`) it draws `n` random inputs inside the
+//! For every `IRiskEngine` math function (`safeLtv`, `bellStatus`, `quoteCover`, `coverLossVector`, `poolCapacity`,
+//! `liquidationLot`, `precloseLot`, `clear`) it draws `n` random inputs inside the
 //! §9.1 bounds (plus a share of out-of-domain inputs, so reverts are compared too), computes the native result,
 //! `eth_call`s the engine, and requires identical outputs, including the revert payload
 //! (`MathError(uint8)` / `UnknownSet(...)`). Every mismatch is written to
 //! `crates/risk-core/tests/regressions/stylus-diff-<fn>.jsonl`. Exit status 1 on any mismatch.
 //!
-//! The deployment's `timelock` and `sigmaOracle` must be the key in `PRIVATE_KEY` (the local deploy script sets
-//! both to the deployer): `safeLtv` sets are rewritten on-chain between batches.
+//! The engine is the `RiskEngineRouter` (R-24 split). Its `timelock` and `sigmaOracle` must be the key in
+//! `PRIVATE_KEY`: params, sets, joint columns and σ are rewritten on-chain between batches, so run it against a
+//! dedicated engine (`make stylus-diff` deploys one and records it in deployments/<chainId>.diff.local.json), never
+//! the shared one. `--gas-check` fails if a call exceeds its §8.9.3 CI ceiling.
 
 use alloy::{
     network::EthereumWallet,
@@ -42,7 +45,21 @@ mod bindings {
             function liquidationLot(uint256 debt, uint256 qty, uint256 sizingPrice, uint256 hfPrice, uint256 lt,
                 uint256 hStar, uint256 lambda, uint8 collDec, uint8 loanDec) external pure returns (uint256 x);
             function clear(uint256[] qtys, uint256[] prices, bytes32[] tieKeys, uint256 lot, uint256 reserve)
-                external pure returns (uint256 pStar, uint256[] fills, uint256 qPool);
+                external view returns (uint256 pStar, uint256[] fills, uint256 qPool);
+            function precloseLot(uint256 debt, uint256 qty, uint256 valuation, uint256 reserve, uint256 targetLtv,
+                uint256 lambdaPre, uint8 collDec, uint8 loanDec) external view returns (uint256 x);
+            function bellStatus(bytes32 assetId, uint8 closureType, uint256 collateralValue, uint256 debtProjected,
+                uint256 maxLtv, uint256 dividend, bool covered)
+                external view returns (uint8 status, uint256 cureRepay, uint256 cureCollateralValue);
+            function quoteCover(bytes32 assetId, uint8 closureType, uint16 closureDays, uint256 collateralValue,
+                uint256 debtProjected, uint256 utilAfter)
+                external view returns (uint256 premium, uint256 expectedLoss, uint256 expectedShortfall);
+            function coverLossVector(bytes32 assetId, uint8 closureType, uint256 collateralValue, uint256 debtProjected)
+                external view returns (uint256[] packed);
+            function poolCapacity(uint256[] packedCurrent, uint256[] packedAdd, bytes32[] uncAssets,
+                uint8[] uncClosureTypes, uint256[] uncCollateralValue, uint256[] uncSafeLtv, uint256 equity)
+                external view returns (bool ok, uint256 utilAfter, uint256 worstLoss);
+            function setJointColumn(bytes32 assetId, uint256[] packedZ) external;
             function setScenarioSet(bytes32 assetId, uint8 closureType, uint256[] packedSortedZ, uint32 n) external;
             function setParams(RiskParams p) external;
             function updateSigma(bytes32 assetId, uint8 closureType, uint256 sigma) external;
@@ -249,6 +266,56 @@ async fn diff_lot<P: Provider>(
     Ok(())
 }
 
+// ───────────────────────────── precloseLot ─────────────────────────────
+
+async fn diff_preclose<P: Provider>(
+    p: &P,
+    engine: Address,
+    g: &mut Rng,
+    n: u64,
+    d: &mut Diff,
+) -> Result<()> {
+    for _ in 0..n {
+        let v = g.magnitude(24);
+        let kappa = U256::from(g.range(0, WAD / 10));
+        let reserve = v * (U256::from(WAD) - kappa) / U256::from(WAD);
+        let mut target = U256::from(g.range(0, WAD * 9 / 10));
+        let mut lambda = U256::from(g.range(0, WAD / 10));
+        let (debt, qty) = (g.magnitude(18), g.magnitude(27));
+        let (cd, mut ld) = (g.range(0, 18) as u8, g.range(0, 18) as u8);
+        if g.chance(3) {
+            lambda = U256::from(WAD) + U256::from(g.range(1, WAD));
+        }
+        if g.chance(2) {
+            target = U256::from(WAD) + U256::from(1u8);
+        }
+        if g.chance(2) {
+            ld = 19 + g.range(0, 10) as u8;
+        }
+        let native = match rc::preclose_lot(debt, qty, v, reserve, target, lambda, cd, ld) {
+            Ok(x) => Outcome::Ok(vec![x]),
+            Err(e) => native_err(e),
+        };
+        let data = IRiskEngine::precloseLotCall {
+            debt,
+            qty,
+            valuation: v,
+            reserve,
+            targetLtv: target,
+            lambdaPre: lambda,
+            collDec: cd,
+            loanDec: ld,
+        }
+        .abi_encode();
+        let chain = to_outcome_single(call_raw(p, engine, data).await?)?;
+        let input = json!({"debt": debt.to_string(), "qty": qty.to_string(), "valuation": v.to_string(),
+            "reserve": reserve.to_string(), "targetLtv": target.to_string(), "lambdaPre": lambda.to_string(),
+            "collDec": cd, "loanDec": ld});
+        d.record("precloseLot", input, &native, &chain)?;
+    }
+    Ok(())
+}
+
 // ───────────────────────────── clear ─────────────────────────────
 
 async fn diff_clear<P: Provider>(
@@ -331,7 +398,9 @@ async fn send<P: Provider>(p: &P, engine: Address, data: Vec<u8>) -> Result<()> 
     Ok(())
 }
 
-async fn diff_safe_ltv<P: Provider>(
+/// One batch = random params, one asset with a sorted set + σ + joint column, a second asset with a joint column
+/// + σ; then `per` random cases of each closure function against those.
+async fn diff_closure<P: Provider>(
     p: &P,
     engine: Address,
     g: &mut Rng,
@@ -342,8 +411,8 @@ async fn diff_safe_ltv<P: Provider>(
     let per = n.div_ceil(batches);
     let mut done = 0u64;
     for b in 0..batches {
-        // a fresh random set, σ and α per batch
         let asset = g.b256();
+        let asset_b = g.b256();
         let closure_type = g.range(1, 5) as u8;
         let len = g.range(1, 2000) as usize;
         let mut set: Vec<i16> = (0..len)
@@ -352,50 +421,82 @@ async fn diff_safe_ltv<P: Provider>(
         set.sort();
         let alpha = [WAD / 1000, WAD / 400, WAD / 100, WAD / 20, WAD][b as usize % 5];
         let kappa = g.range(0, WAD / 10);
+        let u_max = g.range(WAD / 10, WAD);
         let params = IRiskEngine::RiskParams {
             alpha: alpha as u64,
             kappa: kappa as u64,
-            theta: WAD as u64,
-            costOfCap: (WAD * 15 / 100) as u64,
-            eta: (4 * WAD) as u64,
-            beta: (WAD * 975 / 1000) as u64,
-            uMax: (WAD / 2) as u64,
-            minPremium: 500_000,
+            theta: g.range(0, 2 * WAD) as u64,
+            costOfCap: g.range(0, WAD / 2) as u64,
+            eta: g.range(0, 8 * WAD) as u64,
+            beta: g.range(WAD * 9 / 10, WAD) as u64,
+            uMax: u_max as u64,
+            minPremium: g.range(0, 2_000_000) as u64,
             kStress: 256,
         };
         send(
             p,
             engine,
-            IRiskEngine::setParamsCall { p: params }.abi_encode(),
+            IRiskEngine::setParamsCall { p: params.clone() }.abi_encode(),
         )
         .await?;
-        let packed = rc::fixed::pack_i16(&set);
         send(
             p,
             engine,
             IRiskEngine::setScenarioSetCall {
                 assetId: asset,
                 closureType: closure_type,
-                packedSortedZ: packed,
+                packedSortedZ: rc::fixed::pack_i16(&set),
                 n: len as u32,
             }
             .abi_encode(),
         )
         .await?;
+        let joint_a: Vec<i16> = (0..256)
+            .map(|_| (g.next() as i64 % 14_000 - 10_000) as i16)
+            .collect();
+        let joint_b: Vec<i16> = (0..256)
+            .map(|_| (g.next() as i64 % 14_000 - 10_000) as i16)
+            .collect();
+        for (a, j) in [(asset, &joint_a), (asset_b, &joint_b)] {
+            send(
+                p,
+                engine,
+                IRiskEngine::setJointColumnCall {
+                    assetId: a,
+                    packedZ: rc::fixed::pack_i16(j),
+                }
+                .abi_encode(),
+            )
+            .await?;
+        }
         let sigma = U256::from(g.range(WAD / 1000, WAD / 4));
-        send(
-            p,
-            engine,
-            IRiskEngine::updateSigmaCall {
-                assetId: asset,
-                closureType: closure_type,
-                sigma,
-            }
-            .abi_encode(),
-        )
-        .await?;
+        let sigma_b = U256::from(g.range(WAD / 1000, WAD / 4));
+        for (a, s) in [(asset, sigma), (asset_b, sigma_b)] {
+            send(
+                p,
+                engine,
+                IRiskEngine::updateSigmaCall {
+                    assetId: a,
+                    closureType: closure_type,
+                    sigma: s,
+                }
+                .abi_encode(),
+            )
+            .await?;
+        }
         let z = set[rc::quantile_index(len as u32, U256::from(alpha))
             .map_err(|e| anyhow!("{e:?}"))? as usize];
+        let (w, kap) = (|x: u64| U256::from(x), U256::from(kappa));
+        let unknown_err = |qa: B256, qt: u8| {
+            Outcome::Revert(
+                IRiskEngine::UnknownSet {
+                    assetId: qa,
+                    closureType: qt,
+                }
+                .abi_encode()
+                .into(),
+            )
+        };
 
         for _ in 0..per.min(n - done) {
             let max_ltv = U256::from(g.range(0, WAD));
@@ -405,38 +506,228 @@ async fn diff_safe_ltv<P: Provider>(
                 U256::ZERO
             };
             let unknown = g.chance(3);
-            let (qa, qt) = if unknown {
-                (g.b256(), closure_type)
-            } else {
-                (asset, closure_type)
-            };
+            let qa = if unknown { g.b256() } else { asset };
+            let c = g.magnitude(15);
+            let debt = c * U256::from(g.range(0, WAD * 12 / 10)) / U256::from(WAD);
+            let base = json!({"assetId": qa.to_string(), "closureType": closure_type, "sigma": sigma.to_string(),
+                "alpha": alpha.to_string(), "kappa": kappa.to_string(), "setLen": len, "z": z,
+                "collateralValue": c.to_string(), "debtProjected": debt.to_string()});
+
+            // safeLtv
+            let safe = rc::safe_ltv(z, sigma, dividend, kap, max_ltv);
             let native = if unknown {
-                Outcome::Revert(
-                    IRiskEngine::UnknownSet {
-                        assetId: qa,
-                        closureType: qt,
-                    }
-                    .abi_encode()
-                    .into(),
-                )
+                unknown_err(qa, closure_type)
             } else {
-                match rc::safe_ltv(z, sigma, dividend, U256::from(kappa), max_ltv) {
+                match safe {
                     Ok(x) => Outcome::Ok(vec![x]),
                     Err(e) => native_err(e),
                 }
             };
-            let data = IRiskEngine::safeLtvCall {
-                assetId: qa,
-                closureType: qt,
-                maxLtv: max_ltv,
-                dividend,
-            }
-            .abi_encode();
-            let chain = to_outcome_single(call_raw(p, engine, data).await?)?;
-            let input = json!({"assetId": qa.to_string(), "closureType": qt, "maxLtv": max_ltv.to_string(),
-                "dividend": dividend.to_string(), "sigma": sigma.to_string(), "alpha": alpha.to_string(),
-                "kappa": kappa.to_string(), "setLen": len, "z": z});
-            d.record("safeLtv", input, &native, &chain)?;
+            let chain = to_outcome_single(
+                call_raw(
+                    p,
+                    engine,
+                    IRiskEngine::safeLtvCall {
+                        assetId: qa,
+                        closureType: closure_type,
+                        maxLtv: max_ltv,
+                        dividend,
+                    }
+                    .abi_encode(),
+                )
+                .await?,
+            )?;
+            let mut input = base.clone();
+            input["maxLtv"] = json!(max_ltv.to_string());
+            input["dividend"] = json!(dividend.to_string());
+            d.record("safeLtv", input.clone(), &native, &chain)?;
+
+            // bellStatus
+            let covered = g.chance(10);
+            let native = if unknown {
+                unknown_err(qa, closure_type)
+            } else {
+                match safe.and_then(|s| rc::bell_status(c, debt, s, covered)) {
+                    Ok(r) => Outcome::Ok(vec![
+                        U256::from(r.status),
+                        r.cure_repay,
+                        r.cure_collateral_value,
+                    ]),
+                    Err(e) => native_err(e),
+                }
+            };
+            let chain = match call_raw(
+                p,
+                engine,
+                IRiskEngine::bellStatusCall {
+                    assetId: qa,
+                    closureType: closure_type,
+                    collateralValue: c,
+                    debtProjected: debt,
+                    maxLtv: max_ltv,
+                    dividend,
+                    covered,
+                }
+                .abi_encode(),
+            )
+            .await?
+            {
+                Called::Ok(raw) => {
+                    let r = IRiskEngine::bellStatusCall::abi_decode_returns(&raw)
+                        .context("decode bellStatus")?;
+                    Outcome::Ok(vec![
+                        U256::from(r.status),
+                        r.cureRepay,
+                        r.cureCollateralValue,
+                    ])
+                }
+                Called::Revert(r) => Outcome::Revert(r),
+            };
+            input["covered"] = json!(covered);
+            d.record("bellStatus", input, &native, &chain)?;
+
+            // quoteCover
+            let days = g.range(1, 5) as u16;
+            let util = U256::from(g.range(0, WAD));
+            let native = if unknown {
+                unknown_err(qa, closure_type)
+            } else {
+                match rc::quote_cover(
+                    &rc::SliceZ(&set),
+                    &rc::PremiumParams {
+                        sigma,
+                        dividend: U256::ZERO,
+                        kappa: kap,
+                        collateral_value: c,
+                        debt_projected: debt,
+                        closure_days: days,
+                        util_after: util,
+                        theta: w(params.theta),
+                        cost_of_cap: w(params.costOfCap),
+                        eta: w(params.eta),
+                        beta: w(params.beta),
+                        min_premium: w(params.minPremium),
+                    },
+                ) {
+                    Ok(q) => Outcome::Ok(vec![q.premium, q.expected_loss, q.expected_shortfall]),
+                    Err(e) => native_err(e),
+                }
+            };
+            let chain = match call_raw(
+                p,
+                engine,
+                IRiskEngine::quoteCoverCall {
+                    assetId: qa,
+                    closureType: closure_type,
+                    closureDays: days,
+                    collateralValue: c,
+                    debtProjected: debt,
+                    utilAfter: util,
+                }
+                .abi_encode(),
+            )
+            .await?
+            {
+                Called::Ok(raw) => {
+                    let r = IRiskEngine::quoteCoverCall::abi_decode_returns(&raw)
+                        .context("decode quoteCover")?;
+                    Outcome::Ok(vec![r.premium, r.expectedLoss, r.expectedShortfall])
+                }
+                Called::Revert(r) => Outcome::Revert(r),
+            };
+            let mut qi = base.clone();
+            qi["closureDays"] = json!(days);
+            qi["utilAfter"] = json!(util.to_string());
+            d.record("quoteCover", qi, &native, &chain)?;
+
+            // coverLossVector (asset A's joint column, σ of (A, type))
+            let native =
+                match rc::loss_vector(&rc::SliceZ(&joint_a), c, debt, sigma, U256::ZERO, kap) {
+                    Ok(lv) => Outcome::Ok(rc::fixed::pack_u64(&lv)),
+                    Err(e) => native_err(e),
+                };
+            let chain = match call_raw(
+                p,
+                engine,
+                IRiskEngine::coverLossVectorCall {
+                    assetId: asset,
+                    closureType: closure_type,
+                    collateralValue: c,
+                    debtProjected: debt,
+                }
+                .abi_encode(),
+            )
+            .await?
+            {
+                Called::Ok(raw) => Outcome::Ok(
+                    IRiskEngine::coverLossVectorCall::abi_decode_returns(&raw)
+                        .context("decode lossVector")?,
+                ),
+                Called::Revert(r) => Outcome::Revert(r),
+            };
+            let mut li = base.clone();
+            li["assetId"] = json!(asset.to_string());
+            d.record("coverLossVector", li, &native, &chain)?;
+
+            // poolCapacity (random current / added vectors, 0–2 uncovered markets)
+            let cur: Vec<u64> = (0..256).map(|_| g.next() % 1_000_000_000_000).collect();
+            let add: Vec<u64> = (0..256).map(|_| g.next() % 100_000_000_000).collect();
+            let (pc, pa) = (rc::fixed::pack_u64(&cur), rc::fixed::pack_u64(&add));
+            let m = g.below(3) as usize;
+            let unc_assets: Vec<B256> = [asset, asset_b][..m].to_vec();
+            let unc_c: Vec<U256> = (0..m).map(|_| g.magnitude(15)).collect();
+            let unc_s: Vec<U256> = (0..m).map(|_| U256::from(g.range(0, WAD))).collect();
+            let equity = if g.chance(3) {
+                U256::ZERO
+            } else {
+                g.magnitude(15)
+            };
+            let joints = [&joint_a, &joint_b];
+            let sigmas = [sigma, sigma_b];
+            let slices: Vec<rc::SliceZ<'_>> = (0..m).map(|i| rc::SliceZ(joints[i])).collect();
+            let unc: Vec<rc::UncoveredMarket<'_, rc::SliceZ<'_>>> = (0..m)
+                .map(|i| rc::UncoveredMarket {
+                    joint: &slices[i],
+                    sigma: sigmas[i],
+                    dividend: U256::ZERO,
+                    collateral_value: unc_c[i],
+                    safe_ltv: unc_s[i],
+                })
+                .collect();
+            let native =
+                match rc::pool_capacity(&pc, &pa, 256, &unc, kap, equity, U256::from(u_max)) {
+                    Ok(r) => Outcome::Ok(vec![U256::from(r.ok as u8), r.util_after, r.worst_loss]),
+                    Err(e) => native_err(e),
+                };
+            let chain = match call_raw(
+                p,
+                engine,
+                IRiskEngine::poolCapacityCall {
+                    packedCurrent: pc,
+                    packedAdd: pa,
+                    uncAssets: unc_assets.clone(),
+                    uncClosureTypes: vec![closure_type; m],
+                    uncCollateralValue: unc_c.clone(),
+                    uncSafeLtv: unc_s.clone(),
+                    equity,
+                }
+                .abi_encode(),
+            )
+            .await?
+            {
+                Called::Ok(raw) => {
+                    let r = IRiskEngine::poolCapacityCall::abi_decode_returns(&raw)
+                        .context("decode capacity")?;
+                    Outcome::Ok(vec![U256::from(r.ok as u8), r.utilAfter, r.worstLoss])
+                }
+                Called::Revert(r) => Outcome::Revert(r),
+            };
+            let ci = json!({"uncAssets": unc_assets.iter().map(|x| x.to_string()).collect::<Vec<_>>(),
+                "uncCollateralValue": unc_c.iter().map(|x| x.to_string()).collect::<Vec<_>>(),
+                "uncSafeLtv": unc_s.iter().map(|x| x.to_string()).collect::<Vec<_>>(),
+                "equity": equity.to_string(), "kappa": kappa.to_string(), "uMax": u_max.to_string(),
+                "current0": cur[0], "add0": add[0]});
+            d.record("poolCapacity", ci, &native, &chain)?;
             done += 1;
         }
     }
@@ -604,7 +895,8 @@ async fn main() -> Result<()> {
     let t0 = std::time::Instant::now();
     diff_lot(&*provider, engine, &mut g, n, &mut d).await?;
     diff_clear(&*provider, engine, &mut g, n, &mut d).await?;
-    diff_safe_ltv(&*provider, engine, &mut g, n, &mut d).await?;
+    diff_preclose(&*provider, engine, &mut g, n, &mut d).await?;
+    diff_closure(&*provider, engine, &mut g, n, &mut d).await?;
     let gas = if args.iter().any(|a| a == "--gas") {
         Some(gas_report(&*provider, engine, &mut g).await?)
     } else {
