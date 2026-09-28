@@ -12,6 +12,7 @@ pub struct Metrics {
     pub rpc_failovers: IntCounterVec,
     pub calendar_coverage_days: IntGaugeVec,
     pub wallet_balance_gwei: IntGaugeVec,
+    pub program_time_left: IntGaugeVec,
     pub alerts: IntCounterVec,
 }
 
@@ -56,6 +57,13 @@ impl Metrics {
                 Opts::new("keeper_wallet_balance_gwei", "watched wallet balances"),
                 &["wallet"],
             )?,
+            program_time_left: IntGaugeVec::new(
+                Opts::new(
+                    "keeper_stylus_program_time_left_seconds",
+                    "ArbWasm programTimeLeft of each Stylus program (RB-10)",
+                ),
+                &["program"],
+            )?,
             alerts: IntCounterVec::new(
                 Opts::new("keeper_alerts_total", "alerts raised"),
                 &["check", "severity"],
@@ -69,6 +77,7 @@ impl Metrics {
         r.register(Box::new(m.rpc_failovers.clone()))?;
         r.register(Box::new(m.calendar_coverage_days.clone()))?;
         r.register(Box::new(m.wallet_balance_gwei.clone()))?;
+        r.register(Box::new(m.program_time_left.clone()))?;
         r.register(Box::new(m.alerts.clone()))?;
         Ok(m)
     }

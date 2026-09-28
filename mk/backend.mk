@@ -22,7 +22,7 @@ PNPM := pnpm
 .PHONY: backend-install backend-build backend-test backend-lint backend-fmt \
         infra-up infra-down infra-reset infra-ps db-migrate db-rollback calendar-gen calendar-test \
         relayer-dev relayer-smoke keeper-dev indexer-dev api-dev relayer-e2e keeper-e2e indexer-e2e services-up \
-        notifier-dev notifier-e2e r26-probe keeper-sigma-test
+        notifier-dev notifier-e2e r26-probe keeper-sigma-test keeper-j12-e2e
 
 backend-install: ## Install backend deps: @credence/risk-wasm (wasm-pack, into target/be), pnpm workspace, uv calibration env, Rust crates fetched
 	CARGO_TARGET_DIR=$(BACKEND_TARGET_DIR) $(MAKE) --no-print-directory risk-wasm
@@ -129,6 +129,9 @@ r26-probe: ## R-26 feed probe on Arbitrum Sepolia (ADR-0009): RedStone verified 
 	cd $(R26_DIR) && forge build --root . --contracts src/Probe.sol -o out --cache-path cache --skip test >/dev/null
 	$(PNPM) --filter @credence/feeds build
 	node packages/feeds/dist/probe.js --verifier $(R26_DIR)/out/Probe.sol/Probe.json --out $(R26_DIR)/probe.json $(if $(RPC),--rpc $(RPC))
+
+keeper-j12-e2e: ## J12 on the devnode: ArbWasm programTimeLeft of shared.riskEngine → gauge; a non-program raises the stylus-activation alert (needs infra-up db-migrate + an engine)
+	TEST_DATABASE_URL=$(TEST_DATABASE_URL) $(CARGO) test --locked -p credence-keeper --test j12_devnode -- --ignored --nocapture
 
 keeper-sigma-test: ## J7 σ: reproduce QE's calibration/docs/sigma-vectors.json bit for bit + resume from the calibration snapshot
 	$(CARGO) test --locked -p credence-keeper --test sigma_vectors -- --nocapture

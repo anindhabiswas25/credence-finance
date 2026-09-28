@@ -12,6 +12,8 @@ pub struct Config {
     pub database_url: String,
     pub rpc_urls: Vec<String>,
     pub clock: Address,
+    /// `shared.riskEngine` (Stylus) for J12, if deployed.
+    pub risk_engine: Option<Address>,
     pub assets: Vec<Tracked>,
     pub alert_webhook: Option<String>,
     /// (label, address) of wallets whose balance J12 watches; the keeper's own sender is added.
@@ -29,11 +31,8 @@ pub fn venue_for(mic: &str) -> Result<&'static str> {
     })
 }
 
-/// `CLOCK_ADDRESS`, else `shared.clock` (§13.2) from the address book.
-pub fn clock_address(chain_id: u64) -> Result<Address> {
-    if let Some(a) = env::optional("CLOCK_ADDRESS") {
-        return a.parse().context("CLOCK_ADDRESS");
-    }
+/// The address book (`DEPLOYMENTS_FILE`, else `deployments/<chainId>.local.json`, else `<chainId>.json`).
+pub fn address_book(chain_id: u64) -> Result<serde_json::Value> {
     let path = match env::optional("DEPLOYMENTS_FILE") {
         Some(p) => PathBuf::from(p),
         None => {
@@ -45,14 +44,40 @@ pub fn clock_address(chain_id: u64) -> Result<Address> {
             }
         }
     };
-    let v: serde_json::Value = serde_json::from_str(
+    serde_json::from_str(
         &std::fs::read_to_string(&path).with_context(|| format!("{}", path.display()))?,
-    )?;
-    let s = v
-        .pointer("/shared/clock")
+    )
+    .with_context(|| format!("{}", path.display()))
+}
+
+/// `env_key` if set, else the book entry at `pointer` (§13.2 shape, e.g. `/shared/clock`).
+pub fn book_address(chain_id: u64, env_key: &str, pointer: &str) -> Result<Option<Address>> {
+    if let Some(a) = env::optional(env_key) {
+        return Ok(Some(a.parse().with_context(|| env_key.to_owned())?));
+    }
+    let v = address_book(chain_id)?;
+    v.pointer(pointer)
         .and_then(|x| x.as_str())
-        .context("no clock address in the address book")?;
-    s.parse().context("clock address")
+        .map(|s| s.parse().with_context(|| pointer.to_owned()))
+        .transpose()
+}
+
+/// `CLOCK_ADDRESS`, else `shared.clock` (§13.2) from the address book.
+pub fn clock_address(chain_id: u64) -> Result<Address> {
+    book_address(chain_id, "CLOCK_ADDRESS", "/shared/clock")?
+        .context("no clock address in the address book")
+}
+
+/// `RISK_ENGINE_ADDRESS`, else `shared.riskEngine`; `None` before the engine is deployed.
+pub fn risk_engine_address(chain_id: u64) -> Result<Option<Address>> {
+    match book_address(chain_id, "RISK_ENGINE_ADDRESS", "/shared/riskEngine") {
+        Ok(a) => Ok(a),
+        Err(e) if env::optional("CLOCK_ADDRESS").is_some() => {
+            tracing::debug!(error = %e, "no address book: J12 watches no Stylus program");
+            Ok(None)
+        }
+        Err(e) => Err(e),
+    }
 }
 
 pub fn load_calendars() -> Result<HashMap<String, Arc<Calendar>>> {
@@ -139,6 +164,7 @@ impl Config {
             database_url: env::required("DATABASE_URL")?,
             rpc_urls,
             clock: clock_address(chain_id)?,
+            risk_engine: risk_engine_address(chain_id)?,
             assets,
             alert_webhook: env::optional("ALERT_WEBHOOK_URL"),
             watch_wallets,

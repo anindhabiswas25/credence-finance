@@ -13,12 +13,23 @@ sol! {
         function calendar() external view returns (address);
     }
 
+    /// Arbitrum's ArbWasm precompile (0x…71): Stylus program lifecycle.
+    #[sol(rpc)]
+    interface IArbWasm {
+        function programTimeLeft(address program) external view returns (uint64);
+        function programVersion(address program) external view returns (uint16);
+    }
+
     #[sol(rpc)]
     interface ICalendarStore {
         function coverageEnd(bytes32 venue) external view returns (uint40);
         function sessionCount(bytes32 venue) external view returns (uint256);
     }
 }
+
+/// ArbWasm precompile address.
+pub const ARB_WASM: alloy::primitives::Address =
+    alloy::primitives::address!("0000000000000000000000000000000000000071");
 
 /// `bytes32("XNYS")`: ASCII, right-padded (ADR-0101).
 pub fn venue_id(venue: &str) -> alloy::primitives::B256 {

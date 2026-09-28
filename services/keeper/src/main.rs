@@ -110,6 +110,10 @@ async fn main() -> Result<()> {
     keeper.alert_webhook = cfg.alert_webhook.clone();
     keeper.watch_wallets = cfg.watch_wallets.clone();
     keeper.min_balance_wei = cfg.min_balance_wei;
+    keeper.stylus_programs = cfg
+        .risk_engine
+        .map(|a| vec![("riskEngine".to_owned(), a)])
+        .unwrap_or_default();
     let mut leader = Leader::new(&cfg.database_url, pool.clone(), &cfg.instance, cfg.chain_id);
     tracing::info!(instance = %cfg.instance, sender = %signer.address(), clock = %cfg.clock, assets = cfg.assets.len(), "keeper starting");
 

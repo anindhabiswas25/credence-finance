@@ -6,11 +6,11 @@
 //! the clock fully up to date, so the newest key sends and the others are marked covered by it.
 //!
 //! **J12 housekeeping** (daily): calendar coverage < 30 days, wallet balances below the floor, and the
-//! Stylus `programTimeLeft` check (stubbed until the Risk Engine is deployed in S2). Alerts go to
+//! Stylus `programTimeLeft` < 30 days (ArbWasm precompile, `shared.riskEngine`). Alerts go to
 //! `ALERT_WEBHOOK_URL` (PagerDuty / Opsgenie-style JSON) and the `keeper_alerts_total` metric.
 
 use crate::{
-    bindings::{venue_id, IAssetClock, ICalendarStore},
+    bindings::{venue_id, IArbWasm, IAssetClock, ICalendarStore, ARB_WASM},
     clock::Clock,
     jobs::{self, Claim},
     metrics::Metrics,
@@ -28,6 +28,7 @@ use sqlx::postgres::PgConnection;
 use std::{collections::BTreeSet, sync::Arc};
 
 pub const COVERAGE_ALERT_DAYS: u64 = 30;
+pub const STYLUS_ALERT_DAYS: u64 = 30;
 
 pub struct Keeper {
     pub instance: String,
@@ -41,6 +42,8 @@ pub struct Keeper {
     pub alert_webhook: Option<String>,
     pub watch_wallets: Vec<(String, Address)>,
     pub min_balance_wei: u128,
+    /// Stylus programs whose activation J12 watches: (label, address), e.g. ("riskEngine", shared.riskEngine).
+    pub stylus_programs: Vec<(String, Address)>,
     http: reqwest::Client,
 }
 
@@ -77,6 +80,7 @@ impl Keeper {
             alert_webhook: None,
             watch_wallets: Vec::new(),
             min_balance_wei: 0,
+            stylus_programs: Vec::new(),
             http: reqwest::Client::builder()
                 .timeout(std::time::Duration::from_secs(5))
                 .build()
@@ -218,9 +222,28 @@ impl Keeper {
         }
     }
 
+    /// J12: each check runs on its own, so one failing read (an RPC hiccup, an undeployed contract)
+    /// never hides the others.
     async fn j12(&self, conn: &mut PgConnection, rep: &mut TickReport) -> Result<()> {
         let now = self.clock.now();
+        if let Err(e) = self.j12_calendar(conn, rep, now).await {
+            tracing::warn!(error = %e, "J12 calendar coverage failed");
+        }
+        if let Err(e) = self.j12_wallets(conn, rep, now).await {
+            tracing::warn!(error = %e, "J12 wallet balances failed");
+        }
+        self.j12_stylus(conn, rep, now).await
+    }
 
+    async fn j12_calendar(
+        &self,
+        conn: &mut PgConnection,
+        rep: &mut TickReport,
+        now: u64,
+    ) -> Result<()> {
+        if self.assets.is_empty() {
+            return Ok(());
+        }
         // calendar coverage, per venue, from the on-chain CalendarStore
         let key = schedule::j12_key("calendar-coverage", now);
         if matches!(
@@ -265,6 +288,15 @@ impl Keeper {
             jobs::mark(conn, &key, "done", None).await?;
         }
 
+        Ok(())
+    }
+
+    async fn j12_wallets(
+        &self,
+        conn: &mut PgConnection,
+        rep: &mut TickReport,
+        now: u64,
+    ) -> Result<()> {
         // wallet balances (keeper sender + watched relayer wallets)
         let key = schedule::j12_key("wallet-balances", now);
         if matches!(
@@ -296,19 +328,66 @@ impl Keeper {
             jobs::mark(conn, &key, "done", None).await?;
         }
 
-        // Stylus programTimeLeft: stubbed until the Risk Engine is deployed (S2)
+        Ok(())
+    }
+
+    async fn j12_stylus(
+        &self,
+        conn: &mut PgConnection,
+        rep: &mut TickReport,
+        now: u64,
+    ) -> Result<()> {
+        // Stylus programTimeLeft (RB-10): ArbWasm reverts ProgramNotActivated for an expired program
         let key = schedule::j12_key("stylus-program-time-left", now);
         if matches!(
             jobs::claim(conn, &key, "J12", &serde_json::json!({}), &self.instance).await?,
             Claim::Run { .. }
         ) {
-            jobs::mark(
-                conn,
-                &key,
-                "skipped",
-                Some("stub: Risk Engine not deployed until S2"),
-            )
-            .await?;
+            if self.stylus_programs.is_empty() {
+                jobs::mark(
+                    conn,
+                    &key,
+                    "skipped",
+                    Some("no Stylus program in the address book"),
+                )
+                .await?;
+            } else {
+                for (label, program) in &self.stylus_programs {
+                    let program = *program;
+                    let left = self
+                        .rpc
+                        .with_failover("programTimeLeft", |p| async move {
+                            Ok(IArbWasm::new(ARB_WASM, p)
+                                .programTimeLeft(program)
+                                .call()
+                                .await?)
+                        })
+                        .await;
+                    let secs = match left {
+                        Ok(s) => s,
+                        Err(e) => {
+                            // not activated (or expired): time left is zero
+                            tracing::warn!(program = %program, error = %e, "programTimeLeft failed");
+                            0
+                        }
+                    };
+                    self.metrics
+                        .program_time_left
+                        .with_label_values(&[label])
+                        .set(secs.min(i64::MAX as u64) as i64);
+                    let days = secs / 86_400;
+                    if days < STYLUS_ALERT_DAYS {
+                        self.alert(
+                            "stylus-activation",
+                            "P2",
+                            format!("{label} {program}: programTimeLeft {days} days (RB-10: cargo stylus activate)"),
+                            rep,
+                        )
+                        .await;
+                    }
+                }
+                jobs::mark(conn, &key, "done", None).await?;
+            }
         }
         Ok(())
     }
