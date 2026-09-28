@@ -124,6 +124,8 @@ local-deploy-clock: contracts-build ## Deploy the clock + price stack and test a
 
 # CALENDAR=synthetic (S3 A1): XNYS + USBANK centred on the chain's clock (REGULAR for 12 h from now, then a WEEKEND
 # closure, then 10 sessions) and the equity vault seeded to every market's $$2M cap (SEED_EQUITY default 12M), so a devnode core is pokeable today; QE's bundle is then (re)loaded with risk-load-set.
+# SYNTH_ARGS passes options to the generator, e.g. a compressed calendar for BE-backend's scenario-a-e2e:
+# SYNTH_ARGS='--regular-minutes 140 --closure-minutes 15 --session-minutes 20'.
 # The default (CALENDAR=real) uses the calibration calendars and is unchanged.
 CALENDAR        ?= real
 QE_BUNDLE       ?= calibration/out/risk-bundle-889d50e4.json
@@ -132,7 +134,7 @@ SYNTH_CAL_DIR   := $(CONTRACTS_DIR)/test/fixtures/devnode
 local-deploy-core: contracts-build ## Deploy the whole protocol (clock, 6 equity markets + TBILL, vaults seeded) to LOCAL_RPC; writes deployments/<chainId>.local.json. CALENDAR=synthetic: calendar centred on chain time + QE bundle
 ifeq ($(CALENDAR),synthetic)
 	@mkdir -p $(SYNTH_CAL_DIR)
-	python3 $(CONTRACTS_DIR)/script/synthetic_calendar.py $$(cast block latest --field timestamp --rpc-url $(LOCAL_RPC)) $(SYNTH_CAL_DIR)
+	python3 $(CONTRACTS_DIR)/script/synthetic_calendar.py $$(cast block latest --field timestamp --rpc-url $(LOCAL_RPC)) $(SYNTH_CAL_DIR) $(SYNTH_ARGS)
 	cd $(CONTRACTS_DIR) && PRIVATE_KEY=$(DEVNODE_KEY) RELAYER_A_SIGNERS=$(RELAYER_A_SIGNERS) \
 	  RELAYER_B_SIGNERS=$(RELAYER_B_SIGNERS) XNYS_CALENDAR=$(abspath $(SYNTH_CAL_DIR))/XNYS-synthetic.json \
 	  USBANK_CALENDAR=$(abspath $(SYNTH_CAL_DIR))/USBANK-synthetic.json SEED_EQUITY=$${SEED_EQUITY:-12000000000000} \
