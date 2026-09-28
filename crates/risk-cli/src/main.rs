@@ -520,16 +520,7 @@ fn run(cmd: &str, i: &Input) -> R<Vec<(&'static str, Out)>> {
 
 /// Validate a set / joint / bundle file; a bundle's references resolve relative to its directory.
 fn validate_file(path: &Path) -> Result<Value, setfile::FileError> {
-    let read = |p: &Path| -> Result<Value, String> {
-        let raw = std::fs::read_to_string(p).map_err(|e| format!("{}: {e}", p.display()))?;
-        serde_json::from_str(&raw).map_err(|e| format!("{}: invalid JSON: {e}", p.display()))
-    };
-    let v = read(path).map_err(|msg| setfile::FileError {
-        path: ".".into(),
-        msg,
-    })?;
-    let dir = path.parent().unwrap_or(Path::new(".")).to_path_buf();
-    setfile::validate(&v, |rel| read(&dir.join(rel)))
+    setfile::validate_path(path)
 }
 
 fn build_file(cmd: &str, i: &Input) -> Result<Value, String> {

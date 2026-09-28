@@ -4,6 +4,7 @@ resolver = "2"
 members = [
   "crates/risk-core",
   "crates/risk-cli",
+  "crates/risk-py",
   "stylus/risk-engine",
   "stylus/risk-engine-diff",
   "crates/credence-common",

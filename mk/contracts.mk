@@ -27,7 +27,7 @@ ABI_IMPLS ?= CalendarStore AssetClock CredencePriceFeed OracleAdapter SequencerH
 
 .PHONY: abis-check local-deploy-clock contracts-deps contracts-build contracts-test contracts-invariant contracts-coverage contracts-fmt \
   contracts-fmt-check contracts-snapshot contracts-clean abis-export risk-build risk-test risk-lint risk-fmt stylus-test stylus-abi-check \
-  stylus-check stylus-export-abi devnode-up devnode-down devnode-deploy-engine stylus-diff risk-validate-set risk-load-set
+  stylus-check stylus-export-abi devnode-up devnode-down devnode-deploy-engine stylus-diff risk-validate-set risk-load-set risk-py-develop risk-py-test
 
 contracts-deps: ## Install pinned Solidity deps into contracts/lib (OZ, forge-std, solady) if missing
 	@cd $(CONTRACTS_DIR) && \
@@ -78,7 +78,7 @@ risk-build: ## Build risk-core and risk-cli (native, release)
 risk-test: ## Run risk-core golden vectors G-01..G-22, proptests, and risk-cli tests
 	cargo test -p credence-risk-core -p credence-risk-cli
 
-RISK_CRATES := -p credence-risk-core -p credence-risk-cli -p credence-risk-engine -p credence-risk-engine-diff
+RISK_CRATES := -p credence-risk-core -p credence-risk-cli -p credence-risk-py -p credence-risk-engine -p credence-risk-engine-diff
 
 risk-lint: ## rustfmt check + clippy -D warnings on the blockchain crates
 	cargo fmt $(RISK_CRATES) -- --check
@@ -138,3 +138,16 @@ risk-load-set: ## Validate RISK_BUNDLE, then load it into the engine on LOCAL_RP
 	cd $(CONTRACTS_DIR) && PRIVATE_KEY=$(DEVNODE_KEY) RISK_BUNDLE=$(abspath $(RISK_BUNDLE)) \
 	  RISK_BUNDLE_DIR=$(abspath $(dir $(RISK_BUNDLE))) \
 	  forge script script/LoadScenarioSet.s.sol:LoadScenarioSet --rpc-url $(LOCAL_RPC) --broadcast --slow
+
+# risk-py (PyO3 + maturin). maturin is not installed globally: a pinned `uvx maturin` builds into a project venv
+# (board DECISION 09:10). QE: `make risk-py-develop RISK_PY_VENV=calibration/.venv CARGO_TARGET_DIR=target/quant`.
+MATURIN      ?= uvx --from maturin==1.9.6 maturin
+RISK_PY_VENV ?= crates/risk-py/.venv
+
+risk-py-develop: ## Build crates/risk-py (release) and install `credence_risk` into RISK_PY_VENV (default crates/risk-py/.venv)
+	@[ -x $(RISK_PY_VENV)/bin/python ] || uv venv -q $(RISK_PY_VENV)
+	VIRTUAL_ENV=$(abspath $(RISK_PY_VENV)) $(MATURIN) develop --release --uv -m crates/risk-py/Cargo.toml
+
+risk-py-test: risk-py-develop ## risk-py smoke test (every function; cross-checked against risk-cli and the ADR-0106 example)
+	cargo build -q --release -p credence-risk-cli
+	RISK_CLI=$(abspath target/release/risk-cli) $(RISK_PY_VENV)/bin/python crates/risk-py/tests/test_smoke.py

@@ -1,0 +1,20 @@
+[package]
+name = "credence-risk-py"
+description = "risk-core for Python (PyO3 + maturin): the calibration pipeline's only door to engine math"
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+
+[lib]
+name = "credence_risk"
+crate-type = ["cdylib"]
+# A cdylib extension module cannot link a Rust test binary; the tests are Python (`make risk-py-test`).
+test = false
+doctest = false
+
+[dependencies]
+credence-risk-core = { path = "../risk-core", features = ["files"] }
+alloy-primitives = { workspace = true, features = ["std"] }
+serde_json = { workspace = true }
+# abi3: one wheel for every CPython ≥ 3.10 (calibration/.venv is 3.13, the system is 3.12).
+pyo3 = { workspace = true, features = ["abi3-py310"] }

@@ -826,6 +826,48 @@ pub fn validate(v: &Value, load: impl FnMut(&str) -> Result<Value, String>) -> F
     }
 }
 
+// ───────────────────────────── files on disk ─────────────────────────────
+
+/// Read a JSON file; errors carry the path.
+pub fn read_json(path: &std::path::Path) -> Result<Value, String> {
+    let raw = std::fs::read_to_string(path).map_err(|e| format!("{}: {e}", path.display()))?;
+    serde_json::from_str(&raw).map_err(|e| format!("{}: invalid JSON: {e}", path.display()))
+}
+
+fn read_root(path: &std::path::Path) -> FResult<(Value, std::path::PathBuf)> {
+    let v = read_json(path).map_err(|msg| FileError {
+        path: ".".into(),
+        msg,
+    })?;
+    let dir = path
+        .parent()
+        .unwrap_or(std::path::Path::new("."))
+        .to_path_buf();
+    Ok((v, dir))
+}
+
+/// Validate a set, joint set or bundle file; a bundle's references resolve relative to its directory.
+pub fn validate_path(path: &std::path::Path) -> FResult<Value> {
+    let (v, dir) = read_root(path)?;
+    validate(&v, |rel| read_json(&dir.join(rel)))
+}
+
+/// Parse and validate a scenario-set file.
+pub fn load_set_path(path: &std::path::Path) -> FResult<ScenarioSet> {
+    parse_set(&read_root(path)?.0)
+}
+
+/// Parse and validate a joint-set file.
+pub fn load_joint_path(path: &std::path::Path) -> FResult<JointSet> {
+    parse_joint(&read_root(path)?.0)
+}
+
+/// Parse and validate a bundle and every file it references.
+pub fn load_bundle_path(path: &std::path::Path) -> FResult<Bundle> {
+    let (v, dir) = read_root(path)?;
+    parse_bundle(&v, |rel| read_json(&dir.join(rel)))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
