@@ -166,7 +166,11 @@ export function auctionSettledPayload(
   };
 }
 
-/** Share price in loan base units per whole share (10^18 share units), from the pool's WAD price (NAV·1e18 / supply). */
+/** The pool's share price is WAD dollars per whole share (1e18 = $1.00; BE-chain 02:10): WAD → loan base units. */
+const toLoan = (wad: bigint, u: Units) =>
+  wad / 10n ** BigInt(18 - u.loanDecimals);
+
+/** Share prices go out in loan base units per whole share (the template's unit), converted from the pool's WAD dollars. */
 export function epochSettledPayload(
   r: {
     stack: "equity" | "nav";
@@ -190,10 +194,10 @@ export function epochSettledPayload(
     penalties: r.penalties.toString(),
     bonds: r.bonds.toString(),
     losses: r.lossesPaid.toString(),
-    sharePriceBefore: r.before === null ? null : r.before.toString(),
-    sharePriceAfter: r.after.toString(),
+    sharePriceBefore: r.before === null ? null : toLoan(r.before, u).toString(),
+    sharePriceAfter: toLoan(r.after, u).toString(),
     shares: r.shares.toString(),
-    value: ((r.shares * r.after) / WAD).toString(),
+    value: toLoan((r.shares * r.after) / WAD, u).toString(),
     loanDecimals: u.loanDecimals,
   };
 }
@@ -212,7 +216,7 @@ export function withdrawalPayload(
     stack: r.stack,
     epochId: r.epochId.toString(),
     shares: r.shares.toString(),
-    assets: ((r.shares * r.sharePriceAfter) / WAD).toString(),
+    assets: toLoan((r.shares * r.sharePriceAfter) / WAD, u).toString(),
     loanDecimals: u.loanDecimals,
   };
 }

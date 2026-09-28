@@ -97,11 +97,12 @@ describe("producer payloads (exact amounts)", () => {
       penalties: 0n,
       bonds: 86_000_000n,
       lossesPaid: 672_590_000n,
-      before: 1_000_000n,
-      after: 999_882n,
+      before: W,
+      after: 999_882_300_000_000_000n,
       shares: 10_000n * W,
     });
-    expect(e.value).toBe("9998820000"); // $9,998.82
+    expect(e.value).toBe("9998823000"); // 10,000 shares × $0.9998823 = $9,998.823 (S-B: Sara receives 9,998.82)
+    expect(e.sharePriceAfter).toBe("999882");
     expect(render("epoch_settled", e, "https://x").rendered.text).toContain(
       "worth $9,998.82",
     );
@@ -110,7 +111,7 @@ describe("producer payloads (exact amounts)", () => {
         stack: "nav",
         epochId: 3n,
         shares: 3n * W,
-        sharePriceAfter: 1_000_001n,
+        sharePriceAfter: 1_000_001_000_000_000_000n,
       }).assets,
     ).toBe("3000003");
     expect(labels.stack("0xnavpool")).toBe("nav");

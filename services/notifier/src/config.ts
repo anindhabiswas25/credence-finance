@@ -49,7 +49,12 @@ export interface Config {
   pollMs: number;
   lockTimeoutS: number;
   /** Indexer-triggered events (producer.ts). */
-  scan: { schema: string; everyMs: number; lookbackS: number; bookFile: string };
+  scan: {
+    schema: string;
+    everyMs: number;
+    lookbackS: number;
+    bookFile: string;
+  };
   worker: WorkerConfig;
 }
 
