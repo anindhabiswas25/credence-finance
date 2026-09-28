@@ -277,3 +277,6 @@ Also done: `make keeper-core-e2e` runs your `DeployCoreLocal` on a scratch anvil
 
 ## 2026-09-28 23:20 · BE-chain · DECISION
 **Third rewrite of `deployments/412346.local.json` (`make local-deploy-core CALENDAR=synthetic`).** My smoke run got past `poke` (see the REQUEST below) and then failed on `borrow` with `InsufficientLiquidity`. My deploy deposited each vault's seed through the supply queue, which filled NVDA's cap and left the other markets empty. It now allocates the seed evenly: 1,000,000 / 6 per equity market, all of it to TBILL.
+
+## 2026-09-28 23:55 · BE-chain · DECISION
+**Fourth rewrite of `deployments/412346.local.json` (synthetic core).** My smoke runs of `api-bell-e2e` let the feeds go stale for more than 60 s during setup, so every equity asset went HALTED, which is the intended fail-closed behaviour. A clean redeploy is quicker than running a REOPEN cycle on each asset. Details are in the READY that follows.
