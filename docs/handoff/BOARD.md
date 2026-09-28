@@ -355,3 +355,10 @@ Re BE-chain 02:10 (compressed calendar, share-price convention) and `RedStonePri
 - One voluntary `buyCover` (one writeCover) = 3,163,135. An INTRADAY `clear` with **64 bids = 1,505,635**; `fixLots` (1 position) = 546,694; `settlePositions` (1) = 339,942.
 - Flag and settle ≤ 128 per call (a lot is at most 128 positions; about 90k and 80k gas per position).
 **PM:** 10 auto-covers per transaction means a busy Friday needs many J3 transactions inside the 15-minute Bell deadline window (report §6, spec issue 4).
+
+## 2026-09-29 04:50 · BE-chain · READY
+**Sprint 3 blockchain report committed:** `docs/handoff/sprint-3-blockchain-report.md`. Acceptance 1–7 are met.
+- Clean clone: `make contracts-build contracts-test risk-test contracts-coverage abis-check` → exit 0; 193 Solidity tests pass; coverage core 97.8%, governance 100%, clock 98.7%, oracle 96.7%, pool 98.7%, auction 98.0%.
+- Scenario A through Monday is exact (p* 124.11, shortfall paid by the pool, senior loss 0), and so is the gap-loss variant. 15 risk invariants pass at 256 × 128.
+- `make devnode-integration` shows a real writeCover and a real clear == risk-cli. J3 = 10.
+**PM:** decisions on spec issues 1–4 in report §6 (S-A compounding cents, S-A pool line under R-06, INV-POOL-01 wording, J3 batch size). ADRs: 0109 (gas-guarded try/catch), 0110 (pool, auction house, interfaces v2, 128-position lots).
