@@ -23,7 +23,8 @@ ABI_CONTRACTS := ICredenceErrors ICalendarStore IAssetClock IPriceSource INavSou
   ICollateralToken INavFund ICompliance IComplianceRegistry IFaucet
 # Implementations built this sprint (their ABIs add admin functions and constructor args to the interfaces).
 ABI_IMPLS ?= CalendarStore AssetClock CredencePriceFeed OracleAdapter SequencerHealth UniV3TwapSource \
-  CredenceStockToken CredenceTreasuryFund ComplianceRegistry Faucet
+  CredenceStockToken CredenceTreasuryFund ComplianceRegistry Faucet CredenceMarket SeniorVault SigmaOracle \
+  KeeperTips Treasury ProtocolReserve CredenceGuardian CredenceTimelock
 
 .PHONY: abis-check local-deploy-clock contracts-deps contracts-build contracts-test contracts-invariant contracts-coverage contracts-fmt \
   contracts-fmt-check contracts-snapshot contracts-clean abis-export risk-build risk-test risk-lint risk-fmt stylus-test stylus-abi-check \
@@ -76,9 +77,9 @@ risk-build: ## Build risk-core and risk-cli (native, release)
 	cargo build --release -p credence-risk-core -p credence-risk-cli
 
 risk-test: ## Run risk-core golden vectors G-01..G-22, proptests, and risk-cli tests
-	cargo test -p credence-risk-core -p credence-risk-cli
+	cargo test -p credence-risk-core -p credence-risk-cli -p credence-bindings
 
-RISK_CRATES := -p credence-risk-core -p credence-risk-cli -p credence-risk-py -p credence-risk-wasm -p credence-risk-engine -p credence-risk-engine-diff
+RISK_CRATES := -p credence-risk-core -p credence-risk-cli -p credence-bindings -p credence-risk-py -p credence-risk-wasm -p credence-risk-engine -p credence-risk-engine-diff
 
 risk-lint: ## rustfmt check + clippy -D warnings on the blockchain crates
 	cargo fmt $(RISK_CRATES) -- --check

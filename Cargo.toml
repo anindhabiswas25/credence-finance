@@ -6,6 +6,7 @@ members = [
   "crates/risk-cli",
   "crates/risk-py",
   "crates/risk-wasm",
+  "crates/credence-bindings",
   "stylus/risk-engine",
   "stylus/risk-engine-diff",
   "crates/credence-common",
