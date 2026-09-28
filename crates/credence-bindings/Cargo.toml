@@ -1,6 +1,6 @@
 [package]
 name = "credence-bindings"
-description = "alloy sol! bindings of the Credence v1 contract ABIs (deployments/abis/v1), for the keeper and services"
+description = "alloy sol! bindings of the Credence v2 contract ABIs (deployments/abis/v2), for the keeper and services"
 edition.workspace = true
 version.workspace = true
 license.workspace = true
