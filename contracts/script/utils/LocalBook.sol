@@ -7,8 +7,7 @@ import {Vm} from "forge-std/Vm.sol";
 /// @notice Shape = Build Guide §13.2 (`shared`, `equity`, `nav`, `tokens`, `assetIds`), which `@credence/sdk`
 ///         parses as-is, plus:
 ///         - `stylus.riskEngine`: metadata of the Stylus engine deploy (written by stylus/risk-engine/scripts/deploy.sh);
-///         - the S1 flat keys (`clock`, `feedA`, `assetId_NVDA`, …), kept for one sprint so existing scripts keep
-///           working. They are deprecated and disappear in S3.
+///         - `addressBookVersion`: 2 since S3, when the S1 flat keys (`clock`, `feedA`, `assetId_NVDA`, …) were dropped.
 ///         Every local deploy rewrites the whole file. `shared.riskEngine` and `stylus.riskEngine` are carried over
 ///         from the existing file when the engine still has code on this chain (a reset chain drops them).
 library LocalBook {
@@ -122,7 +121,7 @@ library LocalBook {
             if (b.hasAuctionMeta) s = string.concat(s, ', "auctionMath": ', _engine(b.auctionMath, address(0)));
             s = string.concat(s, " },\n");
         }
-        s = string.concat(s, _legacy(b), "\n}\n");
+        s = string.concat(s, '  "addressBookVersion": 2\n}\n'); // v2 (S3): the S1 flat keys are gone
         vm.writeFile(path, s);
     }
 
@@ -216,35 +215,5 @@ library LocalBook {
             _q(m.wasmSha256),
             " }"
         );
-    }
-
-    /// @dev Deprecated S1 flat keys (removed in S3).
-    function _legacy(Book memory b) private pure returns (string memory s) {
-        Shared memory x = b.shared;
-        s = string.concat(
-            '  "_deprecated": "flat S1 keys below; use shared/tokens/assetIds",\n  ',
-            _a("calendar", x.calendar),
-            ",\n  ",
-            _a("clock", x.clock),
-            ",\n  ",
-            _a("oracle", x.oracle),
-            ",\n  ",
-            _a("feedA", x.feedA),
-            ",\n  ",
-            _a("feedB", x.feedB),
-            ",\n  ",
-            _a("navFeed", x.feedNav),
-            ",\n  ",
-            _a("sequencerHealth", x.sequencerHealth)
-        );
-        s = string.concat(s, ",\n  ", _a("registry", x.registry), ",\n  ", _a("faucet", x.faucet));
-        for (uint256 i; i < b.tokenNames.length; ++i) {
-            s = string.concat(s, ",\n  ", _a(b.tokenNames[i], b.tokenAddrs[i]));
-        }
-        for (uint256 i; i < b.assetNames.length; ++i) {
-            s = string.concat(
-                s, ",\n  ", _q(string.concat("assetId_", b.assetNames[i])), ": ", _q(vm.toString(b.assetIds[i]))
-            );
-        }
     }
 }
