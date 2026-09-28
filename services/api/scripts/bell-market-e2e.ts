@@ -316,6 +316,18 @@ const c0 = cycles;
 while (cycles < c0 + 2) await new Promise((r) => setTimeout(r, 500));
 
 const engine = book.shared.riskEngine as Address;
+// the v2 UnderwriterPool answers venue(); the S2 stand-in pool quoted a fixed premium and does not
+const realPool = await pub
+  .readContract({
+    abi: parseAbi(["function venue() view returns (bytes32)"]),
+    address: book.equity.pool as Address,
+    functionName: "venue",
+  })
+  .then(() => true)
+  .catch(() => false);
+console.log(
+  `pool: ${realPool ? "v2 UnderwriterPool: /bell premium == bellStatus premium == engine.quoteCover" : "S2 stand-in: /bell premium == engine.quoteCover"}`,
+);
 let checked = 0;
 let needs = 0;
 const fail: string[] = [];
@@ -337,7 +349,12 @@ for (const { acct, ticker } of pairs) {
     expectedShortfall: { raw: string } | null;
     collateralValue: { raw: string };
     debtProjected: { raw: string };
-    closure: { closureType: { code: number }; days: number; closureId: string };
+    closure: {
+      closureType: { code: number };
+      days: number;
+      closureId: string;
+      epochId?: string;
+    };
   };
   const blockNumber = BigInt(b.block);
   const [st, repay, coll, prem] = await pub.readContract({
@@ -379,7 +396,7 @@ for (const { acct, ticker } of pairs) {
           closureType: b.closure.closureType.code,
           closureDays: b.closure.days,
           closureId: BigInt(b.closure.closureId),
-          epochId: 0n,
+          epochId: BigInt(b.closure.epochId ?? "0"),
           collateralValue: BigInt(b.collateralValue.raw),
           debtProjected: BigInt(b.debtProjected.raw),
         },
@@ -403,7 +420,8 @@ for (const { acct, ticker } of pairs) {
       b.premium?.raw === p.toString() &&
       b.expectedLoss?.raw === el.toString() &&
       b.expectedShortfall?.raw === es.toString();
-    void prem; // the stand-in pool's fixed quote
+    // S3: with the real pool, the market's own bellStatus premium is the pool's quote too
+    if (realPool) ok &&= prem.toString() === b.premium?.raw;
   }
   if (!ok)
     fail.push(

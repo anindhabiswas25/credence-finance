@@ -254,6 +254,12 @@ const BellBody = z
     status: z.object({ code: z.number(), name: z.string() }),
     closure: z.object({
       closureId: z.string(),
+      epochId: z
+        .string()
+        .openapi({
+          description:
+            "The pool epoch the cover would be written in (the clock's venueEpoch, R-10)",
+        }),
       closureType: z.object({ code: z.number(), name: z.string() }),
       closeAt: z.number(),
       reopenAt: z.number(),
@@ -514,6 +520,7 @@ export function registerCoreRoutes(app: OpenAPIHono, deps: CoreDeps) {
           status: { code: status, name: statusName(status) },
           closure: {
             closureId: ctx.upcomingClosureId.toString(),
+            epochId: ctx.epochId.toString(),
             closureType: {
               code: ctx.closureType,
               name: closureName(ctx.closureType),
