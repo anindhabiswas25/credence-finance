@@ -45,8 +45,9 @@ async function tx(w: { writeContract: (a: never) => Promise<Hex> }, req: Call) {
   if (r.status !== "success") throw new Error(`reverted: ${String(req.functionName)}`);
 }
 
-/** Fresh LIVE prices on both feeds (factor in basis points), then poke every clock. */
-async function prices(factorBps: Record<string, bigint> = {}) {
+/** Fresh LIVE prices on both feeds (factor in basis points), then poke every clock. `w` sends (the
+ *  pump uses its own account, so it never races the setup's nonces). */
+async function prices(factorBps: Record<string, bigint> = {}, w: typeof dev = dev) {
   const block = await pub.getBlock();
   const now = Number(block.timestamp);
   for (const t of tickers) {
@@ -59,17 +60,40 @@ async function prices(factorBps: Record<string, bigint> = {}) {
       const digest = await pub.readContract({ abi: FEED, address: feed, functionName: "hashReports", args: [reports] });
       const signed = await Promise.all(SIGNERS.map(async (k) => ({ a: privateKeyToAccount(k).address, s: await privateKeyToAccount(k).sign({ hash: digest }) })));
       signed.sort((x, y) => (BigInt(x.a) < BigInt(y.a) ? -1 : 1));
-      await tx(dev, { abi: FEED, address: feed, functionName: "submit", args: [reports, signed.map((x) => x.s)] });
+      await tx(w, { abi: FEED, address: feed, functionName: "submit", args: [reports, signed.map((x) => x.s)] });
     }
-    await tx(dev, { abi: IAssetClockAbi, address: book.shared.clock, functionName: "poke", args: [assetId] });
+    await tx(w, { abi: IAssetClockAbi, address: book.shared.clock, functionName: "poke", args: [assetId] });
   }
 }
+
+// OracleAdapter's REGULAR staleness limit is 60 s: a pump keeps both feeds fresh (every 15 s) for the
+// whole run, at the current price factors, so no asset goes HALTED while positions are set up or checked.
+const pumpAcct = privateKeyToAccount(keccak256(stringToHex("credence-bell-e2e:pump")));
+const pumpWallet = createWalletClient({ account: pumpAcct, transport: http(RPC) }) as unknown as typeof dev;
+let factors: Record<string, bigint> = {};
+let pumping = true;
+let cycles = 0;
+async function pump() {
+  while (pumping) {
+    const t0 = Date.now();
+    try {
+      await prices(factors, pumpWallet);
+      cycles++;
+    } catch (e) {
+      console.error(`price pump: ${String(e)}`);
+    }
+    await new Promise((r) => setTimeout(r, Math.max(0, 15_000 - (Date.now() - t0))));
+  }
+}
+if ((await pub.getBalance({ address: pumpAcct.address })) < WAD / 10n)
+  await pub.waitForTransactionReceipt({ hash: await dev.sendTransaction({ to: pumpAcct.address, value: WAD, chain } as never) });
+await prices(factors, pumpWallet);
+const pumpDone = pump();
 
 const accounts = Array.from({ length: Math.ceil(N / tickers.length) }, (_, i) => privateKeyToAccount(keccak256(stringToHex(`credence-bell-e2e:${i}`))));
 const pairs = Array.from({ length: N }, (_, i) => ({ acct: accounts[Math.floor(i / tickers.length)]!, ticker: tickers[i % tickers.length]!, i }));
 
 if (process.env.SETUP === "1") {
-  await prices();
   for (const a of accounts) {
     const bal = await pub.getBalance({ address: a.address });
     if (bal < WAD / 100n) await pub.waitForTransactionReceipt({ hash: await dev.sendTransaction({ to: a.address, value: WAD / 10n, chain } as never) });
@@ -88,13 +112,15 @@ if (process.env.SETUP === "1") {
     await tx(w, { abi: ERC20, address: token, functionName: "approve", args: [market, qty] });
     await tx(w, { abi: ICredenceMarketAbi, address: market, functionName: "addCollateral", args: [id, acct.address, qty] });
     await tx(w, { abi: ICredenceMarketAbi, address: market, functionName: "borrow", args: [id, borrow, acct.address] });
-    if (i % 10 === 9) await prices(); // keep the feeds fresh on a real-time chain
   }
   console.log(`setup: ${pairs.length} positions over ${tickers.length} markets and ${accounts.length} accounts`);
 }
 
 // Half the assets fall 10%: their positions above the safe LTV need action at the Bell.
-await prices(Object.fromEntries(tickers.filter((_, k) => k % 2 === 0).map((t) => [t, 9_000n])));
+// (the pump is the only price writer: wait until a whole cycle has run at the new factors)
+factors = Object.fromEntries(tickers.filter((_, k) => k % 2 === 0).map((t) => [t, 9_000n]));
+const c0 = cycles;
+while (cycles < c0 + 2) await new Promise((r) => setTimeout(r, 500));
 
 const engine = book.shared.riskEngine as Address;
 let checked = 0;
@@ -129,6 +155,8 @@ for (const { acct, ticker } of pairs) {
   if (!ok) fail.push(JSON.stringify({ ticker, owner: acct.address, block: b.block, api: { status: b.status.code, repay: b.cure.repay.raw, coll: b.cure.addCollateral, premium: b.premium?.raw }, chain: { status: Number(st), repay: String(repay), coll: String(coll) } }));
   checked++;
 }
+pumping = false;
+await pumpDone;
 console.log(`/bell vs chain: ${checked} positions checked (NEEDS_ACTION ${needs}), mismatches ${fail.length}`);
 if (fail.length) {
   for (const f of fail.slice(0, 5)) console.error(f);
