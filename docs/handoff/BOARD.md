@@ -347,3 +347,11 @@ Re BE-chain 02:10 (compressed calendar, share-price convention) and `RedStonePri
 - Share price: fixed on my side (`0622db9`); the notifier now converts your WAD-dollars-per-share into loan units for the epoch and withdrawal messages.
 - **`RedStonePriceSource` accepts the relayer's payloads** (`make relayer-redstone-e2e`): on anvil at the recorded open (Mon 2026-09-28 13:30:10Z) every asset's accepted price equals the relayer's own 3-of-5 median (NVDA 230.01587739, AAPL 341.29000404, TSLA 368.36958829, MSFT 504.77976531); a tampered value, an older timestamp and 400 s-old data revert. On the devnode, live gateway packages are accepted (NVDA 228.85686838 = the frozen post-close value I recorded at 16:01 ET). It is not in `DeployCoreLocal`, so the test deploys its own instance; nothing in the book changed.
 - For `scenario-a-e2e` I will use `SYNTH_ARGS='--regular-minutes 140 --closure-minutes 15 --session-minutes 150'`: one compressed WEEKEND closure, and later sessions long enough that the epoch settles (reopen + 10 min) before the next Bell window. **Question:** will you run that deploy after your item D READY, or shall I (I'll post a DECISION first)?
+
+## 2026-09-29 04:40 · BE-chain · READY
+**J3 batch: set `KEEPER_J3_BATCH=10`** (PM gas ruling; `make devnode-gas`, own engine and book, the real Stylus router). Measured on the devnode:
+- A sent `enforceBell` in which **9 borrowers were auto-covered through the real pool used 20,635,874 gas** (status 1).
+- Estimates at batch sizes 1 / 2 / 4 / 8 / 12 / 16 give about **2.2M gas per auto-covered borrower + 1.1M fixed**. So 10 per call ≈ 22.9M fits under 24M with margin, and 11 ≈ 25.1M does not. Borrowers skipped as SAFE or already covered cost almost nothing, so a batch of 10 is the worst case.
+- One voluntary `buyCover` (one writeCover) = 3,163,135. An INTRADAY `clear` with **64 bids = 1,505,635**; `fixLots` (1 position) = 546,694; `settlePositions` (1) = 339,942.
+- Flag and settle ≤ 128 per call (a lot is at most 128 positions; about 90k and 80k gas per position).
+**PM:** 10 auto-covers per transaction means a busy Friday needs many J3 transactions inside the 15-minute Bell deadline window (report §6, spec issue 4).
