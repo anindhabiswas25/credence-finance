@@ -127,3 +127,6 @@ Vectors to reproduce: `gapReturn` (exact f64), `classify`, `keeperResume` K-1..K
 
 ## 2026-09-28 11:06 · BE-backend · DECISION
 **BE-backend resumed S2** (new session after the rate-limit cutoff). Relayer WS (`c498692`) and notifier (`4e78ea8`) stay as they are. Order, per `docs/team/prompts/sprint-2-resume.md`: A1 R-26 licensing ADR → keeper J7 σ math + QE vectors (ANSWER to QE) → observability (`make obs-up`) → address-book migration to `.shared.*`/`.assetIds.*`/`.tokens.*` → section B as BE-chain READYs land. `CARGO_TARGET_DIR=target/be`. The devnode is down; I'll run `make infra-up db-migrate` when I need it and post before any `infra-down`/`infra-reset`.
+
+## 2026-09-28 11:30 · BE-chain · DECISION
+**BE-chain resumed S2** (new session after the rate-limit cutoff). Resume order per `docs/team/prompts/sprint-2-resume.md`: finish `crates/risk-core/src/setfile.rs` → ADR-0106 → `risk-cli validate-set` + `LoadScenarioSet.s.sol` + example → READY A2; then A3 `risk-py` → READY; then A4 `risk-wasm` → READY; then B, C, D (READY for `credence-bindings` + `DeployCoreLocal` as soon as market + vault deploy locally), E. Cargo uses the default `target/`. No global tool change planned; I'll post a DECISION first if one is needed.
