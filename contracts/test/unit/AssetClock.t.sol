@@ -182,6 +182,27 @@ contract AssetClockTest is ClockFixture, IAssetClockEvents {
 
     // ───────────── scheduled closures ─────────────
 
+    /// @dev ADR-0109: a caller that starves the oracle read of gas must not force the fail-closed branch.
+    function test_gasStarvedPokeRevertsInsteadOfHalting() public {
+        Session memory mon = _day(0, 0);
+        _healthy();
+        _listAt(mon.open + 1 hours);
+        assertEq(uint8(clock.poke(NVDA)), uint8(ClockState.REGULAR));
+        mo.setBurn(400_000);
+        vm.warp(mon.open + 2 hours);
+        (bool ok, bytes memory ret) = address(clock).call{gas: 300_000}(abi.encodeCall(clock.poke, (NVDA)));
+        assertFalse(ok, "starved poke must revert");
+        assertEq(bytes4(ret), ICredenceErrors.InsufficientGas.selector);
+        assertEq(uint8(clock.state(NVDA)), uint8(ClockState.REGULAR), "not halted");
+        assertEq(uint8(clock.poke(NVDA)), uint8(ClockState.REGULAR), "enough gas: healthy read");
+        // a genuine revert (cheap) still fails closed
+        mo.setBurn(0);
+        mo.setReverts(true, false, false, false);
+        (ok,) = address(clock).call{gas: 300_000}(abi.encodeCall(clock.poke, (NVDA)));
+        assertTrue(ok);
+        assertEq(uint8(clock.state(NVDA)), uint8(ClockState.HALTED));
+    }
+
     function test_scheduledClosureAndReference() public {
         Session memory mon = _mondayClosed();
         ClockData memory d = _info();

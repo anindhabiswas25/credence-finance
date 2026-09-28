@@ -424,6 +424,11 @@
   },
   {
     "type": "error",
+    "name": "InsufficientGas",
+    "inputs": []
+  },
+  {
+    "type": "error",
     "name": "InsufficientLiquidity",
     "inputs": [
       {

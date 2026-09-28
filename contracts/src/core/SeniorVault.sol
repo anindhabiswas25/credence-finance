@@ -49,11 +49,17 @@ contract SeniorVault is ERC4626, ISeniorVault, ReentrancyGuardTransient {
         _;
     }
 
-    constructor(IERC20 asset_, string memory name_, string memory symbol_, address timelock_, address market_, address allocator_)
-        ERC20(name_, symbol_)
-        ERC4626(asset_)
-    {
-        if (timelock_ == address(0) || market_ == address(0) || allocator_ == address(0)) revert ZeroAddress();
+    constructor(
+        IERC20 asset_,
+        string memory name_,
+        string memory symbol_,
+        address timelock_,
+        address market_,
+        address allocator_
+    ) ERC20(name_, symbol_) ERC4626(asset_) {
+        if (timelock_ == address(0) || market_ == address(0) || allocator_ == address(0)) {
+            revert ZeroAddress();
+        }
         timelock = timelock_;
         market = market_;
         allocator = allocator_;
@@ -183,13 +189,22 @@ contract SeniorVault is ERC4626, ISeniorVault, ReentrancyGuardTransient {
     // ───────────── redeem queue (R-17) ─────────────
 
     /// @inheritdoc ISeniorVault
-    function requestRedeem(uint256 shares, address receiver) external nonReentrant returns (uint256 requestId) {
+    function requestRedeem(uint256 shares, address receiver)
+        external
+        nonReentrant
+        returns (uint256 requestId)
+    {
         if (shares == 0) revert ZeroAmount();
         if (receiver == address(0)) revert ZeroAddress();
         _transfer(msg.sender, address(this), shares); // escrowed: still counted in totalSupply until processed
         requestId = nextRequestId++;
         _requests[requestId] = RedeemRequest({
-            owner: msg.sender, receiver: receiver, shares: uint128(shares), assets: 0, processed: false, claimed: false
+            owner: msg.sender,
+            receiver: receiver,
+            shares: uint128(shares),
+            assets: 0,
+            processed: false,
+            claimed: false
         });
         pendingRedeemShares += shares;
         emit RedeemRequested(requestId, msg.sender, shares);

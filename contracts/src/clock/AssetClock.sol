@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity 0.8.30;
 
+import {GasGuard} from "../libraries/GasGuard.sol";
 import {
     ClockState,
     ClosureType,
@@ -241,13 +242,16 @@ contract AssetClock is IAssetClock {
         // 7–8. Reopen: the first REGULAR after a closure waits for the open print, then holds REOPEN.
         if (d.reopenPending && target == ClockState.REGULAR) {
             if (d.openPrint == 0) {
+                uint256 g = gasleft();
                 try orc.openPrint(a, d.reopenAt, d.phaseExtension) returns (bool ok, uint256 p, bool fb) {
                     if (ok && p != 0 && p <= type(uint128).max) {
                         d.openPrint = uint128(p); // INV-CLK-03: written only here, only while 0
                         d.openPrintAt = nowTs;
                         emit OpenPrint(a, d.closureId, p, fb);
                     }
-                } catch {}
+                } catch {
+                    GasGuard.check(g);
+                }
             }
             target = d.openPrint != 0 ? ClockState.REOPEN : ClockState.CLOSED;
         }
@@ -319,9 +323,12 @@ contract AssetClock is IAssetClock {
         d.phaseExtension = 0;
         uint128 ref;
         uint40 rt;
+        uint256 g = gasleft();
         try orc.haltReferencePrice(a) returns (uint256 p, uint40 t_) {
             if (p <= type(uint128).max) (ref, rt) = (uint128(p), t_);
-        } catch {}
+        } catch {
+            GasGuard.check(g);
+        }
         d.refPrice = ref;
         d.refTime = rt;
         emit ClosureStarted(a, cid, c.cursor, t, ref, reopenAt);
@@ -384,9 +391,11 @@ contract AssetClock is IAssetClock {
         ClockState calState
     ) internal view returns (ClockState s) {
         FeedHealth memory h;
+        uint256 g = gasleft();
         try orc.feedHealth(a) returns (FeedHealth memory x) {
             h = x;
         } catch {
+            GasGuard.check(g);
             return ClockState.HALTED;
         }
         s = calState;
@@ -416,11 +425,13 @@ contract AssetClock is IAssetClock {
         view
         returns (uint128, uint40)
     {
+        uint256 g = gasleft();
         try orc.lastRegularClose(a) returns (uint256 p, uint40 t) {
             if (p == 0 || p > type(uint128).max) return (0, 0);
             if (kind == MarketKind.EQUITY && t < sessionOpen) return (0, 0); // must belong to this session
             return (uint128(p), t);
         } catch {
+            GasGuard.check(g);
             return (0, 0);
         }
     }
@@ -563,9 +574,12 @@ contract AssetClock is IAssetClock {
         }
         if (d.reopenPending && target == ClockState.REGULAR) {
             if (d.openPrint == 0) {
+                uint256 g = gasleft();
                 try orc.openPrint(assetId, d.reopenAt, d.phaseExtension) returns (bool ok, uint256 p, bool) {
                     if (ok && p != 0) d.openPrint = uint128(p);
-                } catch {}
+                } catch {
+                    GasGuard.check(g);
+                }
             }
             target = d.openPrint != 0 ? ClockState.REOPEN : ClockState.CLOSED;
         }

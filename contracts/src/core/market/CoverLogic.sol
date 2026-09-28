@@ -21,6 +21,7 @@ import {ICredenceMarketEvents} from "../../libraries/Events.sol";
 import {WadMath} from "../../libraries/WadMath.sol";
 import {IUnderwriterPool} from "../../interfaces/IUnderwriterPool.sol";
 import {Layout, MarketLib} from "./MarketLib.sol";
+import {GasGuard} from "../../libraries/GasGuard.sol";
 
 /// @dev The market's self-call used by the Bell's auto-cover, so a failed quote falls back to a sale.
 interface IAutoCover {
@@ -121,11 +122,15 @@ library CoverLogic {
         cureCollateral = cureValue == type(uint256).max
             ? cureValue
             : WadMath.mulDivUp(cureValue, 10 ** $.dec[id].coll * WadMath.WAD, v * 10 ** $.dec[id].loan);
-        try IUnderwriterPool($.w.pool).previewCover(coverRequest($, id, p, b, pos, d, $.debtView(id, b))) returns (
+        uint256 g0 = gasleft();
+        try IUnderwriterPool($.w.pool)
+            .previewCover(coverRequest($, id, p, b, pos, d, $.debtView(id, b))) returns (
             uint256 prem, uint256
         ) {
             coverPremium = prem;
-        } catch {}
+        } catch {
+            GasGuard.check(g0);
+        }
     }
 
     /// @dev (status, cureRepay, cureCollateralValue) for the upcoming closure: engine.bellStatus at V and D_proj.
@@ -138,9 +143,10 @@ library CoverLogic {
         if (debt == 0) return (uint8(BellStatus.SAFE), 0, 0);
         (,, ClosureType t) = $.clock().closureWindow(p.assetId);
         uint256 c = $.valueNow(id, p.assetId, $.pos[id][b].collateral);
-        return $.engine().bellStatus(
-            p.assetId, uint8(t), c, $.projected(id, p.assetId, debt), $.maxLtvEff(id, p.maxLtv), 0, false
-        );
+        return $.engine()
+            .bellStatus(
+                p.assetId, uint8(t), c, $.projected(id, p.assetId, debt), $.maxLtvEff(id, p.maxLtv), 0, false
+            );
     }
 
     function coverRequest(
@@ -168,10 +174,14 @@ library CoverLogic {
 
     /// @dev The Bell's cure for one NEEDS_ACTION borrower: auto-cover, a pre-close sale down to maxLtv then cover
     ///      (R-03), or a pre-close sale down to the safe LTV.
-    function _cure(Layout storage $, bytes32 id, MarketParams memory p, address b, Position storage pos, uint64 upcoming)
-        internal
-        returns (uint8)
-    {
+    function _cure(
+        Layout storage $,
+        bytes32 id,
+        MarketParams memory p,
+        address b,
+        Position storage pos,
+        uint64 upcoming
+    ) internal returns (uint8) {
         bool coverOn = !pos.autoCoverOptOut && !$.coverPaused(id);
         uint256 cur = $.debtOf(id, pos).ltvUp($.valueNow(id, p.assetId, pos.collateral));
         uint256 maxEff = $.maxLtvEff(id, p.maxLtv);
@@ -186,9 +196,11 @@ library CoverLogic {
     }
 
     function _tryAutoCover(bytes32 id, address b) internal returns (bool) {
+        uint256 g1 = gasleft();
         try IAutoCover(address(this)).autoCover(id, b) {
             return true;
         } catch {
+            GasGuard.check(g1);
             return false;
         }
     }

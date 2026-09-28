@@ -24,6 +24,7 @@ import {Layout, LotBook, LotEntry, Decimals, MarketLib} from "./market/MarketLib
 import {BorrowLogic} from "./market/BorrowLogic.sol";
 import {CoverLogic} from "./market/CoverLogic.sol";
 import {LiquidationLogic} from "./market/LiquidationLogic.sol";
+import {GasGuard} from "../libraries/GasGuard.sol";
 
 /// @title CredenceMarket: a singleton of isolated lending markets keyed by marketId (Build Guide §8.4, R-21).
 /// @notice Only the Senior Vault supplies. Borrowers post collateral, borrow, repay and buy Gap Cover. Every risk
@@ -85,8 +86,8 @@ contract CredenceMarket is ICredenceMarket, ReentrancyGuardTransient {
         if ($.w.clock != address(0)) revert AlreadyWired();
         if (
             w.clock == address(0) || w.oracle == address(0) || w.engine == address(0) || w.vault == address(0)
-                || w.pool == address(0) || w.reserve == address(0) || w.treasury == address(0) || w.tips == address(0)
-                || (w.auctionHouse == address(0) && w.settlement == address(0))
+                || w.pool == address(0) || w.reserve == address(0) || w.treasury == address(0)
+                || w.tips == address(0) || (w.auctionHouse == address(0) && w.settlement == address(0))
         ) revert ZeroAddress();
         $.w = w;
         emit MarketWired(w);
@@ -126,7 +127,8 @@ contract CredenceMarket is ICredenceMarket, ReentrancyGuardTransient {
         _checkRiskParams(p.maxLtv, p.lt, p.penalty);
         _checkPreclose(p.precloseKappa, p.precloseLambda, p.maxLtv);
         $.params[id] = p;
-        $.dec[id] = Decimals(IERC20Metadata(p.collateralToken).decimals(), IERC20Metadata(p.loanToken).decimals());
+        $.dec[id] =
+            Decimals(IERC20Metadata(p.collateralToken).decimals(), IERC20Metadata(p.loanToken).decimals());
         MarketState storage s = $.state[id];
         s.lastAccrual = uint40(block.timestamp);
         s.feePoolBps = 1000; // ρ_J 10% (§12.2)
@@ -280,7 +282,10 @@ contract CredenceMarket is ICredenceMarket, ReentrancyGuardTransient {
     }
 
     /// @inheritdoc ICredenceMarket
-    function borrowWithCover(bytes32 id, uint256 assets, address to, uint256 maxPremium) external nonReentrant {
+    function borrowWithCover(bytes32 id, uint256 assets, address to, uint256 maxPremium)
+        external
+        nonReentrant
+    {
         BorrowLogic.borrow($, id, msg.sender, assets, to, true);
         CoverLogic.buyCover($, id, msg.sender, maxPremium, true, false);
     }
@@ -488,10 +493,13 @@ contract CredenceMarket is ICredenceMarket, ReentrancyGuardTransient {
         LotBook storage lot = $.lots[auctionId];
         if (lot.released || lot.kind != AuctionKind.REOPEN) return;
         MarketParams storage p = $.params[id];
+        uint256 g0 = gasleft();
         try $.clock().closureInfo(p.assetId) returns (ClockData memory d) {
             if (d.openPrint == 0) return;
             uint256 c = $.value(id, pos.collateral, d.openPrint);
             if (c.healthFactorDown(p.lt, $.debtOf(id, pos)) >= 1e18) $.leave(auctionId, id, b, pos);
-        } catch {}
+        } catch {
+            GasGuard.check(g0);
+        }
     }
 }

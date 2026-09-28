@@ -30,7 +30,9 @@ contract SigmaOracle is ISigmaOracle, EIP712 {
 
     /// @dev The engine is wired once afterwards (`initializeWiring`): the Stylus engine's constructor needs this
     ///      contract's address as its only σ writer, so the oracle is deployed first.
-    constructor(address timelock_, address[] memory signers, uint8 threshold_) EIP712("CredenceSigmaOracle", "1") {
+    constructor(address timelock_, address[] memory signers, uint8 threshold_)
+        EIP712("CredenceSigmaOracle", "1")
+    {
         if (timelock_ == address(0)) revert ZeroAddress();
         timelock = timelock_;
         deployer = msg.sender;

@@ -22,6 +22,7 @@ import {IOracleAdapter} from "../../interfaces/IOracleAdapter.sol";
 import {IRiskEngine} from "../../interfaces/IRiskEngine.sol";
 import {IAuctionHouse} from "../../interfaces/IAuctionHouse.sol";
 import {IKeeperTips} from "../../interfaces/IKeeperTips.sol";
+import {GasGuard} from "../../libraries/GasGuard.sol";
 
 /// @dev Decimals of a market's tokens, cached at creation.
 struct Decimals {
@@ -109,7 +110,11 @@ library MarketLib {
     }
 
     function tip(Layout storage $, uint8 job) internal {
-        try IKeeperTips($.w.tips).pay(msg.sender, job) {} catch {}
+        uint256 g0 = gasleft();
+        try IKeeperTips($.w.tips).pay(msg.sender, job) {}
+        catch {
+            GasGuard.check(g0);
+        }
     }
 
     // ───────────── accrual (R-09) ─────────────
@@ -188,7 +193,11 @@ library MarketLib {
         return WadMath.collateralValue(q, v, d.coll, d.loan);
     }
 
-    function valueNow(Layout storage $, bytes32 id, bytes32 asset, uint256 q) internal view returns (uint256) {
+    function valueNow(Layout storage $, bytes32 id, bytes32 asset, uint256 q)
+        internal
+        view
+        returns (uint256)
+    {
         return value($, id, q, oracle($).valuationPrice(asset));
     }
 
@@ -197,10 +206,13 @@ library MarketLib {
     }
 
     /// @dev Mint borrow shares for `assets` (rounded up) against liquidity and the borrow cap.
-    function mintDebt(Layout storage $, bytes32 id, MarketParams memory p, Position storage pos, uint256 assets)
-        internal
-        returns (uint256 shares)
-    {
+    function mintDebt(
+        Layout storage $,
+        bytes32 id,
+        MarketParams memory p,
+        Position storage pos,
+        uint256 assets
+    ) internal returns (uint256 shares) {
         MarketState storage s = $.state[id];
         uint256 liq = liquidity(s);
         if (assets > liq) revert ICredenceErrors.InsufficientLiquidity(assets, liq);
@@ -223,7 +235,11 @@ library MarketLib {
         return maxLtv > cut ? maxLtv - cut : 0;
     }
 
-    function coverableLtv(Layout storage $, bytes32 id, MarketParams memory p) internal view returns (uint256) {
+    function coverableLtv(Layout storage $, bytes32 id, MarketParams memory p)
+        internal
+        view
+        returns (uint256)
+    {
         return WadMath.min(maxLtvEff($, id, p.maxLtv) + DELTA_COVER, uint256(p.lt) - COVER_LT_GAP);
     }
 
@@ -242,13 +258,20 @@ library MarketLib {
 
     function closureDays(Layout storage $, bytes32 asset) internal view returns (uint256 days_) {
         days_ = FALLBACK_CLOSURE_DAYS;
+        uint256 g1 = gasleft();
         try clock($).closureDays(asset) returns (uint256 n) {
             days_ = n;
-        } catch {}
+        } catch {
+            GasGuard.check(g1);
+        }
     }
 
     /// @dev D_proj = D × (1 + r_b × days / 365) over the in-progress or next closure (R-07, R-08).
-    function projected(Layout storage $, bytes32 id, bytes32 asset, uint256 debt) internal view returns (uint256) {
+    function projected(Layout storage $, bytes32 id, bytes32 asset, uint256 debt)
+        internal
+        view
+        returns (uint256)
+    {
         return KinkedRateModel.projected(debt, borrowRate($, id), closureDays($, asset));
     }
 
@@ -287,7 +310,9 @@ library MarketLib {
         if (lot.released) revert ICredenceErrors.LotAlreadyReleased(auctionId);
     }
 
-    function join(Layout storage $, uint64 auctionId, address b, Position storage pos, uint64 targetLtv) internal {
+    function join(Layout storage $, uint64 auctionId, address b, Position storage pos, uint64 targetLtv)
+        internal
+    {
         LotBook storage lot = $.lots[auctionId];
         if (lot.borrowers.length >= MAX_LOT_POSITIONS) {
             revert ICredenceErrors.TooManyPositions(lot.borrowers.length + 1, MAX_LOT_POSITIONS);

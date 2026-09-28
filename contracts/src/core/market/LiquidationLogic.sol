@@ -20,6 +20,7 @@ import {SharesMath} from "../../libraries/SharesMath.sol";
 import {IUnderwriterPool} from "../../interfaces/IUnderwriterPool.sol";
 import {IProtocolReserve} from "../../interfaces/IProtocolReserve.sol";
 import {Layout, LotBook, LotEntry, MarketLib} from "./MarketLib.sol";
+import {GasGuard} from "../../libraries/GasGuard.sol";
 
 /// @title CredenceMarket liquidation, settlement, waterfall and fee sweep (§8.4.3, F-4.5, Architecture §3.6).
 /// @dev External library: runs by DELEGATECALL in the market's storage.
@@ -108,7 +109,9 @@ library LiquidationLogic {
         emit ICredenceMarketEvents.LotsReleased(auctionId, totalQty, lot.releasedCount);
     }
 
-    function onAuctionCleared(Layout storage $, uint64 auctionId, uint256 proceeds, uint256 blendedPrice) external {
+    function onAuctionCleared(Layout storage $, uint64 auctionId, uint256 proceeds, uint256 blendedPrice)
+        external
+    {
         LotBook storage lot = $.lots[auctionId];
         if (!lot.released) revert ICredenceErrors.NotInLot(auctionId, address(0));
         if (lot.cleared) revert ICredenceErrors.LotAlreadyCleared(auctionId);
@@ -193,7 +196,8 @@ library LiquidationLogic {
             x = $.engine().precloseLot(dProj, pos.collateral, v, reserve, targetLtv, p.precloseLambda, cd, ld);
         } else {
             if (c.healthFactorDown(p.lt, debt) >= MarketLib.WAD) return 0;
-            x = $.engine().liquidationLot(debt, pos.collateral, reserve, v, p.lt, MarketLib.H_STAR, p.penalty, cd, ld);
+            x = $.engine()
+                .liquidationLot(debt, pos.collateral, reserve, v, p.lt, MarketLib.H_STAR, p.penalty, cd, ld);
         }
         if (x > pos.collateral) x = pos.collateral;
     }
@@ -223,7 +227,8 @@ library LiquidationLogic {
             ? lot.proceeds - lot.proceedsSettled
             : $.value(id, e.qty, lot.blendedPrice);
         uint256 debt = $.debtOf(id, pos);
-        uint256 penFull = r.proceeds.mulWadDown(lot.kind == AuctionKind.PRECLOSE ? p.precloseLambda : p.penalty);
+        uint256 penFull =
+            r.proceeds.mulWadDown(lot.kind == AuctionKind.PRECLOSE ? p.precloseLambda : p.penalty);
         if (e.qty < e.qtyBefore) {
             // partial: the position stays open (Architecture §4.5: D − (1 − λ)P)
             r.penalty = penFull;
@@ -269,10 +274,16 @@ library LiquidationLogic {
         uint256 toTreasury = pen - 2 * third;
         if (third != 0) {
             token.safeTransfer($.w.pool, third);
-            try IUnderwriterPool($.w.pool).creditPenalty(third) {} catch {}
+            uint256 g0 = gasleft();
+            try IUnderwriterPool($.w.pool).creditPenalty(third) {}
+            catch {
+                GasGuard.check(g0);
+            }
             token.forceApprove($.w.reserve, third);
+            uint256 g1 = gasleft();
             try IProtocolReserve($.w.reserve).fund(third) {}
             catch {
+                GasGuard.check(g1);
                 toTreasury += third;
             }
             token.forceApprove($.w.reserve, 0);
@@ -284,12 +295,20 @@ library LiquidationLogic {
     ///      remainder reduces senior supply (INV-WF-01). Amounts are what actually arrived (balance deltas).
     function _waterfall(Layout storage $, bytes32 id, address b, IERC20 token, uint256 s) internal {
         uint256 bal = token.balanceOf(address(this));
-        try IUnderwriterPool($.w.pool).payShortfall(s) {} catch {}
+        uint256 g2 = gasleft();
+        try IUnderwriterPool($.w.pool).payShortfall(s) {}
+        catch {
+            GasGuard.check(g2);
+        }
         uint256 paidPool = WadMath.min(token.balanceOf(address(this)) - bal, s);
         uint256 paidReserve;
         if (paidPool < s) {
             bal = token.balanceOf(address(this));
-            try IProtocolReserve($.w.reserve).cover(s - paidPool) {} catch {}
+            uint256 g3 = gasleft();
+            try IProtocolReserve($.w.reserve).cover(s - paidPool) {}
+            catch {
+                GasGuard.check(g3);
+            }
             paidReserve = WadMath.min(token.balanceOf(address(this)) - bal, s - paidPool);
         }
         uint256 loss = s - paidPool - paidReserve;

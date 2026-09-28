@@ -2,7 +2,13 @@
 pragma solidity 0.8.30;
 
 import {
-    MarketParams, MarketState, Position, GuardianOverlay, BellStatus, MarketWiring, LotInfo
+    MarketParams,
+    MarketState,
+    Position,
+    GuardianOverlay,
+    BellStatus,
+    MarketWiring,
+    LotInfo
 } from "../libraries/Types.sol";
 import {ICredenceErrors} from "../libraries/Errors.sol";
 import {ICredenceMarketEvents} from "../libraries/Events.sol";

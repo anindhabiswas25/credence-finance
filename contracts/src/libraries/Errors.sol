@@ -127,4 +127,8 @@ interface ICredenceErrors {
     error HaircutNotHigher(uint64 bps, uint64 current);
     error UntilTooLate(uint40 until, uint40 maxUntil);
     error UntilInPast(uint40 until);
+
+    // ── gas (v1.1, S3; ADR-0109) ──
+    /// @notice A guarded try-call failed because the caller supplied too little gas (not because the callee reverted).
+    error InsufficientGas();
 }

@@ -5,6 +5,7 @@ import {ClockState, GuardianOverlay} from "../libraries/Types.sol";
 import {ICredenceGuardian} from "../interfaces/ICredenceGuardian.sol";
 import {ICredenceMarket} from "../interfaces/ICredenceMarket.sol";
 import {IAssetClock} from "../interfaces/IAssetClock.sol";
+import {GasGuard} from "../libraries/GasGuard.sol";
 
 /// @title CredenceGuardian: emergency powers that can only make the protocol safer (Build Guide §8.11).
 /// @notice Called by the Guardian Safe. Instant: pause borrowing, pause cover, halt an asset (≤ 7 days, renewable),
@@ -192,9 +193,11 @@ contract CredenceGuardian is ICredenceGuardian {
     /// @dev id 0 (ALL) exists on every market singleton.
     function _has(ICredenceMarket m, bytes32 marketId) internal view returns (bool) {
         if (marketId == bytes32(0)) return true;
+        uint256 g0 = gasleft();
         try m.marketParams(marketId) {
             return true;
         } catch {
+            GasGuard.check(g0);
             return false;
         }
     }

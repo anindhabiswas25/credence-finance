@@ -42,21 +42,7 @@ ENGINE="$(jq -r .shared.riskEngine "$BOOK")"
 # 2. a synthetic calendar centred on the devnode's clock (it cannot be warped): today's session runs from now − 2 h
 #    to now + 4 h and is followed by a WEEKEND closure, so the market is in REGULAR with live prices
 mkdir -p "$FIX"
-python3 - "$NOW" "$FIX" <<'PY'
-import json, subprocess, sys
-now, out = int(sys.argv[1]), sys.argv[2]
-day = 86400
-rows = []
-for k in range(-3, 8):
-    o = now - 2 * 3600 + k * day
-    t = 2 if k == 0 else 1  # WEEKEND after today, OVERNIGHT otherwise
-    rows.append((o - 5 * 3600 - 1800, o, o + 6 * 3600, o + 10 * 3600, t))
-arg = "[" + ",".join("(%d,%d,%d,%d,%d)" % r for r in rows) + "]"
-enc = subprocess.check_output(["cast", "abi-encode", "f((uint40,uint40,uint40,uint40,uint8)[])", arg]).decode().strip()
-for v in ("XNYS", "USBANK"):
-    json.dump({"venue": v, "source": "synthetic (devnode integration)", "sessionsAbiEncoded": enc},
-              open(f"{out}/{v}-synthetic.json", "w"))
-PY
+python3 "$ROOT/contracts/script/synthetic_calendar.py" "$NOW" "$FIX" --after 7 --regular-hours 4 >/dev/null
 XNYS="$FIX/XNYS-synthetic.json"; USBANK="$FIX/USBANK-synthetic.json"
 (cd "$ROOT/contracts" && OUT="$BOOK" RISK_ENGINE="$ENGINE" PRIVATE_KEY="$KEY" RELAYER_A_SIGNERS="$SIGNERS" \
   RELAYER_B_SIGNERS="$SIGNERS" XNYS_CALENDAR="$XNYS" USBANK_CALENDAR="$USBANK" SEED_EQUITY=100000000000 \

@@ -121,10 +121,30 @@ local-deploy-clock: contracts-build ## Deploy the clock + price stack and test a
 	  RELAYER_B_SIGNERS=$(RELAYER_B_SIGNERS) XNYS_CALENDAR=../$(XNYS_CALENDAR) USBANK_CALENDAR=../$(USBANK_CALENDAR) \
 	  forge script script/DeployClockLocal.s.sol:DeployClockLocal --rpc-url $(LOCAL_RPC) --broadcast --slow
 
-local-deploy-core: contracts-build ## Deploy the whole S2 protocol (clock, 6 equity markets + TBILL, vaults seeded) to LOCAL_RPC; writes deployments/<chainId>.local.json
+# CALENDAR=synthetic (S3 A1): XNYS + USBANK centred on the chain's clock (REGULAR for 12 h from now, then a WEEKEND
+# closure, then 10 sessions), so a devnode core is pokeable today; QE's bundle is then (re)loaded with risk-load-set.
+# The default (CALENDAR=real) uses the calibration calendars and is unchanged.
+CALENDAR        ?= real
+QE_BUNDLE       ?= calibration/out/risk-bundle-889d50e4.json
+SYNTH_CAL_DIR   := $(CONTRACTS_DIR)/test/fixtures/devnode
+
+local-deploy-core: contracts-build ## Deploy the whole protocol (clock, 6 equity markets + TBILL, vaults seeded) to LOCAL_RPC; writes deployments/<chainId>.local.json. CALENDAR=synthetic: calendar centred on chain time + QE bundle
+ifeq ($(CALENDAR),synthetic)
+	@mkdir -p $(SYNTH_CAL_DIR)
+	python3 $(CONTRACTS_DIR)/script/synthetic_calendar.py $$(cast block latest --field timestamp --rpc-url $(LOCAL_RPC)) $(SYNTH_CAL_DIR)
+	cd $(CONTRACTS_DIR) && PRIVATE_KEY=$(DEVNODE_KEY) RELAYER_A_SIGNERS=$(RELAYER_A_SIGNERS) \
+	  RELAYER_B_SIGNERS=$(RELAYER_B_SIGNERS) XNYS_CALENDAR=$(abspath $(SYNTH_CAL_DIR))/XNYS-synthetic.json \
+	  USBANK_CALENDAR=$(abspath $(SYNTH_CAL_DIR))/USBANK-synthetic.json \
+	  forge script script/DeployCoreLocal.s.sol:DeployCoreLocal --rpc-url $(LOCAL_RPC) --broadcast --slow
+	@if [ -n "$$(cast code --rpc-url $(LOCAL_RPC) $$(jq -r .shared.riskEngine deployments/$$(cast chain-id --rpc-url $(LOCAL_RPC)).local.json) | sed 's/^0x$$//')" ] \
+	  && cast call --rpc-url $(LOCAL_RPC) $$(jq -r .shared.riskEngine deployments/$$(cast chain-id --rpc-url $(LOCAL_RPC)).local.json) 'pricing()(address)' >/dev/null 2>&1; then \
+	  $(MAKE) --no-print-directory risk-load-set RISK_BUNDLE=$(QE_BUNDLE); \
+	else echo "note: no Stylus router in the book (Solidity stand-in engine); QE bundle not loaded"; fi
+else
 	cd $(CONTRACTS_DIR) && PRIVATE_KEY=$(DEVNODE_KEY) RELAYER_A_SIGNERS=$(RELAYER_A_SIGNERS) \
 	  RELAYER_B_SIGNERS=$(RELAYER_B_SIGNERS) XNYS_CALENDAR=../$(XNYS_CALENDAR) USBANK_CALENDAR=../$(USBANK_CALENDAR) \
 	  forge script script/DeployCoreLocal.s.sol:DeployCoreLocal --rpc-url $(LOCAL_RPC) --broadcast --slow
+endif
 
 devnode-up: ## Ensure a local nitro-devnode answers on :8547 (delegates to `make infra-up`)
 	@bash $(STYLUS_DIR)/scripts/devnode.sh up

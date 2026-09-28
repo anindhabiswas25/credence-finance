@@ -19,6 +19,7 @@ contract MockOracle {
     bool public revertHalt;
     bool public revertOpen;
     uint256 public openCalls;
+    uint256 public burnGas; // feedHealth burns this much gas first (gas-griefing tests, ADR-0109)
 
     function setHealth(FeedHealth memory x) external {
         h = x;
@@ -47,8 +48,14 @@ contract MockOracle {
         revertOpen = open;
     }
 
+    function setBurn(uint256 g) external {
+        burnGas = g;
+    }
+
     function feedHealth(bytes32) external view returns (FeedHealth memory) {
         require(!revertHealth, "health");
+        uint256 g0 = gasleft();
+        while (burnGas != 0 && g0 - gasleft() < burnGas) {}
         return h;
     }
 

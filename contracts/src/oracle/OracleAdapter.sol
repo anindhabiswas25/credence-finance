@@ -19,6 +19,7 @@ import {IAssetClock} from "../interfaces/IAssetClock.sol";
 import {ICollateralToken} from "../interfaces/ICollateralToken.sol";
 import {INavFund} from "../interfaces/INavFund.sol";
 import {ICalendarStore} from "../interfaces/ICalendarStore.sol";
+import {GasGuard} from "../libraries/GasGuard.sol";
 
 /// @title OracleAdapter: one valuation price per asset, by clock state (Build Guide §8.3.2, F-3.2).
 /// @notice Core rule: when the home market is shut, an off-hours price can lower a collateral's value but never
@@ -351,17 +352,21 @@ contract OracleAdapter is IOracleAdapter {
 
     /// @dev A token whose probe reverts is treated as frozen (fail closed).
     function _tokenFrozen(address token) internal view returns (bool) {
+        uint256 g0 = gasleft();
         try ICollateralToken(token).frozen() returns (bool f) {
             return f;
         } catch {
+            GasGuard.check(g0);
             return true;
         }
     }
 
     function _fundGated(address token) internal view returns (bool) {
+        uint256 g1 = gasleft();
         try INavFund(token).redemptionsGated() returns (bool g) {
             if (g) return true;
         } catch {
+            GasGuard.check(g1);
             return true;
         }
         return _tokenFrozen(token);
@@ -390,15 +395,19 @@ contract OracleAdapter is IOracleAdapter {
     function _dexTwap(OracleConfig storage c) internal view returns (uint256 p, bool usable) {
         address dex = c.dex;
         if (dex == address(0)) return (0, false);
+        uint256 g2 = gasleft();
         try ITwapSource(dex).twap(DEX_TWAP) returns (uint256 tp, bool ok) {
             if (!ok || tp == 0) return (0, false);
             p = tp;
         } catch {
+            GasGuard.check(g2);
             return (0, false);
         }
+        uint256 g3 = gasleft();
         try ITwapSource(dex).depth() returns (uint256 depthUsd) {
             usable = depthUsd >= c.minDepth;
         } catch {
+            GasGuard.check(g3);
             usable = false;
         }
         if (!usable) p = 0;

@@ -5,6 +5,7 @@ import {FixedPointMathLib as FPM} from "solady/utils/FixedPointMathLib.sol";
 import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import {ITwapSource} from "../interfaces/ITwapSource.sol";
 import {ICredenceErrors} from "../libraries/Errors.sol";
+import {GasGuard} from "../libraries/GasGuard.sol";
 
 /// @dev The subset of the Uniswap v3 pool interface this source reads.
 interface IUniswapV3PoolMinimal {
@@ -71,6 +72,7 @@ contract UniV3TwapSource is ITwapSource, ICredenceErrors {
         if (window == 0) return (0, false);
         uint32[] memory ago = new uint32[](2);
         ago[0] = window;
+        uint256 g0 = gasleft();
         try IUniswapV3PoolMinimal(pool).observe(ago) returns (int56[] memory cum, uint160[] memory) {
             if (cum.length != 2) return (0, false);
             int56 delta = cum[1] - cum[0];
@@ -80,6 +82,7 @@ contract UniV3TwapSource is ITwapSource, ICredenceErrors {
             price = priceAtTick(tick);
             ok = price != 0;
         } catch {
+            GasGuard.check(g0);
             return (0, false);
         }
     }

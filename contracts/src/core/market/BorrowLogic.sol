@@ -18,7 +18,9 @@ library BorrowLogic {
     using MarketLib for Layout;
 
     /// @dev `withCover`: the limit is maxLtv (borrowWithCover buys cover in the same transaction).
-    function borrow(Layout storage $, bytes32 id, address b, uint256 assets, address to, bool withCover) external {
+    function borrow(Layout storage $, bytes32 id, address b, uint256 assets, address to, bool withCover)
+        external
+    {
         if (assets == 0) revert ICredenceErrors.ZeroAmount();
         if (to == address(0)) revert ICredenceErrors.ZeroAddress();
         MarketParams memory p = $.market(id);
@@ -29,7 +31,9 @@ library BorrowLogic {
         if (withCover && st != ClockState.REGULAR) {
             revert ICredenceErrors.ActionNotAllowedInState(MarketAction.BUY_COVER, st);
         }
-        if ($.overlay[id].borrowPaused || $.overlay[bytes32(0)].borrowPaused) revert ICredenceErrors.BorrowPaused(id);
+        if ($.overlay[id].borrowPaused || $.overlay[bytes32(0)].borrowPaused) {
+            revert ICredenceErrors.BorrowPaused(id);
+        }
         IOracleAdapter orc = $.oracle();
         if (orc.stressFlag(p.assetId)) revert ICredenceErrors.BorrowPaused(id);
         FeedHealth memory h = orc.feedHealth(p.assetId);
@@ -51,7 +55,9 @@ library BorrowLogic {
         emit ICredenceMarketEvents.Borrow(id, b, to, assets, shares);
     }
 
-    function withdrawCollateral(Layout storage $, bytes32 id, address b, uint256 amount, address to) external {
+    function withdrawCollateral(Layout storage $, bytes32 id, address b, uint256 amount, address to)
+        external
+    {
         if (amount == 0) revert ICredenceErrors.ZeroAmount();
         if (to == address(0)) revert ICredenceErrors.ZeroAddress();
         MarketParams memory p = $.market(id);

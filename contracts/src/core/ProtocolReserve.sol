@@ -6,6 +6,7 @@ import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol
 import {FixedPointMathLib as FPM} from "solady/utils/FixedPointMathLib.sol";
 import {IProtocolReserve} from "../interfaces/IProtocolReserve.sol";
 import {ICredenceMarket} from "../interfaces/ICredenceMarket.sol";
+import {GasGuard} from "../libraries/GasGuard.sol";
 
 /// @title ProtocolReserve: the second loss layer after the Underwriter Pool (Build Guide §8.10, Architecture §3.6).
 /// @notice Receives ⅓ of penalties and a share of the protocol fee up to `targetSize` = max(targetFloor,
@@ -86,9 +87,12 @@ contract ProtocolReserve is IProtocolReserve {
     function targetSize() public view returns (uint256) {
         uint256 byBorrows;
         if (market != address(0)) {
+            uint256 g0 = gasleft();
             try ICredenceMarket(market).totalBorrowsAll() returns (uint256 b) {
                 byBorrows = FPM.fullMulDiv(b, targetBps, 10_000);
-            } catch {}
+            } catch {
+                GasGuard.check(g0);
+            }
         }
         return FPM.max(targetFloor, byBorrows);
     }
