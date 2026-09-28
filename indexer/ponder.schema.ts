@@ -48,7 +48,10 @@ export const pricePoint = onchainTable(
     block: t.bigint().notNull(),
     txHash: t.hex().notNull(),
   }),
-  (table) => ({ pk: primaryKey({ columns: [table.assetId, table.feed, table.seq] }), byTime: index().on(table.assetId, table.observedAt) }),
+  (table) => ({
+    pk: primaryKey({ columns: [table.assetId, table.feed, table.seq] }),
+    byTime: index().on(table.assetId, table.observedAt),
+  }),
 );
 
 /** One row per market (`MarketCreated`), totals as of the last market event (`marketState` at that block). */
@@ -93,7 +96,10 @@ export const position = onchainTable(
     updatedBlock: t.bigint().notNull(),
     updatedAt: t.bigint().notNull(),
   }),
-  (table) => ({ pk: primaryKey({ columns: [table.marketId, table.owner] }), byOwner: index().on(table.owner) }),
+  (table) => ({
+    pk: primaryKey({ columns: [table.marketId, table.owner] }),
+    byOwner: index().on(table.owner),
+  }),
 );
 
 /** Every position event, for the UI history. */
@@ -110,7 +116,10 @@ export const positionEvent = onchainTable(
     ts: t.bigint().notNull(),
     txHash: t.hex().notNull(),
   }),
-  (table) => ({ byOwner: index().on(table.owner, table.ts), byMarket: index().on(table.marketId, table.ts) }),
+  (table) => ({
+    byOwner: index().on(table.owner, table.ts),
+    byMarket: index().on(table.marketId, table.ts),
+  }),
 );
 
 /** Senior Vault per stack, as of its last event. */
@@ -157,5 +166,259 @@ export const sigmaPoint = onchainTable(
     block: t.bigint().notNull(),
     ts: t.bigint().notNull(),
   }),
-  (table) => ({ pk: primaryKey({ columns: [table.assetId, table.closureType, table.day] }) }),
+  (table) => ({
+    pk: primaryKey({ columns: [table.assetId, table.closureType, table.day] }),
+  }),
+);
+
+// ─────────────── S3: underwriter pool and auction house (§11.1; pure projections of the v2 events, ADR-0110) ───────────────
+
+/** One row per stack's pool, from its events: the last settled NAV plus the flows since. */
+export const pool = onchainTable("pool", (t) => ({
+  stack: t.text().primaryKey(),
+  pool: t.hex().notNull(),
+  venue: t.hex(),
+  activeEpoch: t.bigint(), // null: none unsettled
+  lastSettledEpoch: t.bigint(),
+  navAfterLastSettlement: t.bigint(),
+  sharePrice: t.bigint(), // WAD, at the last settlement
+  premiumsWritten: t.bigint().notNull(), // all time
+  lossesPaid: t.bigint().notNull(), // all time
+  riskFees: t.bigint().notNull(),
+  penalties: t.bigint().notNull(),
+  bonds: t.bigint().notNull(),
+  updatedBlock: t.bigint().notNull(),
+  updatedAt: t.bigint().notNull(),
+}));
+
+export const epoch = onchainTable(
+  "epoch",
+  (t) => ({
+    pool: t.hex().notNull(),
+    epochId: t.bigint().notNull(),
+    stack: t.text().notNull(),
+    venue: t.hex(),
+    status: t.text().notNull(), // open | snapshotted | settled
+    bellWindowAt: t.bigint(),
+    bellAt: t.bigint(),
+    closeAt: t.bigint(),
+    reopenAt: t.bigint(),
+    navBefore: t.bigint(),
+    withdrawSharesQueued: t.bigint(),
+    equityAtRisk: t.bigint(),
+    worstLoss: t.bigint(),
+    premiums: t.bigint().notNull(), // written into this epoch (CoverWritten)
+    policies: t.integer().notNull(),
+    riskFees: t.bigint(),
+    penalties: t.bigint(),
+    bonds: t.bigint(),
+    backstopPnl: t.bigint(), // signed
+    lossesPaid: t.bigint(),
+    pendingLossReserve: t.bigint(),
+    navAfter: t.bigint(),
+    sharePriceAfter: t.bigint(),
+    sharesBurned: t.bigint(),
+    assetsReserved: t.bigint(),
+    depositAssets: t.bigint(),
+    sharesMinted: t.bigint(),
+    openedAt: t.bigint(),
+    snapshottedAt: t.bigint(),
+    settledAt: t.bigint(),
+  }),
+  (table) => ({
+    pk: primaryKey({ columns: [table.pool, table.epochId] }),
+    byStack: index().on(table.stack, table.epochId),
+  }),
+);
+
+/** A Gap Cover policy (`CoverWritten`); `auto` when the Bell's auto-cover wrote it (`AutoCoverApplied`). */
+export const coverPolicy = onchainTable(
+  "cover_policy",
+  (t) => ({
+    id: t.text().primaryKey(), // "<pool>:<policyId>"
+    pool: t.hex().notNull(),
+    policyId: t.bigint().notNull(),
+    marketId: t.hex().notNull(),
+    owner: t.hex().notNull(),
+    epochId: t.bigint().notNull(),
+    assetId: t.hex().notNull(),
+    closureId: t.bigint(),
+    premium: t.bigint().notNull(),
+    uAfter: t.bigint().notNull(),
+    worstLoss: t.bigint().notNull(),
+    auto: t.boolean().notNull(),
+    debtAfter: t.bigint(),
+    block: t.bigint().notNull(),
+    ts: t.bigint().notNull(),
+    txHash: t.hex().notNull(),
+  }),
+  (table) => ({
+    byOwner: index().on(table.owner),
+    byEpoch: index().on(table.pool, table.epochId),
+  }),
+);
+
+/** Every pool money flow, for the P&L breakdown. */
+export const poolFlow = onchainTable(
+  "pool_flow",
+  (t) => ({
+    id: t.text().primaryKey(), // txHash:logIndex
+    pool: t.hex().notNull(),
+    kind: t.text().notNull(), // premium | fee | penalty | bond | shortfall | backstop | gda | deposit | withdraw
+    amount: t.bigint().notNull(),
+    epochId: t.bigint(),
+    assetId: t.hex(),
+    ts: t.bigint().notNull(),
+  }),
+  (table) => ({ byPool: index().on(table.pool, table.ts) }),
+);
+
+export const poolRequest = onchainTable(
+  "pool_request",
+  (t) => ({
+    pool: t.hex().notNull(),
+    owner: t.hex().notNull(),
+    epochId: t.bigint().notNull(),
+    kind: t.text().notNull(), // deposit | withdraw
+    assets: t.bigint().notNull(), // deposit: queued assets; withdraw: assets claimed so far
+    shares: t.bigint().notNull(), // deposit: shares claimed; withdraw: shares escrowed
+    stillOwed: t.bigint(),
+    claimed: t.boolean().notNull(),
+    requestedAt: t.bigint().notNull(),
+    claimedAt: t.bigint(),
+  }),
+  (table) => ({
+    pk: primaryKey({
+      columns: [table.pool, table.owner, table.epochId, table.kind],
+    }),
+    byOwner: index().on(table.owner),
+  }),
+);
+
+/** Backstop inventory per (pool, asset): bought at R in auctions, resold by GDA. */
+export const backstopInventory = onchainTable(
+  "backstop_inventory",
+  (t) => ({
+    pool: t.hex().notNull(),
+    assetId: t.hex().notNull(),
+    qty: t.bigint().notNull(),
+    cost: t.bigint().notNull(), // loan units paid for what is still held
+    listed: t.bigint().notNull(), // in a running GDA
+    realisedPnl: t.bigint().notNull(), // signed
+    updatedAt: t.bigint().notNull(),
+  }),
+  (table) => ({ pk: primaryKey({ columns: [table.pool, table.assetId] }) }),
+);
+
+export const auction = onchainTable(
+  "auction",
+  (t) => ({
+    auctionId: t.bigint().primaryKey(),
+    house: t.hex().notNull(),
+    kind: t.integer().notNull(), // 0 REOPEN, 1 INTRADAY, 2 EMERGENCY, 3 PRECLOSE
+    marketId: t.hex().notNull(),
+    assetId: t.hex().notNull(),
+    closureId: t.bigint().notNull(),
+    venueEpoch: t.bigint().notNull(),
+    tranche: t.integer().notNull(),
+    deadlines: t.json().notNull(), // [lotFixAt, biddingStartAt, commitEndOrBidEnd, clearAt]
+    status: t.text().notNull(), // queue | fixed | cleared | settled
+    lot: t.bigint(),
+    reserve: t.bigint(),
+    positions: t.integer(),
+    bids: t.integer().notNull(),
+    pStar: t.bigint(),
+    filled: t.bigint(),
+    qPool: t.bigint(),
+    proceeds: t.bigint(),
+    blendedPrice: t.bigint(),
+    bondsForfeited: t.bigint().notNull(),
+    createdAt: t.bigint().notNull(),
+    fixedAt: t.bigint(),
+    clearedAt: t.bigint(),
+    settledAt: t.bigint(),
+  }),
+  (table) => ({
+    byStatus: index().on(table.status, table.kind),
+    byAsset: index().on(table.assetId),
+  }),
+);
+
+export const bid = onchainTable(
+  "bid",
+  (t) => ({
+    auctionId: t.bigint().notNull(),
+    bidder: t.hex().notNull(),
+    commitment: t.hex(),
+    maxNotional: t.bigint(),
+    bond: t.bigint(),
+    qty: t.bigint(),
+    price: t.bigint(),
+    escrow: t.bigint(),
+    tokens: t.bigint(), // claimed
+    refund: t.bigint(), // claimed
+    bondForfeited: t.boolean().notNull(),
+    status: t.text().notNull(), // committed | revealed | placed | forfeited | claimed
+    updatedAt: t.bigint().notNull(),
+  }),
+  (table) => ({
+    pk: primaryKey({ columns: [table.auctionId, table.bidder] }),
+    byBidder: index().on(table.bidder),
+  }),
+);
+
+/** One position's part in an auction: released qty, then its settlement. */
+export const lotPosition = onchainTable(
+  "lot_position",
+  (t) => ({
+    auctionId: t.bigint().notNull(),
+    owner: t.hex().notNull(),
+    marketId: t.hex(),
+    qty: t.bigint().notNull(),
+    collateralSold: t.bigint(),
+    proceeds: t.bigint(),
+    penalty: t.bigint(),
+    shortfall: t.bigint(),
+    refund: t.bigint(),
+    debtAfter: t.bigint(),
+    paidByPool: t.bigint(),
+    paidByReserve: t.bigint(),
+    seniorLoss: t.bigint(),
+    settledAt: t.bigint(),
+  }),
+  (table) => ({
+    pk: primaryKey({ columns: [table.auctionId, table.owner] }),
+    byOwner: index().on(table.owner),
+  }),
+);
+
+export const gda = onchainTable("gda", (t) => ({
+  gdaId: t.bigint().primaryKey(),
+  house: t.hex().notNull(),
+  assetId: t.hex().notNull(),
+  token: t.hex().notNull(),
+  qty: t.bigint().notNull(),
+  k: t.bigint().notNull(),
+  decay: t.bigint().notNull(),
+  emissionPerSec: t.bigint().notNull(),
+  start: t.bigint().notNull(),
+  sold: t.bigint().notNull(),
+  proceeds: t.bigint().notNull(),
+  unsold: t.bigint(),
+  status: t.text().notNull(), // running | closed
+}));
+
+/** Every closure's open print (`AssetClock.OpenPrint`), the reference for REOPEN auctions' p*. */
+export const openPrint = onchainTable(
+  "open_print",
+  (t) => ({
+    assetId: t.hex().notNull(),
+    closureId: t.bigint().notNull(),
+    price: t.bigint().notNull(),
+    fallbackUsed: t.boolean().notNull(),
+    ts: t.bigint().notNull(),
+  }),
+  (table) => ({
+    pk: primaryKey({ columns: [table.assetId, table.closureId] }),
+  }),
 );

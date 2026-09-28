@@ -18,17 +18,28 @@ const config = loadConfig();
 const repos = pgRepos(config.databaseUrl, config.indexerSchema);
 const calendars = loadCalendars();
 const venues = assetVenues(
-  (process.env.ASSETS ?? "NVDA:XNAS,AAPL:XNAS,TSLA:XNAS,COIN:XNAS,MSFT:XNAS,SPY:ARCX").split(",").concat("TBILL:USBANK"),
+  (
+    process.env.ASSETS ??
+    "NVDA:XNAS,AAPL:XNAS,TSLA:XNAS,COIN:XNAS,MSFT:XNAS,SPY:ARCX"
+  )
+    .split(",")
+    .concat("TBILL:USBANK"),
 );
 await riskReady;
-const repoRoot = resolve(fileURLToPath(new URL(".", import.meta.url)), "../../..");
-const publicClient = config.rpcUrl ? createPublicClient({ transport: http(config.rpcUrl) }) : undefined;
+const repoRoot = resolve(
+  fileURLToPath(new URL(".", import.meta.url)),
+  "../../..",
+);
+const publicClient = config.rpcUrl
+  ? createPublicClient({ transport: http(config.rpcUrl) })
+  : undefined;
 const app = createApp({
   config,
   clock: repos.clock,
   auth: repos.auth,
   metrics: createMetrics(),
   core: repos.core,
+  rt: repos.rt,
   me: repos.me,
   chain: publicClient ? viemChainReader(publicClient) : undefined,
   sets: loadSetStore(config.scenarioDirs.map((d) => resolve(repoRoot, d))),
@@ -40,12 +51,23 @@ const app = createApp({
   },
 });
 
-const hub = new StreamHub(repos.stream, toAssetId, { pollMs: Number(process.env.STREAM_POLL_MS ?? 1000), batch: 500, maxAssets: 100 });
+const hub = new StreamHub(repos.stream, toAssetId, {
+  pollMs: Number(process.env.STREAM_POLL_MS ?? 1000),
+  batch: 500,
+  maxAssets: 100,
+});
 const injectWebSocket = await attachStream(app, hub);
 hub.start((err) => log.warn({ err: String(err) }, "stream poll failed"));
 
 const server = serve({ fetch: app.fetch, port: config.port }, (info) => {
-  log.info({ port: info.port, indexerSchema: config.indexerSchema, corsOrigins: config.corsOrigins }, "credence-api listening");
+  log.info(
+    {
+      port: info.port,
+      indexerSchema: config.indexerSchema,
+      corsOrigins: config.corsOrigins,
+    },
+    "credence-api listening",
+  );
 });
 
 injectWebSocket(server);

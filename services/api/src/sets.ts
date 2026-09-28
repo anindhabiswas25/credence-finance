@@ -32,7 +32,10 @@ export function loadSetStore(dirs: string[]): SetStore {
         const s = loadScenarioSet(text);
         if (s.scenarioHash) sets.set(s.scenarioHash.toLowerCase(), s);
       } catch (err) {
-        log.warn({ path, err: String(err) }, "invalid scenario-set file skipped");
+        log.warn(
+          { path, err: String(err) },
+          "invalid scenario-set file skipped",
+        );
       }
     }
   }
@@ -41,6 +44,10 @@ export function loadSetStore(dirs: string[]): SetStore {
 }
 
 export function memorySetStore(list: ScenarioSet[]): SetStore {
-  const m = new Map(list.filter((s) => s.scenarioHash).map((s) => [s.scenarioHash!.toLowerCase(), s]));
+  const m = new Map(
+    list
+      .filter((s) => s.scenarioHash)
+      .map((s) => [s.scenarioHash!.toLowerCase(), s]),
+  );
   return { byHash: (h) => m.get(h.toLowerCase()), size: () => m.size };
 }

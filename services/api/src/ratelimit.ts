@@ -25,11 +25,15 @@ export class FixedWindow {
     }
     e.count++;
     if (this.hits.size > 100_000) this.gc(t);
-    return { remaining: e.count <= this.limit ? this.limit - e.count : -1, resetMs: e.windowStart + this.windowMs - t };
+    return {
+      remaining: e.count <= this.limit ? this.limit - e.count : -1,
+      resetMs: e.windowStart + this.windowMs - t,
+    };
   }
 
   private gc(t: number) {
-    for (const [k, v] of this.hits) if (t - v.windowStart >= this.windowMs) this.hits.delete(k);
+    for (const [k, v] of this.hits)
+      if (t - v.windowStart >= this.windowMs) this.hits.delete(k);
   }
 }
 
@@ -39,13 +43,19 @@ export function clientIp(headers: Headers, remote?: string): string {
   return (xff?.split(",")[0]?.trim() || remote || "unknown").toLowerCase();
 }
 
-export function rateLimit(limiter: FixedWindow, keyOf: (c: Parameters<MiddlewareHandler>[0]) => string[]): MiddlewareHandler {
+export function rateLimit(
+  limiter: FixedWindow,
+  keyOf: (c: Parameters<MiddlewareHandler>[0]) => string[],
+): MiddlewareHandler {
   return async (c, next) => {
     for (const key of keyOf(c)) {
       const r = limiter.take(key);
       if (r.remaining < 0) {
         c.header("retry-after", String(Math.ceil(r.resetMs / 1000)));
-        return c.json({ error: "rate_limited", message: "Too many requests; slow down." }, 429);
+        return c.json(
+          { error: "rate_limited", message: "Too many requests; slow down." },
+          429,
+        );
       }
       c.header("x-ratelimit-remaining", String(r.remaining));
     }

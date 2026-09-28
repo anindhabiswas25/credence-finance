@@ -4,7 +4,15 @@ import { serve } from "@hono/node-server";
 import { Hono } from "hono";
 import { keccak256, stringToHex, type Hex } from "viem";
 import { toAssetId } from "../src/app.ts";
-import { StreamHub, attachStream, wholeBlocks, type ClockEvent, type PriceEvent, type Socket, type StreamSource } from "../src/stream.ts";
+import {
+  StreamHub,
+  attachStream,
+  wholeBlocks,
+  type ClockEvent,
+  type PriceEvent,
+  type Socket,
+  type StreamSource,
+} from "../src/stream.ts";
 
 const NVDA = keccak256(stringToHex("NVDA:XNAS")) as Hex;
 const AAPL = keccak256(stringToHex("AAPL:XNAS")) as Hex;
@@ -23,7 +31,16 @@ class FakeSource implements StreamSource {
     return this.prices.filter((e) => e.block > b).slice(0, limit);
   }
 }
-const price = (assetId: Hex, block: bigint, seq: bigint): PriceEvent => ({ assetId, feed: "A", seq, kind: 0, price: 181_330_000_000_000_000_000n, observedAt: 1_791_380_000n, status: 2, block });
+const price = (assetId: Hex, block: bigint, seq: bigint): PriceEvent => ({
+  assetId,
+  feed: "A",
+  seq,
+  kind: 0,
+  price: 181_330_000_000_000_000_000n,
+  observedAt: 1_791_380_000n,
+  status: 2,
+  block,
+});
 class FakeSocket implements Socket {
   sent: Record<string, unknown>[] = [];
   closed = false;
@@ -44,20 +61,72 @@ describe("StreamHub", () => {
     const onlyAapl = new FakeSocket();
     const clockOnly = new FakeSocket();
     for (const s of [all, onlyAapl, clockOnly]) hub.add(s);
-    hub.message(all, JSON.stringify({ op: "subscribe", channels: ["clock", "prices"] }));
-    hub.message(onlyAapl, JSON.stringify({ op: "subscribe", channels: ["prices"], assets: ["AAPL:XNAS"] }));
-    hub.message(clockOnly, JSON.stringify({ op: "subscribe", channels: ["clock"] }));
-    expect(onlyAapl.sent[0]).toEqual({ type: "subscribed", channels: ["prices"], assets: [AAPL] });
+    hub.message(
+      all,
+      JSON.stringify({ op: "subscribe", channels: ["clock", "prices"] }),
+    );
+    hub.message(
+      onlyAapl,
+      JSON.stringify({
+        op: "subscribe",
+        channels: ["prices"],
+        assets: ["AAPL:XNAS"],
+      }),
+    );
+    hub.message(
+      clockOnly,
+      JSON.stringify({ op: "subscribe", channels: ["clock"] }),
+    );
+    expect(onlyAapl.sent[0]).toEqual({
+      type: "subscribed",
+      channels: ["prices"],
+      assets: [AAPL],
+    });
     await hub.poll();
     src.prices.push(price(NVDA, 11n, 2n), price(AAPL, 12n, 7n));
-    src.clock.push({ assetId: NVDA, from: 2, to: 3, closureId: 4n, block: 12n, ts: 1_791_379_801n });
+    src.clock.push({
+      assetId: NVDA,
+      from: 2,
+      to: 3,
+      closureId: 4n,
+      block: 12n,
+      ts: 1_791_379_801n,
+    });
     await hub.poll();
     const frames = (s: FakeSocket) => s.sent.filter((f) => "channel" in f);
-    expect(frames(all).map((f) => f.channel)).toEqual(["clock", "prices", "prices"]);
-    expect(frames(onlyAapl)).toEqual([
-      { channel: "prices", data: { assetId: AAPL, feed: "A", seq: "7", kind: 0, price: { raw: "181330000000000000000", formatted: "181.33" }, observedAt: 1_791_380_000, status: 2, block: "12" } },
+    expect(frames(all).map((f) => f.channel)).toEqual([
+      "clock",
+      "prices",
+      "prices",
     ]);
-    expect(frames(clockOnly)).toEqual([{ channel: "clock", data: { assetId: NVDA, from: { code: 2, name: "CLOSED" }, to: { code: 3, name: "REOPEN" }, closureId: "4", block: "12", ts: 1_791_379_801 } }]);
+    expect(frames(onlyAapl)).toEqual([
+      {
+        channel: "prices",
+        data: {
+          assetId: AAPL,
+          feed: "A",
+          seq: "7",
+          kind: 0,
+          price: { raw: "181330000000000000000", formatted: "181.33" },
+          observedAt: 1_791_380_000,
+          status: 2,
+          block: "12",
+        },
+      },
+    ]);
+    expect(frames(clockOnly)).toEqual([
+      {
+        channel: "clock",
+        data: {
+          assetId: NVDA,
+          from: { code: 2, name: "CLOSED" },
+          to: { code: 3, name: "REOPEN" },
+          closureId: "4",
+          block: "12",
+          ts: 1_791_379_801,
+        },
+      },
+    ]);
     await hub.poll(); // nothing new: nothing sent
     expect(frames(all)).toHaveLength(3);
   });
@@ -68,12 +137,31 @@ describe("StreamHub", () => {
     hub.add(s);
     hub.message(s, "not json");
     hub.message(s, JSON.stringify({ op: "subscribe", channels: ["auctions"] }));
-    hub.message(s, JSON.stringify({ op: "subscribe", channels: ["clock"], assets: ["nope"] }));
+    hub.message(
+      s,
+      JSON.stringify({
+        op: "subscribe",
+        channels: ["clock"],
+        assets: ["nope"],
+      }),
+    );
     hub.message(s, JSON.stringify({ op: "dance" }));
-    expect(s.sent.map((f) => f.type)).toEqual(["error", "error", "error", "error"]);
-    hub.message(s, JSON.stringify({ op: "subscribe", channels: ["clock", "prices"] }));
+    expect(s.sent.map((f) => f.type)).toEqual([
+      "error",
+      "error",
+      "error",
+      "error",
+    ]);
+    hub.message(
+      s,
+      JSON.stringify({ op: "subscribe", channels: ["clock", "prices"] }),
+    );
     hub.message(s, JSON.stringify({ op: "unsubscribe", channels: ["prices"] }));
-    expect(s.sent.at(-1)).toEqual({ type: "subscribed", channels: ["clock"], assets: null });
+    expect(s.sent.at(-1)).toEqual({
+      type: "subscribed",
+      channels: ["clock"],
+      assets: null,
+    });
     hub.remove(s);
     expect(hub.size()).toBe(0);
   });
@@ -89,7 +177,11 @@ describe("StreamHub", () => {
 describe("WS /v1/stream end to end (Node 24 global WebSocket client)", () => {
   it("upgrades, subscribes and receives a price pushed after connect", async () => {
     const src = new FakeSource();
-    const hub = new StreamHub(src, toAssetId, { pollMs: 20, batch: 500, maxAssets: 100 });
+    const hub = new StreamHub(src, toAssetId, {
+      pollMs: 20,
+      batch: 500,
+      maxAssets: 100,
+    });
     const app = new Hono();
     const inject = await attachStream(app, hub);
     const server = serve({ fetch: app.fetch, port: 0 });
@@ -100,14 +192,24 @@ describe("WS /v1/stream end to end (Node 24 global WebSocket client)", () => {
     try {
       const ws = new WebSocket(`ws://127.0.0.1:${port}/v1/stream`);
       const got: Record<string, unknown>[] = [];
-      ws.addEventListener("message", (e) => got.push(JSON.parse(String(e.data))));
+      ws.addEventListener("message", (e) =>
+        got.push(JSON.parse(String(e.data))),
+      );
       await new Promise((r) => ws.addEventListener("open", r, { once: true }));
-      ws.send(JSON.stringify({ op: "subscribe", channels: ["prices"], assets: [NVDA] }));
+      ws.send(
+        JSON.stringify({
+          op: "subscribe",
+          channels: ["prices"],
+          assets: [NVDA],
+        }),
+      );
       await until(() => got.some((f) => f.type === "subscribed"));
       src.prices.push(price(NVDA, 11n, 3n), price(AAPL, 11n, 4n));
       await until(() => got.some((f) => f.channel === "prices"));
       expect(got.filter((f) => f.channel === "prices")).toHaveLength(1);
-      expect((got.find((f) => f.channel === "prices")!.data as { seq: string }).seq).toBe("3");
+      expect(
+        (got.find((f) => f.channel === "prices")!.data as { seq: string }).seq,
+      ).toBe("3");
       ws.close();
       await until(() => hub.size() === 0);
     } finally {

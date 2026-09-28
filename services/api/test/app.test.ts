@@ -47,15 +47,39 @@ function app(overrides: Partial<Config> = {}, nowMs = T0 * 1000) {
         updatedAt: 1_791_379_805n,
       },
     ],
-    transitions: { [NVDA]: [{ from: 3, to: 0, closureId: 7n, ts: 1_791_380_100n, block: 1300n }] },
+    transitions: {
+      [NVDA]: [
+        { from: 3, to: 0, closureId: 7n, ts: 1_791_380_100n, block: 1300n },
+      ],
+    },
     prices: {
       [NVDA]: [
-        { feed: "A", seq: 99n, kind: 0, price: 181_750_000_000_000_000_000n, observedAt: BigInt(T0 - 5), block: 1400n },
-        { feed: "B", seq: 51n, kind: 0, price: 181_760_000_000_000_000_000n, observedAt: BigInt(T0 - 90), block: 1390n },
+        {
+          feed: "A",
+          seq: 99n,
+          kind: 0,
+          price: 181_750_000_000_000_000_000n,
+          observedAt: BigInt(T0 - 5),
+          block: 1400n,
+        },
+        {
+          feed: "B",
+          seq: 51n,
+          kind: 0,
+          price: 181_760_000_000_000_000_000n,
+          observedAt: BigInt(T0 - 90),
+          block: 1390n,
+        },
       ],
     },
   });
-  return createApp({ config: { ...config, ...overrides }, clock: repos.clock, auth: repos.auth, now: () => nowMs, nextBoundaries: () => [{ at: T0 + 60, kind: "bell" }] });
+  return createApp({
+    config: { ...config, ...overrides },
+    clock: repos.clock,
+    auth: repos.auth,
+    now: () => nowMs,
+    nextBoundaries: () => [{ at: T0 + 60, kind: "bell" }],
+  });
 }
 
 describe("health and OpenAPI", () => {
@@ -67,10 +91,19 @@ describe("health and OpenAPI", () => {
   it("publishes an OpenAPI 3.1 document with every route", async () => {
     const r = await app().request("/v1/openapi.json");
     expect(r.status).toBe(200);
-    const doc = (await r.json()) as { openapi: string; paths: Record<string, unknown> };
+    const doc = (await r.json()) as {
+      openapi: string;
+      paths: Record<string, unknown>;
+    };
     expect(doc.openapi).toBe("3.1.0");
     expect(Object.keys(doc.paths)).toEqual(
-      expect.arrayContaining(["/v1/clock/{assetId}", "/v1/auth/siwe/nonce", "/v1/auth/siwe/verify", "/v1/auth/session", "/v1/auth/logout"]),
+      expect.arrayContaining([
+        "/v1/clock/{assetId}",
+        "/v1/auth/siwe/nonce",
+        "/v1/auth/siwe/verify",
+        "/v1/auth/session",
+        "/v1/auth/logout",
+      ]),
     );
   });
 });
@@ -83,8 +116,12 @@ describe("GET /metrics", () => {
     await a.request("/v1/clock/nope!");
     await a.request("/wp-admin/xyz");
     const body = await (await a.request("/metrics")).text();
-    expect(body).toMatch(/credence_api_http_requests_total\{method="GET",route="\/healthz",status="200"\} 1/);
-    expect(body).toMatch(/credence_api_http_request_duration_seconds_count\{method="GET",route="\/v1\/clock\/:assetId",status="200"\} 1/);
+    expect(body).toMatch(
+      /credence_api_http_requests_total\{method="GET",route="\/healthz",status="200"\} 1/,
+    );
+    expect(body).toMatch(
+      /credence_api_http_request_duration_seconds_count\{method="GET",route="\/v1\/clock\/:assetId",status="200"\} 1/,
+    );
     expect(body).toMatch(/route="\/v1\/clock\/:assetId",status="400"/);
     expect(body).toMatch(/route="unmatched",status="404"/);
     expect(body).not.toMatch(/wp-admin/);
@@ -115,11 +152,22 @@ describe("GET /v1/clock/:assetId", () => {
     expect(b.assetId).toBe(NVDA);
     expect(b.state).toEqual({ code: 0, name: "REGULAR" });
     expect(b.closureType).toEqual({ code: 2, name: "WEEKEND" });
-    expect(b.refPrice).toEqual({ raw: "180000000000000000000", formatted: "180" });
+    expect(b.refPrice).toEqual({
+      raw: "180000000000000000000",
+      formatted: "180",
+    });
     expect(b.openPrint.formatted).toBe("181.5");
-    expect(b.transitions[0]).toMatchObject({ from: { name: "REOPEN" }, to: { name: "REGULAR" } });
+    expect(b.transitions[0]).toMatchObject({
+      from: { name: "REOPEN" },
+      to: { name: "REGULAR" },
+    });
     expect(b.feeds).toEqual([
-      expect.objectContaining({ feed: "A", seq: "99", ageSeconds: 5, stale: false }),
+      expect.objectContaining({
+        feed: "A",
+        seq: "99",
+        ageSeconds: 5,
+        stale: false,
+      }),
       expect.objectContaining({ feed: "B", ageSeconds: 90, stale: true }),
     ]);
     expect(b.next).toEqual([{ at: T0 + 60, kind: "bell" }]);
@@ -133,10 +181,17 @@ describe("GET /v1/clock/:assetId", () => {
 });
 
 describe("SIWE sessions", () => {
-  const account = privateKeyToAccount("0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d");
+  const account = privateKeyToAccount(
+    "0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d",
+  );
 
-  async function signIn(a: ReturnType<typeof app>, opts: { domain?: string; chainId?: number; reuse?: string } = {}) {
-    const { nonce } = (await (await a.request("/v1/auth/siwe/nonce", { method: "POST" })).json()) as { nonce: string };
+  async function signIn(
+    a: ReturnType<typeof app>,
+    opts: { domain?: string; chainId?: number; reuse?: string } = {},
+  ) {
+    const { nonce } = (await (
+      await a.request("/v1/auth/siwe/nonce", { method: "POST" })
+    ).json()) as { nonce: string };
     const message = createSiweMessage({
       address: account.address,
       chainId: opts.chainId ?? 412346,
@@ -164,13 +219,26 @@ describe("SIWE sessions", () => {
     expect(cookie).toMatch(/HttpOnly/);
     expect(cookie).toMatch(/Secure/);
     expect(cookie).toMatch(/SameSite=Lax/);
-    const s = await a.request("/v1/auth/session", { headers: { cookie: cookie.split(";")[0]! } });
+    const s = await a.request("/v1/auth/session", {
+      headers: { cookie: cookie.split(";")[0]! },
+    });
     expect(s.status).toBe(200);
-    expect(((await s.json()) as { address: string }).address).toBe(account.address);
+    expect(((await s.json()) as { address: string }).address).toBe(
+      account.address,
+    );
     // logout ends it
-    const out = await a.request("/v1/auth/logout", { method: "POST", headers: { cookie: cookie.split(";")[0]! } });
+    const out = await a.request("/v1/auth/logout", {
+      method: "POST",
+      headers: { cookie: cookie.split(";")[0]! },
+    });
     expect(out.status).toBe(204);
-    expect((await a.request("/v1/auth/session", { headers: { cookie: cookie.split(";")[0]! } })).status).toBe(401);
+    expect(
+      (
+        await a.request("/v1/auth/session", {
+          headers: { cookie: cookie.split(";")[0]! },
+        })
+      ).status,
+    ).toBe(401);
   });
 
   it("rejects a reused nonce, a wrong domain, a wrong chain and a forged cookie", async () => {
@@ -180,18 +248,27 @@ describe("SIWE sessions", () => {
     const replay = await a.request("/v1/auth/siwe/verify", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ message: first.message, signature: first.signature }),
+      body: JSON.stringify({
+        message: first.message,
+        signature: first.signature,
+      }),
     });
     expect(replay.status).toBe(401);
     expect((await signIn(a, { domain: "evil.example" })).r.status).toBe(401);
     expect((await signIn(a, { chainId: 1 })).r.status).toBe(401);
-    const forged = await a.request("/v1/auth/session", { headers: { cookie: "credence_session=00000000-0000-0000-0000-000000000000.AAAA" } });
+    const forged = await a.request("/v1/auth/session", {
+      headers: {
+        cookie: "credence_session=00000000-0000-0000-0000-000000000000.AAAA",
+      },
+    });
     expect(forged.status).toBe(401);
   });
 
   it("rejects a signature from another key", async () => {
     const a = app();
-    const { nonce } = (await (await a.request("/v1/auth/siwe/nonce", { method: "POST" })).json()) as { nonce: string };
+    const { nonce } = (await (
+      await a.request("/v1/auth/siwe/nonce", { method: "POST" })
+    ).json()) as { nonce: string };
     const message = createSiweMessage({
       address: account.address,
       chainId: 412346,
@@ -200,11 +277,16 @@ describe("SIWE sessions", () => {
       uri: "https://testnet.credence.finance",
       version: "1",
     });
-    const other = privateKeyToAccount("0x5de4111afa1a4b94908f83103eb1f1706367c2e68ca870fc3fb9a804cdab365a");
+    const other = privateKeyToAccount(
+      "0x5de4111afa1a4b94908f83103eb1f1706367c2e68ca870fc3fb9a804cdab365a",
+    );
     const r = await a.request("/v1/auth/siwe/verify", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ message, signature: await other.signMessage({ message }) }),
+      body: JSON.stringify({
+        message,
+        signature: await other.signMessage({ message }),
+      }),
     });
     expect(r.status).toBe(401);
   });
@@ -221,30 +303,58 @@ describe("SIWE sessions", () => {
 
 describe("CORS and rate limits", () => {
   it("allows only the configured origin, with credentials", async () => {
-    const ok = await app().request("/v1/clock/NVDA:XNAS", { headers: { origin: "https://testnet.credence.finance" } });
-    expect(ok.headers.get("access-control-allow-origin")).toBe("https://testnet.credence.finance");
+    const ok = await app().request("/v1/clock/NVDA:XNAS", {
+      headers: { origin: "https://testnet.credence.finance" },
+    });
+    expect(ok.headers.get("access-control-allow-origin")).toBe(
+      "https://testnet.credence.finance",
+    );
     expect(ok.headers.get("access-control-allow-credentials")).toBe("true");
-    const bad = await app().request("/v1/clock/NVDA:XNAS", { headers: { origin: "https://evil.example" } });
+    const bad = await app().request("/v1/clock/NVDA:XNAS", {
+      headers: { origin: "https://evil.example" },
+    });
     expect(bad.headers.get("access-control-allow-origin")).toBeNull();
   });
 
   it("returns 429 past the per-IP limit", async () => {
     const a = app({ rateLimitPerMin: 3 });
-    const hit = () => a.request("/v1/clock/NVDA:XNAS", { headers: { "x-forwarded-for": "203.0.113.9" } });
+    const hit = () =>
+      a.request("/v1/clock/NVDA:XNAS", {
+        headers: { "x-forwarded-for": "203.0.113.9" },
+      });
     for (let i = 0; i < 3; i++) expect((await hit()).status).toBe(200);
     const r = await hit();
     expect(r.status).toBe(429);
     expect(r.headers.get("retry-after")).toBeTruthy();
     // another client is unaffected
-    expect((await a.request("/v1/clock/NVDA:XNAS", { headers: { "x-forwarded-for": "198.51.100.1" } })).status).toBe(200);
+    expect(
+      (
+        await a.request("/v1/clock/NVDA:XNAS", {
+          headers: { "x-forwarded-for": "198.51.100.1" },
+        })
+      ).status,
+    ).toBe(200);
   });
 });
 
 describe("calendar boundaries", () => {
   it("lists the next boundaries in order, deduplicated", () => {
     const open = 1_791_379_800;
-    const s = [{ extOpen: open - 48_600, open, close: open + 23_400, extClose: open + 37_800, closureTypeAfter: 1 as const }];
+    const s = [
+      {
+        extOpen: open - 48_600,
+        open,
+        close: open + 23_400,
+        extClose: open + 37_800,
+        closureTypeAfter: 1 as const,
+      },
+    ];
     const b = boundariesAfter(s, open + 1);
-    expect(b.map((x) => x.kind)).toEqual(["bellWindow", "bell", "close", "extClose"]);
+    expect(b.map((x) => x.kind)).toEqual([
+      "bellWindow",
+      "bell",
+      "close",
+      "extClose",
+    ]);
   });
 });

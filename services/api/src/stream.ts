@@ -53,7 +53,10 @@ interface Sub {
 }
 
 /** A full batch may end mid-block: drop the trailing block (the next poll re-reads it whole). */
-export function wholeBlocks<T extends { block: bigint }>(rows: T[], batch: number): T[] {
+export function wholeBlocks<T extends { block: bigint }>(
+  rows: T[],
+  batch: number,
+): T[] {
   if (rows.length < batch || rows.length === 0) return rows;
   const last = rows[rows.length - 1]!.block;
   const cut = rows.filter((r) => r.block < last);
@@ -74,7 +77,11 @@ export class StreamHub {
   constructor(
     source: StreamSource,
     toAssetId: (s: string) => Hex | undefined,
-    opts: { pollMs: number; batch: number; maxAssets: number } = { pollMs: 1000, batch: 500, maxAssets: 100 },
+    opts: { pollMs: number; batch: number; maxAssets: number } = {
+      pollMs: 1000,
+      batch: 500,
+      maxAssets: 100,
+    },
   ) {
     this.source = source;
     this.toAssetId = toAssetId;
@@ -105,13 +112,24 @@ export class StreamHub {
     }
     const channels = Array.isArray(m.channels) ? m.channels : [];
     const bad = channels.find((c) => !CHANNELS.includes(c as Channel));
-    if (bad !== undefined) return this.err(ws, `unknown channel ${JSON.stringify(bad)} (available: ${CHANNELS.join(", ")})`);
+    if (bad !== undefined)
+      return this.err(
+        ws,
+        `unknown channel ${JSON.stringify(bad)} (available: ${CHANNELS.join(", ")})`,
+      );
     if (m.op === "subscribe") {
       for (const c of channels) sub.channels.add(c as Channel);
       if (m.assets !== undefined) {
-        if (!Array.isArray(m.assets) || m.assets.length > this.opts.maxAssets) return this.err(ws, `assets must be an array of at most ${this.opts.maxAssets}`);
-        const ids = m.assets.map((a) => (typeof a === "string" ? this.toAssetId(a) : undefined));
-        if (ids.some((x) => !x)) return this.err(ws, "assets must be bytes32 ids or TICKER:MIC");
+        if (!Array.isArray(m.assets) || m.assets.length > this.opts.maxAssets)
+          return this.err(
+            ws,
+            `assets must be an array of at most ${this.opts.maxAssets}`,
+          );
+        const ids = m.assets.map((a) =>
+          typeof a === "string" ? this.toAssetId(a) : undefined,
+        );
+        if (ids.some((x) => !x))
+          return this.err(ws, "assets must be bytes32 ids or TICKER:MIC");
         sub.assets = new Set(ids as string[]);
       }
     } else if (m.op === "unsubscribe") {
@@ -119,7 +137,13 @@ export class StreamHub {
     } else {
       return this.err(ws, 'op must be "subscribe" or "unsubscribe"');
     }
-    ws.send(JSON.stringify({ type: "subscribed", channels: [...sub.channels], assets: sub.assets ? [...sub.assets] : null }));
+    ws.send(
+      JSON.stringify({
+        type: "subscribed",
+        channels: [...sub.channels],
+        assets: sub.assets ? [...sub.assets] : null,
+      }),
+    );
   }
 
   private err(ws: Socket, message: string) {
@@ -147,8 +171,12 @@ export class StreamHub {
       return;
     }
     const [clock, prices] = await Promise.all([
-      this.source.clockSince(this.cursorClock, this.opts.batch).then((r) => wholeBlocks(r, this.opts.batch)),
-      this.source.pricesSince(this.cursorPrices, this.opts.batch).then((r) => wholeBlocks(r, this.opts.batch)),
+      this.source
+        .clockSince(this.cursorClock, this.opts.batch)
+        .then((r) => wholeBlocks(r, this.opts.batch)),
+      this.source
+        .pricesSince(this.cursorPrices, this.opts.batch)
+        .then((r) => wholeBlocks(r, this.opts.batch)),
     ]);
     for (const e of clock) {
       this.broadcast("clock", e.assetId, {
@@ -210,7 +238,11 @@ export async function attachStream(app: Hono<any, any, any>, hub: StreamHub) {
   const { createNodeWebSocket } = await import("@hono/node-ws");
   const { injectWebSocket, upgradeWebSocket } = createNodeWebSocket({ app });
   const sockets = new WeakMap<object, Socket>();
-  const of = (ws: { raw?: unknown; send: (d: string) => void; close: (c?: number, r?: string) => void }) => {
+  const of = (ws: {
+    raw?: unknown;
+    send: (d: string) => void;
+    close: (c?: number, r?: string) => void;
+  }) => {
     const key = (ws.raw ?? ws) as object;
     let s = sockets.get(key);
     if (!s) {
@@ -223,7 +255,11 @@ export async function attachStream(app: Hono<any, any, any>, hub: StreamHub) {
     "/v1/stream",
     upgradeWebSocket(() => ({
       onOpen: (_e, ws) => hub.add(of(ws)),
-      onMessage: (e, ws) => hub.message(of(ws), typeof e.data === "string" ? e.data : String(e.data)),
+      onMessage: (e, ws) =>
+        hub.message(
+          of(ws),
+          typeof e.data === "string" ? e.data : String(e.data),
+        ),
       onClose: (_e, ws) => hub.remove(of(ws)),
       onError: (_e, ws) => hub.remove(of(ws)),
     })),

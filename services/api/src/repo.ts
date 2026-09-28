@@ -4,6 +4,7 @@ import postgres from "postgres";
 import { getAddress, type Address, type Hex } from "viem";
 import type { AccountView, MeRepo, Pref, PushSub } from "./me.ts";
 import type { StreamSource } from "./stream.ts";
+import { pgRiskTransferRepo } from "./rt.ts";
 
 export interface ClockRow {
   assetId: Hex;
@@ -118,23 +119,39 @@ export interface AuthRepo {
   putNonce(nonce: string, expiresAt: Date): Promise<void>;
   /** Delete and return whether an unexpired nonce existed (single use). */
   takeNonce(nonce: string, now: Date): Promise<boolean>;
-  createSession(id: string, address: Address, nonce: string, expiresAt: Date): Promise<void>;
-  getSession(id: string, now: Date): Promise<{ address: Address; expiresAt: Date } | undefined>;
+  createSession(
+    id: string,
+    address: Address,
+    nonce: string,
+    expiresAt: Date,
+  ): Promise<void>;
+  getSession(
+    id: string,
+    now: Date,
+  ): Promise<{ address: Address; expiresAt: Date } | undefined>;
   deleteSession(id: string): Promise<void>;
 }
 
 const hexToBuf = (h: string) => Buffer.from(h.slice(2), "hex");
 const bufToHex = (b: Buffer | Uint8Array | string): Hex =>
-  typeof b === "string" ? (b as Hex) : (`0x${Buffer.from(b).toString("hex")}` as Hex);
-const big = (v: unknown): bigint | null => (v === null || v === undefined ? null : BigInt(v as string));
+  typeof b === "string"
+    ? (b as Hex)
+    : (`0x${Buffer.from(b).toString("hex")}` as Hex);
+const big = (v: unknown): bigint | null =>
+  v === null || v === undefined ? null : BigInt(v as string);
 
 export function pgRepos(databaseUrl: string, indexerSchema: string) {
-  const sql = postgres(databaseUrl, { max: 10, idle_timeout: 30, types: { bigint: postgres.BigInt } });
+  const sql = postgres(databaseUrl, {
+    max: 10,
+    idle_timeout: 30,
+    types: { bigint: postgres.BigInt },
+  });
   const ix = (t: string) => sql(`${indexerSchema}.${t}`);
 
   const clock: ClockRepo = {
     async clock(assetId) {
-      const [r] = await sql`select * from ${ix("clock_state")} where asset_id = ${assetId}`;
+      const [r] =
+        await sql`select * from ${ix("clock_state")} where asset_id = ${assetId}`;
       if (!r) return undefined;
       return {
         assetId: bufToHex(r.asset_id),
@@ -153,12 +170,20 @@ export function pgRepos(databaseUrl: string, indexerSchema: string) {
       };
     },
     async transitions(assetId, limit) {
-      const rows = await sql`select "from", "to", closure_id, ts, block from ${ix("clock_transition")}
+      const rows =
+        await sql`select "from", "to", closure_id, ts, block from ${ix("clock_transition")}
                              where asset_id = ${assetId} order by ts desc, block desc limit ${limit}`;
-      return rows.map((r) => ({ from: Number(r.from), to: Number(r.to), closureId: BigInt(r.closure_id), ts: BigInt(r.ts), block: BigInt(r.block) }));
+      return rows.map((r) => ({
+        from: Number(r.from),
+        to: Number(r.to),
+        closureId: BigInt(r.closure_id),
+        ts: BigInt(r.ts),
+        block: BigInt(r.block),
+      }));
     },
     async latestLive(assetId) {
-      const rows = await sql`select distinct on (feed) feed, seq, kind, price, observed_at, block from ${ix("price_point")}
+      const rows =
+        await sql`select distinct on (feed) feed, seq, kind, price, observed_at, block from ${ix("price_point")}
                              where asset_id = ${assetId} and kind = 0 order by feed, observed_at desc, seq desc`;
       return rows.map((r) => ({
         feed: String(r.feed),
@@ -179,7 +204,8 @@ export function pgRepos(databaseUrl: string, indexerSchema: string) {
       await sql`insert into app.siwe_nonce (nonce, expires_at) values (${nonce}, ${expiresAt})`;
     },
     async takeNonce(nonce, now) {
-      const rows = await sql`delete from app.siwe_nonce where nonce = ${nonce} returning expires_at`;
+      const rows =
+        await sql`delete from app.siwe_nonce where nonce = ${nonce} returning expires_at`;
       await sql`delete from app.siwe_nonce where expires_at < ${now}`;
       return rows.length === 1 && new Date(rows[0]!.expires_at) > now;
     },
@@ -191,8 +217,14 @@ export function pgRepos(databaseUrl: string, indexerSchema: string) {
       });
     },
     async getSession(id, now) {
-      const [r] = await sql`select address, expires_at from app.siwe_session where id = ${id} and expires_at > ${now}`;
-      return r ? { address: getAddress(bufToHex(r.address)), expiresAt: new Date(r.expires_at) } : undefined;
+      const [r] =
+        await sql`select address, expires_at from app.siwe_session where id = ${id} and expires_at > ${now}`;
+      return r
+        ? {
+            address: getAddress(bufToHex(r.address)),
+            expiresAt: new Date(r.expires_at),
+          }
+        : undefined;
     },
     async deleteSession(id) {
       await sql`delete from app.siwe_session where id = ${id}`;
@@ -224,14 +256,18 @@ export function pgRepos(databaseUrl: string, indexerSchema: string) {
   });
   const core: CoreRepo = {
     async markets() {
-      return (await sql`select * from ${ix("market")} order by created_block, market_id`).map(toMarket);
+      return (
+        await sql`select * from ${ix("market")} order by created_block, market_id`
+      ).map(toMarket);
     },
     async market(id) {
-      const [r] = await sql`select * from ${ix("market")} where market_id = ${id}`;
+      const [r] =
+        await sql`select * from ${ix("market")} where market_id = ${id}`;
       return r ? toMarket(r) : undefined;
     },
     async positionsOf(owner) {
-      const rows = await sql`select * from ${ix("position")} where owner = ${owner.toLowerCase()} order by market_id`;
+      const rows =
+        await sql`select * from ${ix("position")} where owner = ${owner.toLowerCase()} order by market_id`;
       return rows.map((r) => ({
         marketId: hx(r.market_id),
         owner: hx(r.owner) as Address,
@@ -247,7 +283,8 @@ export function pgRepos(databaseUrl: string, indexerSchema: string) {
       }));
     },
     async vault(stack) {
-      const [r] = await sql`select * from ${ix("vault_state")} where stack = ${stack}`;
+      const [r] =
+        await sql`select * from ${ix("vault_state")} where stack = ${stack}`;
       if (!r) return undefined;
       return {
         stack: String(r.stack),
@@ -263,7 +300,8 @@ export function pgRepos(databaseUrl: string, indexerSchema: string) {
       };
     },
     async openRequests(stack, limit) {
-      const rows = await sql`select request_id, owner, shares, assets, status, requested_at from ${ix("vault_request")}
+      const rows =
+        await sql`select request_id, owner, shares, assets, status, requested_at from ${ix("vault_request")}
                              where stack = ${stack} and status = 'requested' order by request_id limit ${limit}`;
       return rows.map((r) => ({
         requestId: BigInt(r.request_id),
@@ -281,24 +319,43 @@ export function pgRepos(databaseUrl: string, indexerSchema: string) {
     tx`insert into app.account (address) values (${addr(a)}) on conflict (address) do nothing`;
   const me: MeRepo = {
     async account(a) {
-      const [acct] = await sql`select email, email_verified_at, telegram_chat_id, testnet_attested_at from app.account where address = ${addr(a)}`;
-      const push = await sql`select endpoint from app.push_subscription where address = ${addr(a)} order by id`;
-      const prefs = await sql`select event, channel, enabled from app.notification_pref where address = ${addr(a)}`;
-      const [al] = await sql`select status, tx_hash from app.allowlist_request where address = ${addr(a)}`;
+      const [acct] =
+        await sql`select email, email_verified_at, telegram_chat_id, testnet_attested_at from app.account where address = ${addr(a)}`;
+      const push =
+        await sql`select endpoint from app.push_subscription where address = ${addr(a)} order by id`;
+      const prefs =
+        await sql`select event, channel, enabled from app.notification_pref where address = ${addr(a)}`;
+      const [al] =
+        await sql`select status, tx_hash from app.allowlist_request where address = ${addr(a)}`;
       return {
         email: acct?.email ?? null,
         emailVerified: !!acct?.email_verified_at,
         telegramChatId: acct?.telegram_chat_id ?? null,
         push: push.map((r) => ({ endpoint: String(r.endpoint) })),
-        prefs: prefs.map((r) => ({ event: r.event, channel: r.channel, enabled: Boolean(r.enabled) }) as Pref),
-        testnetAttestedAt: acct?.testnet_attested_at ? new Date(acct.testnet_attested_at) : null,
-        allowlist: al ? { status: String(al.status), txHash: al.tx_hash ? bufToHex(al.tx_hash) : null } : null,
+        prefs: prefs.map(
+          (r) =>
+            ({
+              event: r.event,
+              channel: r.channel,
+              enabled: Boolean(r.enabled),
+            }) as Pref,
+        ),
+        testnetAttestedAt: acct?.testnet_attested_at
+          ? new Date(acct.testnet_attested_at)
+          : null,
+        allowlist: al
+          ? {
+              status: String(al.status),
+              txHash: al.tx_hash ? bufToHex(al.tx_hash) : null,
+            }
+          : null,
       } satisfies AccountView;
     },
     async setEmail(a, email, tokenHash, expiresAt) {
       return sql.begin(async (tx) => {
         await ensure(tx, a);
-        const [cur] = await tx`select email from app.account where address = ${addr(a)} for update`;
+        const [cur] =
+          await tx`select email from app.account where address = ${addr(a)} for update`;
         if ((cur?.email ?? null) === email) return false;
         await tx`update app.account set email = ${email}, email_verified_at = null where address = ${addr(a)}`;
         await tx`delete from app.email_verification where address = ${addr(a)}`;
@@ -310,9 +367,11 @@ export function pgRepos(databaseUrl: string, indexerSchema: string) {
     },
     async verifyEmail(tokenHash, now) {
       return sql.begin(async (tx) => {
-        const [v] = await tx`delete from app.email_verification where token_hash = ${tokenHash} returning address, email, expires_at`;
+        const [v] =
+          await tx`delete from app.email_verification where token_hash = ${tokenHash} returning address, email, expires_at`;
         if (!v || new Date(v.expires_at) <= now) return null;
-        const r = await tx`update app.account set email_verified_at = ${now} where address = ${v.address} and email = ${v.email} returning address`;
+        const r =
+          await tx`update app.account set email_verified_at = ${now} where address = ${v.address} and email = ${v.email} returning address`;
         return r[0] ? getAddress(bufToHex(r[0].address)) : null;
       });
     },
@@ -343,9 +402,11 @@ export function pgRepos(databaseUrl: string, indexerSchema: string) {
       return sql.begin(async (tx) => {
         await ensure(tx, a);
         await tx`update app.account set testnet_attested_at = coalesce(testnet_attested_at, ${now}) where address = ${addr(a)}`;
-        const ins = await tx`insert into app.allowlist_request (address, requested_at) values (${addr(a)}, ${now}) on conflict (address) do nothing returning status`;
+        const ins =
+          await tx`insert into app.allowlist_request (address, requested_at) values (${addr(a)}, ${now}) on conflict (address) do nothing returning status`;
         if (ins[0]) return { status: String(ins[0].status), created: true };
-        const [r] = await tx`select status from app.allowlist_request where address = ${addr(a)}`;
+        const [r] =
+          await tx`select status from app.allowlist_request where address = ${addr(a)}`;
         return { status: String(r!.status), created: false };
       });
     },
@@ -353,17 +414,27 @@ export function pgRepos(databaseUrl: string, indexerSchema: string) {
 
   const stream: StreamSource = {
     async head() {
-      const [r] = await sql`select greatest((select coalesce(max(block), 0) from ${ix("clock_transition")}),
+      const [r] =
+        await sql`select greatest((select coalesce(max(block), 0) from ${ix("clock_transition")}),
                                             (select coalesce(max(block), 0) from ${ix("price_point")})) as b`;
       return BigInt(r!.b);
     },
     async clockSince(block, limit) {
-      const rows = await sql`select asset_id, "from", "to", closure_id, block, ts from ${ix("clock_transition")}
+      const rows =
+        await sql`select asset_id, "from", "to", closure_id, block, ts from ${ix("clock_transition")}
                              where block > ${block.toString()} order by block, id limit ${limit}`;
-      return rows.map((r) => ({ assetId: hx(r.asset_id), from: Number(r.from), to: Number(r.to), closureId: BigInt(r.closure_id), block: BigInt(r.block), ts: BigInt(r.ts) }));
+      return rows.map((r) => ({
+        assetId: hx(r.asset_id),
+        from: Number(r.from),
+        to: Number(r.to),
+        closureId: BigInt(r.closure_id),
+        block: BigInt(r.block),
+        ts: BigInt(r.ts),
+      }));
     },
     async pricesSince(block, limit) {
-      const rows = await sql`select asset_id, feed, seq, kind, price, observed_at, status, block from ${ix("price_point")}
+      const rows =
+        await sql`select asset_id, feed, seq, kind, price, observed_at, status, block from ${ix("price_point")}
                              where block > ${block.toString()} order by block, feed, seq limit ${limit}`;
       return rows.map((r) => ({
         assetId: hx(r.asset_id),
@@ -378,7 +449,8 @@ export function pgRepos(databaseUrl: string, indexerSchema: string) {
     },
   };
 
-  return { clock, auth, core, me, stream, sql, close: () => sql.end() };
+  const rt = pgRiskTransferRepo(sql, ix);
+  return { clock, auth, core, me, rt, stream, sql, close: () => sql.end() };
 }
 
 /** In-memory repos (tests, and `API_MEMORY=1` demos). */
@@ -397,7 +469,9 @@ export function memoryRepos(
   const sessions = new Map<string, { address: Address; expiresAt: Date }>();
   const clock: ClockRepo = {
     async clock(id) {
-      return seed.clocks?.find((c) => c.assetId.toLowerCase() === id.toLowerCase());
+      return seed.clocks?.find(
+        (c) => c.assetId.toLowerCase() === id.toLowerCase(),
+      );
     },
     async transitions(id, limit) {
       return (seed.transitions?.[id.toLowerCase()] ?? []).slice(0, limit);
@@ -432,39 +506,86 @@ export function memoryRepos(
       return seed.markets ?? [];
     },
     async market(id) {
-      return seed.markets?.find((m) => m.marketId.toLowerCase() === id.toLowerCase());
+      return seed.markets?.find(
+        (m) => m.marketId.toLowerCase() === id.toLowerCase(),
+      );
     },
     async positionsOf(owner) {
-      return (seed.positions ?? []).filter((p) => p.owner.toLowerCase() === owner.toLowerCase());
+      return (seed.positions ?? []).filter(
+        (p) => p.owner.toLowerCase() === owner.toLowerCase(),
+      );
     },
     async vault(stack) {
       return seed.vaults?.find((v) => v.stack === stack);
     },
     async openRequests(stack, limit) {
-      return (seed.requests?.[stack] ?? []).filter((r) => r.status === "requested").slice(0, limit);
+      return (seed.requests?.[stack] ?? [])
+        .filter((r) => r.status === "requested")
+        .slice(0, limit);
     },
   };
-  const accounts = new Map<string, { email: string | null; verified: boolean; telegram: string | null; push: Map<string, PushSub>; prefs: Pref[]; attested: Date | null; allowlist: string | null }>();
+  const accounts = new Map<
+    string,
+    {
+      email: string | null;
+      verified: boolean;
+      telegram: string | null;
+      push: Map<string, PushSub>;
+      prefs: Pref[];
+      attested: Date | null;
+      allowlist: string | null;
+    }
+  >();
   const acct = (a: Address) => {
     const k = a.toLowerCase();
     let x = accounts.get(k);
-    if (!x) accounts.set(k, (x = { email: null, verified: false, telegram: null, push: new Map(), prefs: [], attested: null, allowlist: null }));
+    if (!x)
+      accounts.set(
+        k,
+        (x = {
+          email: null,
+          verified: false,
+          telegram: null,
+          push: new Map(),
+          prefs: [],
+          attested: null,
+          allowlist: null,
+        }),
+      );
     return x;
   };
-  const tokens = new Map<string, { address: Address; email: string; expiresAt: Date }>();
-  const jobs: { dedupeKey: string; address: Address; event: string; payload: object }[] = [];
+  const tokens = new Map<
+    string,
+    { address: Address; email: string; expiresAt: Date }
+  >();
+  const jobs: {
+    dedupeKey: string;
+    address: Address;
+    event: string;
+    payload: object;
+  }[] = [];
   const me: MeRepo = {
     async account(a) {
       const x = acct(a);
-      return { email: x.email, emailVerified: x.verified, telegramChatId: x.telegram, push: [...x.push.keys()].map((endpoint) => ({ endpoint })), prefs: x.prefs, testnetAttestedAt: x.attested, allowlist: x.allowlist ? { status: x.allowlist, txHash: null } : null };
+      return {
+        email: x.email,
+        emailVerified: x.verified,
+        telegramChatId: x.telegram,
+        push: [...x.push.keys()].map((endpoint) => ({ endpoint })),
+        prefs: x.prefs,
+        testnetAttestedAt: x.attested,
+        allowlist: x.allowlist ? { status: x.allowlist, txHash: null } : null,
+      };
     },
     async setEmail(a, email, tokenHash, expiresAt) {
       const x = acct(a);
       if (x.email === email) return false;
       x.email = email;
       x.verified = false;
-      for (const [k, v] of tokens) if (v.address.toLowerCase() === a.toLowerCase()) tokens.delete(k);
-      if (email && tokenHash) tokens.set(tokenHash.toString("hex"), { address: a, email, expiresAt });
+      for (const [k, v] of tokens)
+        if (v.address.toLowerCase() === a.toLowerCase()) tokens.delete(k);
+      if (email && tokenHash)
+        tokens.set(tokenHash.toString("hex"), { address: a, email, expiresAt });
       return true;
     },
     async verifyEmail(tokenHash, now) {
@@ -487,7 +608,13 @@ export function memoryRepos(
     },
     async setPrefs(a, prefs) {
       const x = acct(a);
-      for (const p of prefs) x.prefs = [...x.prefs.filter((q) => !(q.event === p.event && q.channel === p.channel)), p];
+      for (const p of prefs)
+        x.prefs = [
+          ...x.prefs.filter(
+            (q) => !(q.event === p.event && q.channel === p.channel),
+          ),
+          p,
+        ];
     },
     async enqueue(j) {
       if (!jobs.some((x) => x.dedupeKey === j.dedupeKey)) jobs.push(j);
