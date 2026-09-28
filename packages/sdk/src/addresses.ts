@@ -43,7 +43,7 @@ export const AddressBookSchema = z.object({
       markets: z.record(z.string(), bytes32),
     })
     .partial()
-    .optional(),
+    .nullish(), // null until a core stack is deployed (DeployCoreLocal)
   nav: z
     .object({
       market: address,
@@ -57,7 +57,7 @@ export const AddressBookSchema = z.object({
       markets: z.record(z.string(), bytes32),
     })
     .partial()
-    .optional(),
+    .nullish(), // null until a core stack is deployed (DeployCoreLocal)
   tokens: z.record(z.string(), address).optional(),
   /** Asset ids by ticker (local deployments list them; on testnet they are keccak256("TICKER:MIC")). */
   assetIds: z.record(z.string(), bytes32).optional(),
@@ -66,7 +66,7 @@ export const AddressBookSchema = z.object({
 export type AddressBook = z.infer<typeof AddressBookSchema>;
 
 /**
- * The local deploy script (contracts/script/DeployClockLocal.s.sol) writes a flat book
+ * Legacy (S1): the local deploy script used to write a flat book
  * (`{ chainId, startBlock, clock, calendar, feedA, … }`). Lift it into the §13.2 shape.
  */
 export function normalizeAddressBook(json: unknown): unknown {

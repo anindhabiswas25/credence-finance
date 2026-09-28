@@ -117,9 +117,9 @@ fn deploy_clock(rpc: &str, tag: &str) -> (Address, B256, Address) {
         serde_json::from_str(&std::fs::read_to_string(&out).unwrap()).unwrap();
     let _ = std::fs::remove_file(&out);
     (
-        v["clock"].as_str().unwrap().parse().unwrap(),
-        v["assetId_NVDA"].as_str().unwrap().parse().unwrap(),
-        v["feedA"].as_str().unwrap().parse().unwrap(),
+        v["shared"]["clock"].as_str().unwrap().parse().unwrap(),
+        v["assetIds"]["NVDA"].as_str().unwrap().parse().unwrap(),
+        v["shared"]["feedA"].as_str().unwrap().parse().unwrap(),
     )
 }
 

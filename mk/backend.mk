@@ -78,7 +78,7 @@ relayer-dev: ## Run the relayer on the devnode: 3 nodes + aggregator (VENDOR=rep
 	  ASSETS=$${ASSETS:-NVDA:XNAS,AAPL:XNAS} $(CARGO) run -q -p credence-relayer -- sample-replay --out target/replay-sample.jsonl; fi
 	CHAIN_ID=$${CHAIN_ID:-412346} RPC_URL=$${RPC_URL:-http://127.0.0.1:8547} VENDOR=$${VENDOR:-replay} \
 	  REPLAY_FILE=$${REPLAY_FILE:-target/replay-sample.jsonl} REPLAY_START_OFFSET_S=$${REPLAY_START_OFFSET_S:-4200} ASSETS=$${ASSETS:-NVDA:XNAS,AAPL:XNAS} \
-	  FEED_ADDRESS=$${FEED_ADDRESS:-$$(jq -r .feedA deployments/412346.local.json)} \
+	  FEED_ADDRESS=$${FEED_ADDRESS:-$$(jq -r .shared.feedA deployments/412346.local.json)} \
 	  $(CARGO) run -p credence-relayer -- run
 
 relayer-smoke: ## Live vendor smoke test (VENDOR=polygon|alpaca, keys in .env)

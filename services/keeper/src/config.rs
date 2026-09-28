@@ -29,7 +29,7 @@ pub fn venue_for(mic: &str) -> Result<&'static str> {
     })
 }
 
-/// `CLOCK_ADDRESS`, else `shared.clock` (§13.2) or `clock` (local deploy) from the address book.
+/// `CLOCK_ADDRESS`, else `shared.clock` (§13.2) from the address book.
 pub fn clock_address(chain_id: u64) -> Result<Address> {
     if let Some(a) = env::optional("CLOCK_ADDRESS") {
         return a.parse().context("CLOCK_ADDRESS");
@@ -50,7 +50,6 @@ pub fn clock_address(chain_id: u64) -> Result<Address> {
     )?;
     let s = v
         .pointer("/shared/clock")
-        .or_else(|| v.get("clock"))
         .and_then(|x| x.as_str())
         .context("no clock address in the address book")?;
     s.parse().context("clock address")

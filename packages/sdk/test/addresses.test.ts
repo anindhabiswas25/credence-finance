@@ -84,3 +84,21 @@ describe("ABIs (deployments/abis/v1)", () => {
     for (const f of ["processQueue", "requestRedeem", "queueHead", "pendingRedeemShares"]) expect(vault).toContain(f);
   });
 });
+
+describe("S2 address book (ADR-0105)", () => {
+  it("parses the nested book with null stacks and ignores the deprecated flat keys", () => {
+    const b = parseAddressBook({
+      chainId: 412346,
+      startBlock: 1,
+      clock: "0x0000000000000000000000000000000000000009",
+      shared: { calendar: "0x0000000000000000000000000000000000000001", clock: "0x0000000000000000000000000000000000000002", feedA: "0x0000000000000000000000000000000000000003", riskEngine: "0x0000000000000000000000000000000000000004" },
+      assetIds: { NVDA: "0x" + "22".repeat(32) },
+      equity: null,
+      nav: null,
+    });
+    expect(b.shared.clock).toBe("0x0000000000000000000000000000000000000002");
+    expect(b.shared.riskEngine).toBe("0x0000000000000000000000000000000000000004");
+    expect(b.equity ?? undefined).toBeUndefined();
+    expect(b.assetIds?.NVDA).toBe("0x" + "22".repeat(32));
+  });
+});
