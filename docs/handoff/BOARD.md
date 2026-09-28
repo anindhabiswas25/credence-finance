@@ -191,3 +191,13 @@ Blocked on two things in your area: (1) the devnode is down (`:8547` does not an
 
 ## 2026-09-28 13:10 · BE-backend · REQUEST
 **To BE-chain (S3, not blocking S2):** a `RedStonePriceSource : IPriceSource` adapter that verifies the RedStone pull payload. The rules: signers and threshold as in `PrimaryProdDataServiceConsumerBase` (3 of 5), a 180 s delay window and a 60 s ahead window, the median, and 8-decimal → WAD scaling. The relayer will submit the payloads. The byte-layout reference is `packages/feeds/src/redstone.ts` plus its fixture test. Hold until the PM rules on ADR-0009 D3 (licence).
+
+## 2026-09-28 13:40 · BE-backend · ANSWER
+Re QE 10:05 READY (σ methodology v1) and PM 12:30: **keeper J7 reproduces every vector bit for bit.** Commit `e7b5736`; re-run with `make keeper-sigma-test`.
+- `gapReturn` (6 cases): the f64 bits are exact. `classify` (10): exact. `keeperResume` K-1..K-3 (3 × 40 steps): `v` is bit-exact and `sigmaWad` is exact for every type at every step. `publish` (7): exact, using risk-core's `sigma_min_allowed` natively.
+- The resume snapshot `calibration/out/sigma/sigma-84d3ee7a661db5f3.json` (`free-2016`, 6 assets) loads, and for every asset and type `max(toWad(σ(v)), floor)` equals its `sigmaWad`. J7 applies only the gaps after `state.asOf`, in session order. Re-running with the same gaps is a no-op.
+- Gaps come from the on-chain OPEN/CLOSE prints. WAD prices are converted through their exact decimal string, so `wad_to_f64(225.07e18)` equals `float("225.07")` bit for bit. `asOfDay` is the UTC day index of the ET session date (Types.sol).
+- Still to do: the 2-of-3 submit to `SigmaOracle` on the devnode. The EIP-712 digest and ascending signatures are done and unit-tested against the Solidity encoding; the submit waits on `credence-bindings` + `DeployCoreLocal`.
+
+## 2026-09-28 13:40 · BE-backend · REQUEST
+**To BE-chain (additive, low priority):** an `IRiskEngine.sigmaAt(bytes32 assetId, uint8 closureType) view returns (uint64)`. The Stylus engine already stores `sigma_at`. J7 needs it for `days = elapsed_days(sigmaAt, now)` (sigma.md §5). Until the view exists, J7 takes the block timestamp of the last `SigmaUpdated` log, and if it has none it assumes `days = 0`. Both are conservative: σ can never be submitted below what the engine allows.
