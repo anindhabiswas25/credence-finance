@@ -51,6 +51,9 @@ class Engine(Protocol):
     def kinked_rate(self, u: int, r0: int, s1: int, s2: int, u_kink: int) -> int: ...
     def projected_debt(self, debt: int, rate: int, days: int) -> int: ...
     def sigma_min_allowed(self, current: int, days: int) -> int: ...
+    # ADR-0106 files, built by the same risk-core code that validates them (so the hashes cannot drift)
+    def build_set(self, asset: str, closure_type: int, z: list[int], meta: dict) -> dict: ...
+    def build_joint(self, columns: list[tuple[str, list[int]]], meta: dict) -> dict: ...
 
 
 class CliEngine:
@@ -119,6 +122,20 @@ class CliEngine:
 
     def sigma_min_allowed(self, current, days):
         return int(self._call("sigma-min-allowed", {"current": str(current), "days": days})["minAllowed"])
+
+    def build_set(self, asset, closure_type, z, meta):
+        return self._call("build-set", {"asset": asset, "closureType": int(closure_type), "z": [int(v) for v in z], "meta": meta})
+
+    def build_joint(self, columns, meta):
+        return self._call("build-joint", {"columns": [{"asset": a, "z": [int(v) for v in z]} for a, z in columns], "meta": meta})
+
+    def validate_file(self, path: Path) -> dict:
+        """`risk-cli validate-set <file>`: the ADR-0106 validator (a bundle validates every file it references)."""
+        r = subprocess.run([self.bin, "validate-set", str(path)], capture_output=True, text=True)
+        out = json.loads(r.stdout or "{}")
+        if r.returncode != 0 or not out.get("ok", False):
+            raise ValueError(f"validate-set {path}: {out or r.stderr}")
+        return out
 
 
 def default_engine() -> Engine:

@@ -30,7 +30,9 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - name: calibration env + risk-py (PyO3) into calibration/.venv
         run: make cal-install
-      - name: unit tests (σ vectors current, sets, gaps)
+      - name: risk-cli (engine math and the ADR-0106 builder/validator) into target/quant
+        run: make cal-risk-cli
+      - name: unit tests (σ vectors current, sets, gaps, engine)
         run: make cal-test
       - name: rebuild every output from the synthetic sample
         run: make cal-sample

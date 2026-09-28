@@ -1,12 +1,17 @@
-"""Scenario-set and joint-column files in BE-chain's format (the format ADR is BE-chain's; this module
-only serialises). Packing: 16 × int16 per uint256 word, lane 0 in the least-significant bits,
-two's complement (== risk-core `pack_i16`, PackedInt.sol)."""
+"""Scenario-set, joint-set and risk-bundle files in BE-chain's format (ADR-0106). The payload and both hashes
+(`scenarioHash` = keccak of the packed words, `contentHash` = sha256 over tag ‖ ids ‖ words) are built by
+risk-core itself (`Engine.build_set` / `build_joint`), so a file this module writes is exactly what
+`risk-cli validate-set` and `LoadScenarioSet.s.sol` check. Files are named by `contentHash` as the ADR says:
+`<TICKER>-<MIC>-<closureType>-<contentHash[0..8]>.json` and `joint-<contentHash[0..8]>.json`.
+`pack_i16` stays as the independent reference the tests compare risk-core's packing with."""
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import numpy as np
 
-from .common import ClosureType, asset_id
+from .common import LISTED, ClosureType, write_json
 
 
 def pack_i16(values: list[int]) -> list[str]:
@@ -19,34 +24,47 @@ def pack_i16(values: list[int]) -> list[str]:
     return words
 
 
+def asset_key(symbol: str) -> str:
+    return f"{symbol}:{LISTED[symbol]}"
+
+
 def _provenance(c) -> dict:
     return {"vendor": c.vendor, "dataGrade": c.grade, "dataEnd": c.end}
 
 
-def set_document(symbol: str, t: int, q: np.ndarray, info: dict, c) -> dict:
+def set_document(eng, symbol: str, t: int, q: np.ndarray, info: dict, c) -> dict:
     z = [int(v) for v in q]
-    assert all(z[i] <= z[i + 1] for i in range(len(z) - 1))
-    return {
-        "kind": "credence.scenario-set.v1",
-        "assetId": asset_id(symbol),
-        "symbol": symbol,
-        "closureType": int(t),
-        "closureTypeName": ClosureType(t).name,
-        "n": len(z),
-        "z": z,
-        "packedWords": pack_i16(z),
-        "provenance": {**_provenance(c), "pooling": {k: info[k] for k in ("group", "poolSize", "contributors",
-                                                                           "paddedWithWeekend")}},
-    }
+    meta = {**_provenance(c), "symbol": symbol, "closureTypeName": ClosureType(t).name,
+            "pooling": {k: info[k] for k in ("group", "poolSize", "contributors", "paddedWithWeekend")},
+            "tail": info["tail"], "method": "ADR-0203 (pooling), ADR-0204 (t3 tail floor)"}
+    doc = eng.build_set(asset_key(symbol), t, z, meta)
+    assert doc["packed"] == pack_i16(z) and doc["z"] == z
+    return doc
 
 
-def joint_document(cols: dict[str, np.ndarray], info: dict, c) -> dict:
-    return {
-        "kind": "credence.joint-set.v1",
-        "k": info["k"],
-        "columns": [{"assetId": asset_id(a), "symbol": a, "z": [int(v) for v in col],
-                     "packedWords": pack_i16([int(v) for v in col])} for a, col in cols.items()],
-        "closures": info["closures"],
-        "provenance": {**_provenance(c), "beta": info["beta"], "backfilled": info["backfilled"],
-                       "ranking": info["ranking"], "betaMethod": info["betaMethod"], "synthetic": info["synthetic"]},
-    }
+def joint_document(eng, cols: dict[str, np.ndarray], info: dict, c) -> dict:
+    meta = {**_provenance(c), "beta": info["beta"], "backfilled": info["backfilled"], "ranking": info["ranking"],
+            "betaMethod": info["betaMethod"], "synthetic": info["synthetic"], "closures": info["closures"],
+            "method": "ADR-0203 (joint set), ADR-0204 (synthetic stress closures)"}
+    return eng.build_joint([(asset_key(a), [int(v) for v in col]) for a, col in cols.items()], meta)
+
+
+def file_name(doc: dict) -> str:
+    h = doc["contentHash"][2:10]
+    if doc["format"] == "credence.joint-set/v1":
+        return f"joint-{h}.json"
+    return f"{doc['asset'].replace(':', '-')}-{doc['closureType']}-{h}.json"
+
+
+def write_chain_file(directory: Path, doc: dict) -> Path:
+    """Write an ADR-0106 document under its content-addressed name; remove older versions of the same
+    (asset, type) or joint file, so the directory holds exactly one of each."""
+    name = file_name(doc)
+    stem = name.rsplit("-", 1)[0]
+    directory.mkdir(parents=True, exist_ok=True)
+    for old in directory.glob(f"{stem}-*.json"):
+        if old.name != name:
+            old.unlink()
+    path = directory / name
+    write_json(path, doc)
+    return path

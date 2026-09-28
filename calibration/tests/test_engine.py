@@ -1,6 +1,8 @@
 """The engine door (credence_cal.engine): packing, and the risk-cli backend against the guide's golden vectors
 (Appendix A). The risk-cli checks are skipped when no binary is built; they never touch the network."""
 
+import json
+
 import pytest
 
 from credence_cal import engine
@@ -47,3 +49,15 @@ def test_loss_vector_and_capacity_agree(cli):
     assert len(add) == 4 and add[0] >= add[1] >= add[2] == add[3] == 0
     ok, util, worst = cli.pool_capacity([0] * 4, add, [], w(0.03), 100_000 * 10**6, w(0.5))
     assert ok and worst == add[0] and util == add[0] * WAD // (100_000 * 10**6)
+
+
+def test_build_set_matches_reference_packing_and_validates(cli, tmp_path):
+    from credence_cal.setfile import file_name, pack_i16
+
+    z = [-9318, -5000, -5000, 0, 12, 7000] * 3
+    z.sort()
+    doc = cli.build_set("NVDA:XNAS", 2, z, {"test": True})
+    assert doc["packed"] == pack_i16(z) and doc["n"] == len(z) and doc["format"] == "credence.scenario-set/v1"
+    p = tmp_path / file_name(doc)
+    p.write_text(json.dumps(doc))
+    assert cli.validate_file(p)["fileName"] == p.name

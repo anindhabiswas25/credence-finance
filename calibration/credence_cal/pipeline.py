@@ -123,20 +123,23 @@ def stage_sigma(c: Ctx) -> None:
 
 def stage_sets(c: Ctx) -> None:
     from . import sets as sets_mod
-    from .setfile import set_document
+    from .engine import default_engine
+    from .setfile import joint_document, set_document, write_chain_file
 
+    eng = default_engine()
+    for d in ("scenarios", "joint"):  # this stage owns both directories: drop every older file first
+        for old in (c.out / d).glob("*.json"):
+            old.unlink()
     z = _pooled_z(c)
     index = []
     for a in LISTED:
         for t in (1, 2, 3):
             q, info = sets_mod.build_set(z, a, t)
-            doc = set_document(a, t, q, info, c)
-            p, h = write_addressed(c.out / "scenarios", f"{a}-{ClosureType(t).name}", doc)
-            index.append({**info, "file": p.name})
+            doc = set_document(eng, a, t, q, info, c)
+            p = write_chain_file(c.out / "scenarios", doc)
+            index.append({**info, "file": p.name, "scenarioHash": doc["scenarioHash"]})
     cols, jinfo = sets_mod.joint(z)
-    from .setfile import joint_document
-
-    jp, _ = write_addressed(c.out / "joint", "joint", joint_document(cols, jinfo, c))
+    jp = write_chain_file(c.out / "joint", joint_document(eng, cols, jinfo, c))
     write_json(c.work / "sets-index.json", {"sets": index, "joint": {**jinfo, "file": jp.name}})
     (c.out / "scenarios" / "README.md").write_text(sets_markdown(index, jinfo, jp.name, c))
     print(f"sets: {len(index)} scenario sets, joint K={jinfo['k']} -> {jp.name}")
