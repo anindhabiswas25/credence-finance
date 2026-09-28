@@ -11,7 +11,7 @@ BOOK=deployments/412346.local.json
 PORT_PONDER=${PORT_PONDER:-42169}
 PORT_API=${PORT_API:-18787}
 [ -f "$BOOK" ] || { echo "no $BOOK: run make local-deploy-clock LOCAL_RPC=$RPC"; exit 1; }
-CLOCK=$(jq -r .clock $BOOK); FEED=$(jq -r .feedA $BOOK); NVDA=$(jq -r .assetId_NVDA $BOOK)
+CLOCK=$(jq -r .shared.clock $BOOK); FEED=$(jq -r .shared.feedA $BOOK); NVDA=$(jq -r .assetIds.NVDA $BOOK)
 REPORT_T='(bytes32,uint8,uint128,uint40,uint40,uint8,uint64)[]'
 if command -v psql >/dev/null; then q() { psql "$DB" -tAc "$1"; }
 else q() { docker compose -f infra/docker-compose.yml exec -T postgres psql -U credence -d "${DB##*/}" -tAc "$1"; }; fi
@@ -32,7 +32,15 @@ echo "   poked NVDA, submitted LIVE seq=$SEQ price=181.33"
 
 echo "── 2. Ponder"
 LOG=$(mktemp); API_LOG=$(mktemp)
-cleanup() { kill ${PONDER_PID:-} ${API_PID:-} 2>/dev/null || true; }
+# kill whole trees: `npx ponder` and `node` outlive their subshells otherwise (and keep the ports bound)
+tree() { local c; echo "$1"; for c in $(pgrep -P "$1" 2>/dev/null); do tree "$c"; done; }
+cleanup() {
+  local pids; pids=$( { [ -n "${PONDER_PID:-}" ] && tree $PONDER_PID; [ -n "${API_PID:-}" ] && tree $API_PID; } | tr '\n' ' ')
+  [ -n "$pids" ] || return 0
+  kill $pids 2>/dev/null || true
+  for _ in 1 2 3 4 5 6 7 8 9 10; do kill -0 $pids 2>/dev/null || return 0; sleep 0.5; done
+  kill -9 $pids 2>/dev/null || true   # Ponder's graceful shutdown can hang
+}
 trap cleanup EXIT
 ( cd indexer && DATABASE_URL=$DB PONDER_CHAIN_ID=412346 PONDER_RPC_URL=$RPC PONDER_TELEMETRY_DISABLED=true \
     npx ponder start --schema indexer_e2e_$$ --views-schema indexer --port $PORT_PONDER >"$LOG" 2>&1 ) &

@@ -1,5 +1,6 @@
-// Event handlers (Build Guide §10.3). Pure projections of events: no RPC reads.
-import { ponder } from "ponder:registry";
+// Clock and price handlers (Build Guide §10.3): pure projections of events, no RPC reads.
+// Markets, positions, vaults and σ are in core.ts.
+import { ponder, type Context } from "ponder:registry";
 import { clockState, clockTransition, pricePoint } from "ponder:schema";
 import { feedLabeler, indexerBook } from "./book";
 
@@ -65,7 +66,11 @@ ponder.on("AssetClock:OpenPrint", async ({ event, context }) => {
     .onConflictDoUpdate(fields);
 });
 
-ponder.on("PriceFeed:ReportAccepted", async ({ event, context }) => {
+async function onReport(
+  event: { args: { asset: `0x${string}`; kind: number; price: bigint; observedAt: number; seq: bigint }; log: { address: `0x${string}` }; block: { number: bigint }; transaction: { hash: `0x${string}` } },
+  context: Context,
+  status: number | null,
+) {
   const { asset, kind, price, observedAt, seq } = event.args;
   await context.db
     .insert(pricePoint)
@@ -76,8 +81,17 @@ ponder.on("PriceFeed:ReportAccepted", async ({ event, context }) => {
       kind: Number(kind),
       price,
       observedAt: BigInt(observedAt),
+      status,
       block: event.block.number,
       txHash: event.transaction.hash,
     })
     .onConflictDoNothing();
-});
+}
+
+ponder.on(
+  "PriceFeed:ReportAccepted(bytes32 indexed asset, uint8 kind, uint256 price, uint40 observedAt, uint64 seq, uint8 marketStatus)",
+  async ({ event, context }) => onReport(event, context, Number(event.args.marketStatus)),
+);
+ponder.on("PriceFeed:ReportAccepted(bytes32 indexed asset, uint8 kind, uint256 price, uint40 observedAt, uint64 seq)", async ({ event, context }) =>
+  onReport(event, context, null),
+);
