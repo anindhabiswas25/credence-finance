@@ -3,7 +3,7 @@
 //!
 //! 1. resume from the calibration snapshot and apply every gap after its `asOf`, built from the
 //!    on-chain OPEN/CLOSE prints the indexer holds (`price_point` kinds 1 and 2, feed A preferred);
-//! 2. read the engine's current σ and its last update time (the block of its last `SigmaUpdated`),
+//! 2. read the engine's current σ and its last update time (`IRiskEngine.sigmaAt`),
 //!    and the oracle's `lastAsOfDay` per closure type;
 //! 3. plan with the §5 publish rule (never below the engine's 10 %/day limit or the floor), have the
 //!    committee sign, and `SigmaOracle.submit` each update (idempotency key `J7:<asset>:<type>:<day>`).
@@ -14,12 +14,10 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use alloy::{
-    eips::BlockNumberOrTag,
     primitives::{Address, Bytes, B256, U256},
-    providers::{DynProvider, Provider},
-    rpc::types::Filter,
+    providers::DynProvider,
     signers::local::PrivateKeySigner,
-    sol_types::{SolCall, SolEvent},
+    sol_types::SolCall,
 };
 use anyhow::{Context, Result};
 use chrono::{DateTime, NaiveDate};
@@ -48,8 +46,6 @@ pub struct SigmaRunner {
     pub committee: Vec<PrivateKeySigner>,
     pub xnys: std::sync::Arc<Calendar>,
     pub indexer_schema: String,
-    /// First block to scan for `SigmaUpdated` (the address book's startBlock).
-    pub from_block: u64,
 }
 
 pub fn utc_date(t: u64) -> NaiveDate {
@@ -66,34 +62,16 @@ pub fn due_session(cal: &Calendar, now: u64) -> Option<&credence_common::calenda
         .find(|s| s.close + AFTER_CLOSE_S <= now)
 }
 
-/// (current σ, time of the last accepted update, lastAsOfDay) per closure type.
+/// (current σ, time of the last accepted update, lastAsOfDay) per closure type. The update time is
+/// the engine's own `sigmaAt` view (0 = never written).
 pub async fn chain_state(
     p: &DynProvider,
     engine: Address,
     oracle: Address,
     asset: B256,
-    from_block: u64,
 ) -> Result<[OnChainSigma; 3]> {
     let e = IRiskEngine::new(engine, p);
     let o = ISigmaOracle::new(oracle, p);
-    let logs = p
-        .get_logs(
-            &Filter::new()
-                .address(engine)
-                .event_signature(IRiskEngine::SigmaUpdated::SIGNATURE_HASH)
-                .from_block(from_block)
-                .to_block(BlockNumberOrTag::Latest),
-        )
-        .await?;
-    let mut last_block: [Option<u64>; 3] = [None; 3];
-    for l in &logs {
-        let Ok(ev) = IRiskEngine::SigmaUpdated::decode_log_data(l.data()) else {
-            continue;
-        };
-        if ev.asset == asset && (1..=3).contains(&ev.closureType) {
-            last_block[ev.closureType as usize - 1] = l.block_number;
-        }
-    }
     let mut out = [OnChainSigma::default(); 3];
     for t in TYPES {
         let i = t as usize - 1;
@@ -103,10 +81,8 @@ pub async fn chain_state(
         } else {
             o.lastAsOfDay(asset, t).call().await?
         };
-        if let Some(b) = last_block[i] {
-            let blk = p.get_block_by_number(b.into()).await?.context("block")?;
-            out[i].sigma_at = Some(blk.header.timestamp);
-        }
+        let at = e.sigmaAt(asset, t).call().await?;
+        out[i].sigma_at = (at != 0).then_some(at);
     }
     Ok(out)
 }
@@ -197,10 +173,9 @@ impl Keeper {
         let day = utc_date(session.open);
         let dom = domain(r.chain_id, r.oracle);
         let threshold = ISigmaOracle::new(r.oracle, self.rpc.primary())
-            .committee()
+            .threshold()
             .call()
-            .await?
-            .threshold as usize;
+            .await? as usize;
         for base in &r.snapshot.assets {
             let asset: B256 = base.asset_id.parse()?;
             let key = format!("J7:{asset}:{day}");
@@ -222,7 +197,7 @@ impl Keeper {
                 let prints = r.prints(conn, asset, since).await?;
                 let sessions = r.sessions(&prints, base.as_of, day);
                 let gaps = build_gaps(&sessions, &prints, None)?;
-                let chain = chain_state(self.rpc.primary(), r.engine, r.oracle, asset, r.from_block).await?;
+                let chain = chain_state(self.rpc.primary(), r.engine, r.oracle, asset).await?;
                 let mut a: AssetSigma = base.clone();
                 let planned = plan(&mut a, &gaps, &chain, day, now, now)?;
                 let mut out = Vec::new();

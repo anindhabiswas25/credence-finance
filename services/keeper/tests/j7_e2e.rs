@@ -4,7 +4,8 @@
 //!   to `MockRiskEngine`. The keeper plans from the calibration snapshot, the 2-of-3 committee signs, and
 //!   `submit` lands σ in the engine; 1 signature, unsorted signatures and a replayed `asOfDay` revert.
 //! * `stylus_engine_accepts_planned_sigma_and_rejects_a_fast_drop` (nitro devnode): the Risk Engine from
-//!   the address book, whose σ writer on local is the deployer. The σ the keeper plans against the
+//!   the address book; its σ writer is `shared.sigmaOracle` (the committee submits) or, on an S2-era
+//!   book, the deployer. The σ the keeper plans against the
 //!   engine's own state (current σ, last update time) is accepted; a drop below 0.9 × current is
 //!   rejected with `SigmaDropTooFast`.
 
@@ -31,10 +32,6 @@ const ANVIL: [&str; 4] = [
     "0x5de4111afa1a4b94908f83103eb1f1706367c2e68ca870fc3fb9a804cdab365a",
     "0x7c852118294e51e653712a81e05800f419141751be58f605c371e15141b007a6",
 ];
-alloy::sol! {
-    /// BE-chain's working-tree SigmaOracle (engine wired after deploy); not in abis/v1 yet.
-    function initializeWiring(address engine) external;
-}
 
 const NITRO_DEV_KEY: &str = "0xb6b15c8cb491557369f3c7d2c287b053eb229daa9c22138887752191c9520659";
 
@@ -166,9 +163,13 @@ async fn sigma_oracle_accepts_the_keeper_committee() {
             .concat(),
         )
         .await;
-        try_send(&p, oracle, initializeWiringCall { engine }.abi_encode())
-            .await
-            .unwrap();
+        try_send(
+            &p,
+            oracle,
+            ISigmaOracle::initializeWiringCall { engine_: engine }.abi_encode(),
+        )
+        .await
+        .unwrap();
         (oracle, engine)
     } else {
         let oracle_at = deployer.create(nonce + 1);
@@ -203,7 +204,7 @@ async fn sigma_oracle_accepts_the_keeper_committee() {
         .clone();
     let asset: B256 = nvda.asset_id.parse().unwrap();
     let day: chrono::NaiveDate = "2026-09-28".parse().unwrap();
-    let chain = chain_state(&p, engine, oracle, asset, 0).await.unwrap();
+    let chain = chain_state(&p, engine, oracle, asset).await.unwrap();
     assert!(chain
         .iter()
         .all(|c| c.current.is_zero() && c.sigma_at.is_none() && c.last_as_of_day == 0));
@@ -308,9 +309,8 @@ async fn sigma_oracle_accepts_the_keeper_committee() {
     .await
     .is_err());
     // and a re-plan for the same day plans nothing
-    let chain = chain_state(&p, engine, oracle, asset, 0).await.unwrap();
-    // the oracle now records today's asOfDay for all three types (MockRiskEngine emits no SigmaUpdated,
-    // so sigma_at stays unknown here; the devnode test reads it from the Stylus engine's event)
+    let chain = chain_state(&p, engine, oracle, asset).await.unwrap();
+    // the oracle now records today's asOfDay for all three types
     let today = credence_keeper::sigma_job::as_of_day(day);
     assert!(chain.iter().all(|c| c.last_as_of_day == today), "{chain:?}");
     let mut again = snap
@@ -336,11 +336,20 @@ async fn stylus_engine_accepts_planned_sigma_and_rejects_a_fast_drop() {
     let p = provider(&rpc, NITRO_DEV_KEY).await;
     let e = IRiskEngine::new(engine, &p);
     let writer = e.sigmaOracle().call().await.unwrap();
-    assert_eq!(
-        writer,
-        NITRO_DEV_KEY.parse::<PrivateKeySigner>().unwrap().address(),
-        "local engine: the deployer writes σ"
-    );
+    let deployer = NITRO_DEV_KEY.parse::<PrivateKeySigner>().unwrap().address();
+    // S2 devnode: the deployer writes σ directly. Since DeployCoreLocal the writer is `shared.sigmaOracle`,
+    // whose local committee is anvil keys 1..3 (RELAYER_A_SIGNERS), so updates go through `submit`.
+    let committee: Vec<PrivateKeySigner> = ANVIL[1..].iter().map(|k| k.parse().unwrap()).collect();
+    let via_oracle = writer != deployer;
+    let (dom, threshold) = if via_oracle {
+        let o = ISigmaOracle::new(writer, &p);
+        (
+            domain(412_346, writer),
+            o.threshold().call().await.unwrap() as usize,
+        )
+    } else {
+        (domain(412_346, Address::ZERO), 0)
+    };
 
     // a fresh asset key per run (the devnode keeps state), with NVDA's calibrated state
     let mut a = snapshot()
@@ -356,21 +365,60 @@ async fn stylus_engine_accepts_planned_sigma_and_rejects_a_fast_drop() {
     let asset = keccak256(format!("J7-E2E:{salt}"));
     a.asset_id = asset.to_string();
     let t = 2u8;
+    let day0 = credence_keeper::sigma_job::as_of_day("2026-09-28".parse().unwrap());
+    let seq = std::sync::atomic::AtomicU32::new(0);
     let update = |s: U256| {
-        IRiskEngine::updateSigmaCall {
-            assetId: asset,
-            closureType: t,
-            sigma: s,
+        let (dom, committee, seq) = (&dom, &committee, &seq);
+        async move {
+            if !via_oracle {
+                return (
+                    engine,
+                    IRiskEngine::updateSigmaCall {
+                        assetId: asset,
+                        closureType: t,
+                        sigma: s,
+                    }
+                    .abi_encode(),
+                );
+            }
+            // asOfDay must increase per (asset, type): one day per write
+            let u = credence_keeper::sigma_job::SigmaUpdate {
+                assetId: asset,
+                closureType: t,
+                sigma: s,
+                asOfDay: day0 + seq.fetch_add(1, std::sync::atomic::Ordering::SeqCst),
+                nonce: 0,
+            };
+            let sigs = sign_committee(&u, dom, committee, threshold).await.unwrap();
+            (
+                writer,
+                ISigmaOracle::submitCall {
+                    u: ISigmaOracle::SigmaUpdate {
+                        assetId: u.assetId,
+                        closureType: u.closureType,
+                        sigma: u.sigma,
+                        asOfDay: u.asOfDay,
+                        nonce: u.nonce,
+                    },
+                    signatures: sigs,
+                }
+                .abi_encode(),
+            )
         }
-        .abi_encode()
+    };
+    let send = |s: U256| {
+        let p = &p;
+        let update = &update;
+        async move {
+            let (to, data) = update(s).await;
+            try_send(p, to, data).await
+        }
     };
 
     // the engine currently holds a much higher σ (a volatile week): raising is always allowed
     let high = a.seed_wad[1] * U256::from(3u64);
-    try_send(&p, engine, update(high)).await.unwrap();
-    let chain = chain_state(&p, engine, Address::ZERO, asset, 0)
-        .await
-        .unwrap();
+    send(high).await.unwrap();
+    let chain = chain_state(&p, engine, Address::ZERO, asset).await.unwrap();
     assert_eq!(chain[1].current, high);
     assert!(chain[1].sigma_at.is_some());
 
@@ -409,16 +457,12 @@ async fn stylus_engine_accepts_planned_sigma_and_rejects_a_fast_drop() {
         "the model σ is below the current one"
     );
     assert_eq!(s, high, "same day: min allowed = current");
-    try_send(&p, engine, update(s)).await.unwrap();
+    send(s).await.unwrap();
 
     // a drop faster than 10 %/day is rejected by the engine
-    let err = try_send(
-        &p,
-        engine,
-        update(high * U256::from(8u64) / U256::from(10u64)),
-    )
-    .await
-    .unwrap_err();
+    let err = send(high * U256::from(8u64) / U256::from(10u64))
+        .await
+        .unwrap_err();
     let sel = alloy::hex::encode(&keccak256("SigmaDropTooFast(uint256,uint256,uint256)")[..4]);
     assert!(
         err.contains(&sel),

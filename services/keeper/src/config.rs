@@ -147,10 +147,6 @@ pub fn sigma_runner(
     };
     let snapshot = crate::sigma::Snapshot::load(&snap_path)?;
     let xnys = calendars.get("XNYS").cloned().context("XNYS calendar")?;
-    let from_block = address_book(chain_id)
-        .ok()
-        .and_then(|b| b.get("startBlock").and_then(|v| v.as_u64()))
-        .unwrap_or(0);
     tracing::info!(snapshot = %snap_path.display(), grade = %snapshot.data_grade, assets = snapshot.assets.len(), committee = committee.len(), "J7 enabled");
     Ok(Some(crate::sigma_runner::SigmaRunner {
         oracle,
@@ -160,7 +156,6 @@ pub fn sigma_runner(
         committee,
         xnys,
         indexer_schema: env::or("INDEXER_SCHEMA", "indexer"),
-        from_block,
     }))
 }
 

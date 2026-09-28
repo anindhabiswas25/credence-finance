@@ -2,8 +2,7 @@
 //! read at one block, and the Bell computed natively with risk-core exactly like
 //! `CredenceMarket.bellStatus` (CoverLogic.bellStatusView).
 //!
-//! Bindings come from the frozen interface ABIs in `deployments/abis/v1` (the same JSON
-//! `credence-bindings` is generated from), so switching to that crate changes imports, not logic.
+//! Bindings come from `credence-bindings` (the frozen v1 ABIs).
 
 use alloy::{
     eips::BlockId,
@@ -17,50 +16,22 @@ use credence_risk_core::{
     WAD,
 };
 
+/// Contract bindings: `credence-bindings` (generated from `deployments/abis/v1`), under the names the
+/// keeper's jobs use. Declared here only: the ERC-20 `decimals` view, and `ComplianceRegistry` until
+/// `credence-bindings` exports it (BE-chain REQUEST, board 2026-09-28).
 pub mod abi {
-    #![allow(missing_docs, clippy::too_many_arguments)]
-    use alloy::sol;
-    sol!(
-        #[sol(rpc)]
-        ICredenceMarket,
-        "../../deployments/abis/v1/ICredenceMarket.json"
-    );
-    sol!(
-        #[sol(rpc)]
-        ISeniorVault,
-        "../../deployments/abis/v1/ISeniorVault.json"
-    );
-    sol!(
-        #[sol(rpc)]
-        IRiskEngine,
-        "../../deployments/abis/v1/IRiskEngine.json"
-    );
-    sol!(
-        #[sol(rpc)]
-        IAssetClockV1,
-        "../../deployments/abis/v1/IAssetClock.json"
-    );
-    sol!(
-        #[sol(rpc)]
-        IOracleAdapter,
-        "../../deployments/abis/v1/IOracleAdapter.json"
-    );
-    sol!(
-        #[sol(rpc)]
-        IUnderwriterPool,
-        "../../deployments/abis/v1/IUnderwriterPool.json"
-    );
-    sol!(
-        #[sol(rpc)]
-        ISigmaOracle,
-        "../../deployments/abis/v1/ISigmaOracle.json"
-    );
-    sol!(
+    #![allow(missing_docs)]
+    pub use credence_bindings::{
+        AssetClock as IAssetClockV1, CredenceMarket as ICredenceMarket, IAuctionHouse, IRiskEngine,
+        IUnderwriterPool, OracleAdapter as IOracleAdapter, SeniorVault as ISeniorVault,
+        SigmaOracle as ISigmaOracle,
+    };
+    alloy::sol!(
         #[sol(rpc)]
         ComplianceRegistry,
         "../../deployments/abis/v1/ComplianceRegistry.json"
     );
-    sol! {
+    alloy::sol! {
         #[sol(rpc)]
         interface IERC20Decimals {
             function decimals() external view returns (uint8);

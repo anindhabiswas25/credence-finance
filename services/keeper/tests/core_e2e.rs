@@ -567,22 +567,22 @@ async fn core_jobs_match_the_contracts() {
     assert_eq!(onchain._0, 1, "NEEDS_ACTION on-chain");
     assert_eq!(
         p["cureRepay"].as_str().unwrap(),
-        onchain.cureRepay.to_string(),
+        onchain._1.to_string(),
         "cure repay == market.bellStatus"
     );
     assert_eq!(
         p["cureCollateral"].as_str().unwrap(),
-        onchain.cureCollateral.to_string(),
+        onchain._2.to_string(),
         "cure collateral == market.bellStatus"
     );
     assert_eq!(
         p["premium"].as_str().unwrap(),
-        onchain.coverPremium.to_string(),
+        onchain._3.to_string(),
         "premium == market.bellStatus"
     );
     println!(
         "J2 T-2h == bellStatus @{block}: repay {} collateral {} premium {}",
-        onchain.cureRepay, onchain.cureCollateral, onchain.coverPremium
+        onchain._1, onchain._2, onchain._3
     );
 
     // ── J3 dry-run after bellAt, then the real enforceBell emits the predicted outcome ──
