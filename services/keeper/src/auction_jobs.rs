@@ -39,7 +39,8 @@ pub const REOPEN_STATE: u8 = 3;
 /// MarketLib.REOPEN_QUEUE: flags are accepted until openPrintAt + 120 s + ext.
 pub const REOPEN_QUEUE_S: u64 = 120;
 /// Settlement batch (positions per `settlePositions`).
-pub const SETTLE_BATCH: usize = 50;
+/// Settlement batch: at most 128 positions per call (~80k gas each, BE-chain 04:40).
+pub const SETTLE_BATCH: usize = 128;
 const WAD: u128 = 1_000_000_000_000_000_000;
 
 /// AuctionKind codes.

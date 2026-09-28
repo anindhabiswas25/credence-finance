@@ -86,7 +86,7 @@ pub fn core_jobs(chain_id: u64) -> Result<Option<crate::core_jobs::CoreJobs>> {
     c.j3_live = env::or("KEEPER_J3_LIVE", "0") == "1";
     c.j4_live = env::or("KEEPER_J4_LIVE", "0") == "1";
     c.j3_batch = env::parse_or("KEEPER_J3_BATCH", crate::core_jobs::BELL_BATCH)?;
-    c.flag_batch = env::parse_or("KEEPER_FLAG_BATCH", crate::core_jobs::BELL_BATCH)?;
+    c.flag_batch = env::parse_or("KEEPER_FLAG_BATCH", crate::core_jobs::FLAG_BATCH)?;
     c.settle_batch = env::parse_or("KEEPER_SETTLE_BATCH", crate::auction_jobs::SETTLE_BATCH)?;
     if env::or("KEEPER_AUCTIONS", "1") == "1" {
         c.auction_stacks = crate::core_jobs::auction_stacks(&book);

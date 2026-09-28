@@ -38,7 +38,10 @@ use crate::{
 
 pub const HEADSUP_EARLY_S: u64 = 26 * 3600;
 pub const HEADSUP_LATE_S: u64 = 2 * 3600;
-pub const BELL_BATCH: usize = 50;
+/// J3: BE-chain 04:40 (devnode, real pool): 10 auto-covers ≈ 22.9M gas, 11 ≈ 25.1M > 24M.
+pub const BELL_BATCH: usize = 10;
+/// Flag batches: a lot holds at most 128 positions (~90k gas each).
+pub const FLAG_BATCH: usize = 128;
 /// J3 pages ops if NEEDS_ACTION positions remain this long after bellAt (§10.2).
 pub const BELL_PAGE_AFTER_S: u64 = 10 * 60;
 /// 0.92 (§10.2 J4, EXTENDED uncovered).
@@ -100,7 +103,7 @@ impl CoreJobs {
             registry: None,
             j4_every_s: 10,
             j3_batch: BELL_BATCH,
-            flag_batch: BELL_BATCH,
+            flag_batch: FLAG_BATCH,
             settle_batch: crate::auction_jobs::SETTLE_BATCH,
             auction_stacks: Vec::new(),
             auctions: Mutex::new(Default::default()),
