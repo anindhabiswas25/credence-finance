@@ -4,8 +4,11 @@
 UV      ?= uv
 VENDOR  ?= alpaca
 CAL      = cd calibration && $(UV) run --frozen
+CAL_OUT ?= calibration/out
+QE_CARGO = CARGO_TARGET_DIR=target/quant cargo
+RISK_CLI ?= target/quant/release/risk-cli
 
-.PHONY: cal-install cal-data cal-verify cal-crosscheck cal-all cal-sample cal-test cal-vectors
+.PHONY: cal-install cal-data cal-verify cal-crosscheck cal-all cal-sample cal-test cal-vectors cal-risk-cli cal-validate
 
 cal-install: ## QE: sync the calibration env (uv) and build risk-py into it
 	cd calibration && $(UV) sync --frozen
@@ -24,3 +27,14 @@ cal-vectors: ## QE: regenerate the σ spec test vectors (calibration/docs/sigma-
 
 cal-test: ## QE: calibration unit tests (offline)
 	$(CAL) pytest -q
+
+cal-sample: ## QE: rebuild every output from the committed synthetic sample into calibration/out-sample (CI)
+	$(CAL) python -m credence_cal.pipeline all --vendor sample --out out-sample
+
+cal-risk-cli: ## QE: build risk-cli into target/quant (engine math for the backtest fallback and validate-set)
+	$(QE_CARGO) build --release -p credence-risk-cli
+
+cal-validate: cal-risk-cli ## QE: run risk-cli validate-set on every scenario set and joint file (CAL_OUT=calibration/out|out-sample)
+	@set -e; for f in $(CAL_OUT)/scenarios/*.json $(CAL_OUT)/joint/*.json; do \
+	  $(RISK_CLI) validate-set $$f >/dev/null || { echo "INVALID: $$f"; exit 1; }; done; \
+	echo "validate-set: every file in $(CAL_OUT) passes"

@@ -69,8 +69,8 @@ def compute(symbol: str, raw: pd.DataFrame, sessions: list[dt.date], holidays: s
             continue
         r = sr * (o + dv) / c_prev - 1.0
         rows.append({"symbol": symbol, "date": str(s), "prev": str(p), "type": int(_classify(p, s, holidays)),
-                     "r": r, "split": sr, "dividend": dv})
-    g = pd.DataFrame(rows, columns=["symbol", "date", "prev", "type", "r", "split", "dividend"])
+                     "r": r, "split": sr, "dividend": dv, "d": sr * dv / c_prev})
+    g = pd.DataFrame(rows, columns=["symbol", "date", "prev", "type", "r", "split", "dividend", "d"])
     outliers = g[g["r"].abs() > OUTLIER_ABS_R]
     suspect = []
     for _, x in outliers.iterrows():

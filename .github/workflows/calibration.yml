@@ -1,0 +1,40 @@
+# Calibration pipeline CI (owner: QE). Build Guide §10.6: outputs are content-addressed and reproducible.
+# CI holds no vendor data (ADR-0201), so it rebuilds everything from the committed synthetic sample
+# (calibration/sample/) and checks every output hash against calibration/out-sample/HASHES.sample.json.
+name: calibration
+
+on:
+  push:
+    branches: [main]
+    paths: ["calibration/**", "crates/risk-core/**", "crates/risk-py/**", "crates/risk-cli/**", "Cargo.lock",
+            "rust-toolchain.toml", "mk/quant.mk", ".github/workflows/calibration.yml"]
+  pull_request:
+    paths: ["calibration/**", "crates/risk-core/**", "crates/risk-py/**", "crates/risk-cli/**", "Cargo.lock",
+            "rust-toolchain.toml", "mk/quant.mk", ".github/workflows/calibration.yml"]
+
+concurrency:
+  group: calibration-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  sample:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      CARGO_TARGET_DIR: target/quant
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - name: Toolchain from rust-toolchain.toml
+        run: rustup show
+      - uses: Swatinem/rust-cache@v2
+      - name: calibration env + risk-py (PyO3) into calibration/.venv
+        run: make cal-install
+      - name: unit tests (σ vectors current, sets, gaps)
+        run: make cal-test
+      - name: rebuild every output from the synthetic sample
+        run: make cal-sample
+      - name: output hashes match the committed ones
+        run: git diff --exit-code -- calibration/out-sample
+      - name: every scenario set passes risk-cli validate-set
+        run: make cal-validate CAL_OUT=calibration/out-sample

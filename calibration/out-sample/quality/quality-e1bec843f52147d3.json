@@ -1,0 +1,407 @@
+{
+ "comparableFrom": {
+  "MARA": "2021-01-01",
+  "RIOT": "2021-01-01"
+ },
+ "dataGrade": "synthetic",
+ "end": "2023-12-29",
+ "kind": "credence.quality.v1",
+ "outlierAbsR": 0.2,
+ "symbols": {
+  "AAPL": {
+   "badBars": [],
+   "bars": 2012,
+   "excluded": [],
+   "firstSession": "2016-01-04",
+   "gaps": {
+    "HOLIDAY_WEEKEND": 73,
+    "OVERNIGHT": 1578,
+    "WEEKEND": 360
+   },
+   "missingSessions": [],
+   "offCalendarBars": [],
+   "outliers": [
+    {
+     "date": "2017-02-22",
+     "r": 0.219935,
+     "type": "OVERNIGHT"
+    }
+   ],
+   "stats": {
+    "HOLIDAY_WEEKEND": {
+     "max": 0.126041,
+     "min": -0.051104,
+     "n": 73,
+     "sd": 0.019712
+    },
+    "OVERNIGHT": {
+     "max": 0.219935,
+     "min": -0.167388,
+     "n": 1578,
+     "sd": 0.020156
+    },
+    "WEEKEND": {
+     "max": 0.100818,
+     "min": -0.19727,
+     "n": 360,
+     "sd": 0.025463
+    }
+   },
+   "suspectUnadjustedSplits": [],
+   "symbol": "AAPL",
+   "zeroVolumeDays": []
+  },
+  "AMD": {
+   "badBars": [],
+   "bars": 2012,
+   "excluded": [],
+   "firstSession": "2016-01-04",
+   "gaps": {
+    "HOLIDAY_WEEKEND": 73,
+    "OVERNIGHT": 1578,
+    "WEEKEND": 360
+   },
+   "missingSessions": [],
+   "offCalendarBars": [],
+   "outliers": [
+    {
+     "date": "2017-02-13",
+     "r": -0.241306,
+     "type": "WEEKEND"
+    },
+    {
+     "date": "2017-02-24",
+     "r": 0.33121,
+     "type": "OVERNIGHT"
+    },
+    {
+     "date": "2017-03-07",
+     "r": 0.202384,
+     "type": "OVERNIGHT"
+    },
+    {
+     "date": "2017-03-10",
+     "r": -0.219141,
+     "type": "OVERNIGHT"
+    }
+   ],
+   "stats": {
+    "HOLIDAY_WEEKEND": {
+     "max": 0.16957,
+     "min": -0.083051,
+     "n": 73,
+     "sd": 0.032747
+    },
+    "OVERNIGHT": {
+     "max": 0.33121,
+     "min": -0.219141,
+     "n": 1578,
+     "sd": 0.030059
+    },
+    "WEEKEND": {
+     "max": 0.174308,
+     "min": -0.241306,
+     "n": 360,
+     "sd": 0.035202
+    }
+   },
+   "suspectUnadjustedSplits": [],
+   "symbol": "AMD",
+   "zeroVolumeDays": []
+  },
+  "COIN": {
+   "badBars": [],
+   "bars": 684,
+   "excluded": [],
+   "firstSession": "2021-04-14",
+   "gaps": {
+    "HOLIDAY_WEEKEND": 24,
+    "OVERNIGHT": 538,
+    "WEEKEND": 121
+   },
+   "missingSessions": [],
+   "offCalendarBars": [],
+   "outliers": [],
+   "stats": {
+    "HOLIDAY_WEEKEND": {
+     "max": 0.058686,
+     "min": -0.047196,
+     "n": 24,
+     "sd": 0.023364
+    },
+    "OVERNIGHT": {
+     "max": 0.153356,
+     "min": -0.116357,
+     "n": 538,
+     "sd": 0.028519
+    },
+    "WEEKEND": {
+     "max": 0.094695,
+     "min": -0.11843,
+     "n": 121,
+     "sd": 0.033115
+    }
+   },
+   "suspectUnadjustedSplits": [],
+   "symbol": "COIN",
+   "zeroVolumeDays": []
+  },
+  "MSFT": {
+   "badBars": [],
+   "bars": 2012,
+   "excluded": [],
+   "firstSession": "2016-01-04",
+   "gaps": {
+    "HOLIDAY_WEEKEND": 73,
+    "OVERNIGHT": 1578,
+    "WEEKEND": 360
+   },
+   "missingSessions": [],
+   "offCalendarBars": [],
+   "outliers": [
+    {
+     "date": "2017-12-06",
+     "r": 0.243428,
+     "type": "OVERNIGHT"
+    }
+   ],
+   "stats": {
+    "HOLIDAY_WEEKEND": {
+     "max": 0.058694,
+     "min": -0.084172,
+     "n": 73,
+     "sd": 0.017343
+    },
+    "OVERNIGHT": {
+     "max": 0.243428,
+     "min": -0.0833,
+     "n": 1578,
+     "sd": 0.01535
+    },
+    "WEEKEND": {
+     "max": 0.136314,
+     "min": -0.068685,
+     "n": 360,
+     "sd": 0.017374
+    }
+   },
+   "suspectUnadjustedSplits": [],
+   "symbol": "MSFT",
+   "zeroVolumeDays": []
+  },
+  "MSTR": {
+   "badBars": [],
+   "bars": 2012,
+   "excluded": [],
+   "firstSession": "2016-01-04",
+   "gaps": {
+    "HOLIDAY_WEEKEND": 73,
+    "OVERNIGHT": 1578,
+    "WEEKEND": 360
+   },
+   "missingSessions": [],
+   "offCalendarBars": [],
+   "outliers": [
+    {
+     "date": "2021-12-29",
+     "r": -0.287822,
+     "type": "OVERNIGHT"
+    }
+   ],
+   "stats": {
+    "HOLIDAY_WEEKEND": {
+     "max": 0.089859,
+     "min": -0.055304,
+     "n": 73,
+     "sd": 0.025982
+    },
+    "OVERNIGHT": {
+     "max": 0.105501,
+     "min": -0.287822,
+     "n": 1578,
+     "sd": 0.02526
+    },
+    "WEEKEND": {
+     "max": 0.120193,
+     "min": -0.112913,
+     "n": 360,
+     "sd": 0.03006
+    }
+   },
+   "suspectUnadjustedSplits": [],
+   "symbol": "MSTR",
+   "zeroVolumeDays": []
+  },
+  "NVDA": {
+   "badBars": [],
+   "bars": 2012,
+   "excluded": [],
+   "firstSession": "2016-01-04",
+   "gaps": {
+    "HOLIDAY_WEEKEND": 73,
+    "OVERNIGHT": 1578,
+    "WEEKEND": 360
+   },
+   "missingSessions": [],
+   "offCalendarBars": [],
+   "outliers": [
+    {
+     "date": "2018-06-13",
+     "r": -0.278305,
+     "type": "OVERNIGHT"
+    }
+   ],
+   "stats": {
+    "HOLIDAY_WEEKEND": {
+     "max": 0.179402,
+     "min": -0.190523,
+     "n": 73,
+     "sd": 0.037038
+    },
+    "OVERNIGHT": {
+     "max": 0.182615,
+     "min": -0.278305,
+     "n": 1578,
+     "sd": 0.027629
+    },
+    "WEEKEND": {
+     "max": 0.155817,
+     "min": -0.124319,
+     "n": 360,
+     "sd": 0.031567
+    }
+   },
+   "suspectUnadjustedSplits": [],
+   "symbol": "NVDA",
+   "zeroVolumeDays": []
+  },
+  "QQQ": {
+   "badBars": [],
+   "bars": 2012,
+   "excluded": [],
+   "firstSession": "2016-01-04",
+   "gaps": {
+    "HOLIDAY_WEEKEND": 73,
+    "OVERNIGHT": 1578,
+    "WEEKEND": 360
+   },
+   "missingSessions": [],
+   "offCalendarBars": [],
+   "outliers": [],
+   "stats": {
+    "HOLIDAY_WEEKEND": {
+     "max": 0.025565,
+     "min": -0.023895,
+     "n": 73,
+     "sd": 0.007544
+    },
+    "OVERNIGHT": {
+     "max": 0.030585,
+     "min": -0.039858,
+     "n": 1578,
+     "sd": 0.007069
+    },
+    "WEEKEND": {
+     "max": 0.028835,
+     "min": -0.057789,
+     "n": 360,
+     "sd": 0.009223
+    }
+   },
+   "suspectUnadjustedSplits": [],
+   "symbol": "QQQ",
+   "zeroVolumeDays": []
+  },
+  "SPY": {
+   "badBars": [],
+   "bars": 2012,
+   "excluded": [],
+   "firstSession": "2016-01-04",
+   "gaps": {
+    "HOLIDAY_WEEKEND": 73,
+    "OVERNIGHT": 1578,
+    "WEEKEND": 360
+   },
+   "missingSessions": [],
+   "offCalendarBars": [],
+   "outliers": [],
+   "stats": {
+    "HOLIDAY_WEEKEND": {
+     "max": 0.018013,
+     "min": -0.02393,
+     "n": 73,
+     "sd": 0.006771
+    },
+    "OVERNIGHT": {
+     "max": 0.077073,
+     "min": -0.043834,
+     "n": 1578,
+     "sd": 0.007341
+    },
+    "WEEKEND": {
+     "max": 0.055871,
+     "min": -0.025348,
+     "n": 360,
+     "sd": 0.007551
+    }
+   },
+   "suspectUnadjustedSplits": [],
+   "symbol": "SPY",
+   "zeroVolumeDays": []
+  },
+  "TSLA": {
+   "badBars": [],
+   "bars": 2012,
+   "excluded": [],
+   "firstSession": "2016-01-04",
+   "gaps": {
+    "HOLIDAY_WEEKEND": 73,
+    "OVERNIGHT": 1578,
+    "WEEKEND": 360
+   },
+   "missingSessions": [],
+   "offCalendarBars": [],
+   "outliers": [
+    {
+     "date": "2020-04-14",
+     "r": 0.226786,
+     "type": "OVERNIGHT"
+    },
+    {
+     "date": "2023-10-25",
+     "r": -0.408292,
+     "type": "OVERNIGHT"
+    },
+    {
+     "date": "2023-11-03",
+     "r": 0.245277,
+     "type": "OVERNIGHT"
+    }
+   ],
+   "stats": {
+    "HOLIDAY_WEEKEND": {
+     "max": 0.188786,
+     "min": -0.106311,
+     "n": 73,
+     "sd": 0.039471
+    },
+    "OVERNIGHT": {
+     "max": 0.245277,
+     "min": -0.408292,
+     "n": 1578,
+     "sd": 0.032504
+    },
+    "WEEKEND": {
+     "max": 0.154104,
+     "min": -0.18491,
+     "n": 360,
+     "sd": 0.038235
+    }
+   },
+   "suspectUnadjustedSplits": [],
+   "symbol": "TSLA",
+   "zeroVolumeDays": []
+  }
+ },
+ "vendor": "sample"
+}
