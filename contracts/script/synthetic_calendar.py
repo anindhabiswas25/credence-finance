@@ -11,6 +11,7 @@ reads (`sessionsAbiEncoded`). Used by `make local-deploy-core CALENDAR=synthetic
 import argparse
 import json
 import subprocess
+import time
 
 DAY = 86400
 OVERNIGHT, WEEKEND = 1, 2
@@ -21,6 +22,8 @@ ap.add_argument("out")
 ap.add_argument("--after", type=int, default=10)
 ap.add_argument("--regular-hours", type=float, default=12)
 a = ap.parse_args()
+# an idle devnode's latest block can lag the wall clock by hours; its next block is stamped ~now
+a.now = max(a.now, int(time.time()))
 # the next session's extended open is at NOW - 2 h + 1 d - 5.5 h; today's extended close must stay before it
 assert 0 < a.regular_hours <= 12, "--regular-hours must be in (0, 12]"
 
