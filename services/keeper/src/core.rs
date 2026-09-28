@@ -130,7 +130,60 @@ pub struct RiskCtx {
     pub coll_dec: u8,
     pub loan_dec: u8,
     pub pool: Address,
+    pub engine: Address,
+    /// Annual borrow rate (WAD), for projecting debt over a later closure.
+    pub borrow_rate: U256,
     pub pending_fees: bool,
+}
+
+/// One scheduled close ahead, from the venue calendar (R-07 days, bellAt = close − 15 min).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Target {
+    pub close_at: u64,
+    pub reopen_at: u64,
+    pub bell_at: u64,
+    pub closure_type: u8,
+    pub days: u64,
+    /// 0 = the next close (closureId + 1), 1 = the one after (closureId + 2).
+    pub offset: u64,
+}
+
+pub const BELL_BEFORE_CLOSE_S: u64 = 15 * 60;
+
+/// The next two scheduled closes after `now`.
+pub fn targets(cal: &credence_common::calendar::Calendar, now: u64) -> Vec<Target> {
+    let i = cal.sessions.partition_point(|s| s.close <= now);
+    (0..2usize)
+        .filter_map(|k| {
+            let s = cal.sessions.get(i + k)?;
+            let next = cal.sessions.get(i + k + 1)?;
+            Some(Target {
+                close_at: s.close,
+                reopen_at: next.open,
+                bell_at: s.close - BELL_BEFORE_CLOSE_S,
+                closure_type: s.closure_type_after as u8,
+                days: (next.open - s.close).div_ceil(86_400),
+                offset: k as u64,
+            })
+        })
+        .collect()
+}
+
+/// `min(maxLtvEff, engine.safeLtv(asset, type, maxLtvEff, 0))` for a given closure type (MarketLib.safeLtv).
+pub async fn safe_ltv_for(p: &DynProvider, ctx: &RiskCtx, closure_type: u8) -> Option<U256> {
+    IRiskEngine::new(ctx.engine, p)
+        .safeLtv(ctx.asset_id, closure_type, ctx.max_ltv_eff, U256::ZERO)
+        .block(BlockId::number(ctx.block))
+        .call()
+        .await
+        .ok()
+        .map(|v| v.min(ctx.max_ltv_eff))
+}
+
+/// KinkedRateModel.projected: D × (1 + r × days / 365), rounded up.
+pub fn project(debt: U256, rate: U256, days: u64) -> Result<U256> {
+    rc::projected_debt(debt, rate, days.min(u16::MAX as u64) as u16)
+        .map_err(|e| anyhow::anyhow!("{e:?}"))
 }
 
 #[derive(Clone, Debug)]
@@ -364,6 +417,8 @@ pub async fn read_ctx(
         coll_dec,
         loan_dec,
         pool: w.pool,
+        engine: w.engine,
+        borrow_rate: m.borrowRate(id).block(at).call().await?,
         pending_fees: st.poolFeeAccrued > 0 || st.treasuryFeeAccrued > 0,
     })
 }
@@ -404,15 +459,16 @@ pub async fn preview_cover(
     p: &DynProvider,
     ctx: &RiskCtx,
     s: &PositionSnap,
+    t: Option<&Target>,
 ) -> Result<(U256, U256)> {
     let req = abi::IUnderwriterPool::CoverRequest {
         marketId: ctx.market_id,
         assetId: ctx.asset_id,
         borrower: s.owner,
-        closureType: ctx.closure_type,
-        closureDays: ctx.closure_days as u16,
-        closureId: ctx.upcoming_closure_id,
-        epochId: ctx.epoch_id,
+        closureType: t.map_or(ctx.closure_type, |t| t.closure_type),
+        closureDays: t.map_or(ctx.closure_days, |t| t.days) as u16,
+        closureId: ctx.upcoming_closure_id + t.map_or(0, |t| t.offset),
+        epochId: ctx.epoch_id + t.map_or(0, |t| t.offset),
         collateralValue: s.collateral_value,
         debtProjected: s.debt_projected,
     };
@@ -470,6 +526,8 @@ mod tests {
             coll_dec: 18,
             loan_dec: 6,
             pool: Address::ZERO,
+            engine: Address::ZERO,
+            borrow_rate: wad("0.0733"),
             pending_fees: false,
         }
     }
@@ -552,6 +610,21 @@ mod tests {
         let mut opt_out = mk(0, false);
         opt_out.auto_cover_opt_out = true;
         assert_eq!(expected_outcome(&c, &opt_out, wad("0.5")), PRECLOSE_SALE);
+    }
+
+    #[test]
+    fn targets_are_the_next_two_scheduled_closes() {
+        let cal = credence_common::calendar::Calendar::load(concat!(env!("CARGO_MANIFEST_DIR"), "/../../calibration/out/calendars/XNYS-20261001-20271031.json")).unwrap();
+        // Thu 2026-10-08 14:05 ET (18:05Z): T-26h before Friday's close
+        let t = targets(&cal, 1_791_482_700);
+        assert_eq!(t.len(), 2);
+        assert_eq!((t[0].closure_type, t[0].days, t[0].offset), (1, 1, 0)); // Thursday night
+        assert_eq!((t[1].closure_type, t[1].days, t[1].offset), (2, 3, 1)); // the weekend (R-07: 3 days)
+        assert_eq!(t[1].close_at, 1_791_576_000); // Fri 16:00 ET
+        assert_eq!(t[1].bell_at, t[1].close_at - 900);
+        // Wed 2026-11-25 14:00Z (Thanksgiving next day): the next close opens a holiday closure
+        let w = targets(&cal, 1_795_615_200);
+        assert_eq!(w[0].closure_type, 3);
     }
 
     #[test]

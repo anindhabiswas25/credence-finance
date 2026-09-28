@@ -27,8 +27,9 @@ use sqlx::{postgres::PgConnection, Row};
 
 use crate::{
     core::{
-        abi, bell, expected_outcome, health, preclose_qty, preview_cover, read_ctx, read_position,
-        RiskCtx, EXTENDED, NEEDS_ACTION, PRECLOSE_SALE, PRECLOSE_THEN_COVER, REGULAR,
+        abi, bell, bell_at, expected_outcome, health, preclose_qty, preview_cover, project,
+        read_ctx, read_position, safe_ltv_for, targets, RiskCtx, Target, EXTENDED, NEEDS_ACTION,
+        PRECLOSE_SALE, PRECLOSE_THEN_COVER, REGULAR,
     },
     jobs::{self, Claim},
     tasks::{Keeper, TickReport},
@@ -176,31 +177,59 @@ impl Keeper {
         if ctx.clock_state != REGULAR {
             return Ok(());
         }
-        let Some(stage) = headsup_stage(now, ctx.close_at, ctx.bell_at) else {
+        // the venue calendar of this asset (the clock's own schedule): the next two closes
+        let Some(cal) = self
+            .assets
+            .iter()
+            .find(|a| a.id == ctx.asset_id)
+            .map(|a| a.calendar.clone())
+        else {
             return Ok(());
         };
-        let key = format!("J2:{}:{}:{stage}", m.id, ctx.upcoming_closure_id);
-        if !matches!(
-            jobs::claim(
-                conn,
-                &key,
-                "J2",
-                &json!({ "asset": m.asset, "closeAt": ctx.close_at }),
-                &self.instance
-            )
-            .await?,
-            Claim::Run { .. }
-        ) {
+        for t in targets(&cal, now) {
+            let Some(stage) = headsup_stage(now, t.close_at, t.bell_at) else {
+                continue;
+            };
+            if let Err(e) = self.j2_target(conn, core, m, ctx, &t, stage).await {
+                tracing::warn!(asset = %m.asset, close = t.close_at, error = %e, "J2 failed");
+                self.metrics.jobs.with_label_values(&["J2", "error"]).inc();
+            }
+        }
+        Ok(())
+    }
+
+    /// J2 for one closure ahead: binding check at that closure's type, then one heads-up per
+    /// NEEDS_ACTION borrower with the debt projected over that closure's days (R-08).
+    async fn j2_target(
+        &self,
+        conn: &mut PgConnection,
+        core: &CoreJobs,
+        m: &CoreMarket,
+        ctx: &RiskCtx,
+        t: &Target,
+        stage: &str,
+    ) -> Result<()> {
+        let closure_id = ctx.upcoming_closure_id + t.offset;
+        let key = format!("J2:{}:{closure_id}:{stage}", m.id);
+        let claim = jobs::claim(
+            conn,
+            &key,
+            "J2",
+            &json!({ "asset": m.asset, "closeAt": t.close_at, "closureType": t.closure_type }),
+            &self.instance,
+        )
+        .await?;
+        if !matches!(claim, Claim::Run { .. }) {
             return Ok(());
         }
-        let Some(safe) = ctx.safe_ltv else {
+        let Some(safe) = safe_ltv_for(self.rpc.primary(), ctx, t.closure_type).await else {
             jobs::mark(
                 conn,
                 &key,
                 "failed",
                 Some(&format!(
                     "engine has no set for {} type {}",
-                    ctx.asset_id, ctx.closure_type
+                    ctx.asset_id, t.closure_type
                 )),
             )
             .await?;
@@ -213,8 +242,13 @@ impl Keeper {
         }
         let mut sent = 0usize;
         for owner in self.borrowers(conn, core, m.id).await? {
-            let (p, debt) = read_position(self.rpc.primary(), ctx, owner).await?;
-            let b = bell(ctx, &p)?;
+            let (mut p, debt) = read_position(self.rpc.primary(), ctx, owner).await?;
+            if p.covered && t.offset == 0 {
+                continue;
+            }
+            p.covered = false;
+            p.debt_projected = project(debt, ctx.borrow_rate, t.days)?;
+            let b = bell_at(ctx, &p, safe)?;
             if b.status != NEEDS_ACTION {
                 continue;
             }
@@ -224,9 +258,9 @@ impl Keeper {
             let (prem, unavailable) = if ctx.cover_paused {
                 (None, Some("Gap Cover is paused for this market"))
             } else {
-                // the pool's own quote: the amount the borrower would actually be charged
+                // the pool's own quote for this closure: what the borrower would actually be charged
                 (
-                    Some(preview_cover(self.rpc.primary(), ctx, &p).await?.0),
+                    Some(preview_cover(self.rpc.primary(), ctx, &p, Some(t)).await?.0),
                     None,
                 )
             };
@@ -243,10 +277,10 @@ impl Keeper {
                 "marketId": m.id.to_string(),
                 "asset": m.asset,
                 "token": m.token,
-                "closureId": ctx.upcoming_closure_id.to_string(),
-                "closureType": ctx.closure_type,
+                "closureId": closure_id.to_string(),
+                "closureType": t.closure_type,
                 "stage": stage,
-                "bellAt": ctx.bell_at,
+                "bellAt": t.bell_at,
                 "ltv": s(b.ltv),
                 "safeLtv": s(b.safe_ltv),
                 "cureRepay": s(b.cure_repay),
@@ -255,12 +289,12 @@ impl Keeper {
                 "default": default,
                 "loanDecimals": ctx.loan_dec,
                 "collateralDecimals": ctx.coll_dec,
-                "expiresAt": ctx.bell_at,
+                "expiresAt": t.bell_at,
             });
             if let Some(u) = unavailable {
                 payload["coverUnavailable"] = json!(u);
             }
-            let dedupe = format!("J2:{}:{}:{owner:#x}:{stage}", m.id, ctx.upcoming_closure_id);
+            let dedupe = format!("J2:{}:{closure_id}:{owner:#x}:{stage}", m.id);
             let inserted = sqlx::query(
                 "insert into app.notification_job (dedupe_key, address, event, payload) values ($1, $2, 'bell_headsup', $3)
                  on conflict (dedupe_key) do nothing",
@@ -281,7 +315,7 @@ impl Keeper {
         .await?;
         jobs::mark(conn, &key, "done", None).await?;
         self.metrics.jobs.with_label_values(&["J2", "done"]).inc();
-        tracing::info!(asset = %m.asset, stage, closure = ctx.upcoming_closure_id, enqueued = sent, "J2 Bell heads-up");
+        tracing::info!(asset = %m.asset, stage, closure = closure_id, enqueued = sent, "J2 Bell heads-up");
         Ok(())
     }
 
