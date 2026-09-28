@@ -24,7 +24,8 @@ PNPM := pnpm
         relayer-dev relayer-smoke keeper-dev indexer-dev api-dev relayer-e2e keeper-e2e indexer-e2e services-up \
         notifier-dev notifier-e2e r26-probe keeper-sigma-test
 
-backend-install: ## Install backend deps: pnpm workspace, uv calibration env, Rust crates fetched
+backend-install: ## Install backend deps: @credence/risk-wasm (wasm-pack, into target/be), pnpm workspace, uv calibration env, Rust crates fetched
+	CARGO_TARGET_DIR=$(BACKEND_TARGET_DIR) $(MAKE) --no-print-directory risk-wasm
 	$(PNPM) install --frozen-lockfile
 	cd calibration && $(UV) sync --frozen
 	$(CARGO) fetch --locked

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { parseAddressBook } from "../src/addresses.js";
 import { assetId, venueId } from "../src/eip712.js";
 import { ClockState, clockStateName } from "../src/types.js";
-import { abis, ICredencePriceFeedAbi, IAssetClockAbi } from "../src/generated/abis.js";
+import { ABI_VERSION, abis, ICredenceMarketAbi, ICredencePriceFeedAbi, IAssetClockAbi, ISeniorVaultAbi } from "../src/generated/abis.js";
 
 const book = {
   chainId: 412346,
@@ -63,12 +63,24 @@ describe("ids and enums", () => {
   });
 });
 
-describe("ABIs (deployments/abis/v0)", () => {
+describe("ABIs (deployments/abis/v1)", () => {
   it("exposes the price feed and clock", () => {
     const names = (ICredencePriceFeedAbi as readonly { type: string; name?: string }[]).map((x) => x.name);
     expect(names).toContain("submit");
     expect(names).toContain("ReportAccepted");
     expect((IAssetClockAbi as readonly { name?: string }[]).some((x) => x.name === "StateChanged")).toBe(true);
-    expect(Object.keys(abis).length).toBeGreaterThanOrEqual(27);
+    expect(Object.keys(abis).length).toBeGreaterThanOrEqual(37);
+    expect(ABI_VERSION).toBe("v1");
+  });
+
+  it("ReportAccepted carries marketStatus (R-25) and the market/vault v1 views exist", () => {
+    const ev = (ICredencePriceFeedAbi as unknown as readonly { type: string; name?: string; inputs?: readonly { name: string }[] }[]).find(
+      (x) => x.type === "event" && x.name === "ReportAccepted",
+    );
+    expect(ev?.inputs?.map((i) => i.name)).toEqual(["asset", "kind", "price", "observedAt", "seq", "marketStatus"]);
+    const market = (ICredenceMarketAbi as readonly { name?: string }[]).map((x) => x.name);
+    for (const f of ["bellStatus", "projectedDebt", "marketIds", "upcomingClosureId", "claimFees"]) expect(market).toContain(f);
+    const vault = (ISeniorVaultAbi as readonly { name?: string }[]).map((x) => x.name);
+    for (const f of ["processQueue", "requestRedeem", "queueHead", "pendingRedeemShares"]) expect(vault).toContain(f);
   });
 });

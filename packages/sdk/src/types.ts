@@ -1,4 +1,4 @@
-// Shared types that mirror contracts/src/libraries/Types.sol (interfaces v0). Enum values are part of
+// Shared types that mirror contracts/src/libraries/Types.sol (interfaces v1). Enum values are part of
 // the ABI: append only, never reorder.
 import type { Address, Hex } from "viem";
 
@@ -91,3 +91,18 @@ export function clockStateName(s: number): ClockStateName {
 }
 
 export type { Address, Hex };
+
+/** `BellEnforced.outcome` (v1). */
+export const BellOutcome = { SAFE: 0, ALREADY_COVERED: 1, AUTO_COVERED: 2, PRECLOSE_THEN_COVER: 3, PRECLOSE_SALE: 4 } as const;
+export type BellOutcome = (typeof BellOutcome)[keyof typeof BellOutcome];
+
+/** `ActionNotAllowedInState.action` (v1). */
+export const MarketAction = {
+  BORROW: 0,
+  WITHDRAW_COLLATERAL: 1,
+  REPAY: 2,
+  ADD_COLLATERAL: 3,
+  BUY_COVER: 4,
+  FLAG_FOR_AUCTION: 5,
+  ENFORCE_BELL: 6,
+} as const;

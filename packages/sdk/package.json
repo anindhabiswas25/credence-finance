@@ -2,15 +2,27 @@
   "name": "@credence/sdk",
   "version": "0.1.0",
   "private": true,
-  "description": "Credence TS SDK: ABIs (deployments/abis/v0), typed address book, shared types, EIP-712 report builder.",
+  "description": "Credence TS SDK: ABIs (deployments/abis/v1), typed address book, shared types, EIP-712 report builder, risk-wasm Bell/quote helpers.",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
-    ".": { "types": "./dist/index.d.ts", "default": "./dist/index.js" },
-    "./node": { "types": "./dist/node.d.ts", "default": "./dist/node.js" }
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./node": {
+      "types": "./dist/node.d.ts",
+      "default": "./dist/node.js"
+    },
+    "./risk": {
+      "types": "./dist/risk.d.ts",
+      "default": "./dist/risk.js"
+    }
   },
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "gen": "node scripts/gen-abis.mjs",
     "build": "node scripts/gen-abis.mjs && tsc -p tsconfig.build.json",
@@ -20,7 +32,8 @@
   },
   "dependencies": {
     "viem": "2.56.9",
-    "zod": "4.6.5"
+    "zod": "4.6.5",
+    "@credence/risk-wasm": "link:../../crates/risk-wasm/pkg"
   },
   "devDependencies": {
     "@credence/config": "workspace:*",

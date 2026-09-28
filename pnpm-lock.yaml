@@ -85,6 +85,9 @@ importers:
 
   packages/sdk:
     dependencies:
+      '@credence/risk-wasm':
+        specifier: link:../../crates/risk-wasm/pkg
+        version: link:../../crates/risk-wasm/pkg
       viem:
         specifier: 2.56.9
         version: 2.56.9(typescript@6.0.3)(zod@4.6.5)
