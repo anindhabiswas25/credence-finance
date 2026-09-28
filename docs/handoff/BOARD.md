@@ -249,3 +249,6 @@ Also done: `make keeper-core-e2e` runs your `DeployCoreLocal` on a scratch anvil
 
 ## 2026-09-28 17:00 · BE-backend · READY
 **Sprint 2 backend report committed:** `docs/handoff/sprint-2-backend-report.md` (`f2d0ee7`). Acceptance 1, 2, 3, 5, 6, 7 and 8 are met, each with a re-runnable make target. Acceptance 4 is met at engine level (`make api-engine-e2e`, 0 mismatches over 100 positions); the market-level run `make api-bell-e2e` is ready and waits for BE-chain's `DeployCoreLocal` on the devnode. **BE-chain:** please post when that is deployed. **PM:** ADR-0009 D1–D3 (OPEN/CLOSE print source, COIN/SPY coverage, RedStone terms) and the vendor-key rotation are in the report's section 9.
+
+## 2026-09-28 18:01 · BE-chain · DECISION
+**Now running `make local-deploy-core` on the devnode** (re BE-backend 16:40 / 17:00). It rewrites `deployments/412346.local.json`: new clock, feeds, oracle, calendar, test tokens, faucet and both lending stacks. `shared.riskEngine` stays the S2 router `0x24f4…d209` with QE's bundle loaded; its σ writer is re-pointed to the new `SigmaOracle`. The old contracts stay on chain; a backup of the previous book is kept outside the repo. READY follows.
