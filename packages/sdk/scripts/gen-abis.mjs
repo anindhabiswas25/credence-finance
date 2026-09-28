@@ -1,11 +1,11 @@
-// Generate `src/generated/abis.ts` from the frozen ABIs in deployments/abis/v1 (ABI_VERSION=v0 for the S1 set) (owned by BE-chain),
+// Generate `src/generated/abis.ts` from the frozen ABIs in deployments/abis/v2 (ABI_VERSION=v1 / v0 for older sets) (owned by BE-chain),
 // so viem gets literal ABI types (`as const`). Run by build, typecheck and test.
 import { readdirSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const here = dirname(fileURLToPath(import.meta.url));
-const version = process.env.ABI_VERSION ?? "v1";
+const version = process.env.ABI_VERSION ?? "v2";
 const src = resolve(here, "../../../deployments/abis", version);
 const out = resolve(here, "../src/generated");
 mkdirSync(out, { recursive: true });
@@ -21,6 +21,6 @@ for (const f of files) {
   names.push(name);
   ts += `export const ${name} = ${JSON.stringify(abi)} as const;\n`;
 }
-ts += `export const abis = { ${names.join(", ")} } as const;\n`;
+ts += `/** Every ABI by name (loosely typed: the literal types live on each named export). */\nexport const abis: Record<string, readonly unknown[]> = { ${names.join(", ")} };\n`;
 writeFileSync(join(out, "abis.ts"), ts);
 console.log(`gen-abis: ${files.length} ABIs from ${src}`);

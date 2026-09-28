@@ -8,23 +8,44 @@ export function indexerBook(chainId: number, dir: string): AddressBook {
   try {
     return loadAddressBook(chainId, dir);
   } catch (e) {
-    console.warn(`[indexer] ${(e as Error).message}; using placeholder addresses`);
-    return { chainId, startBlock: 0, shared: { calendar: ZERO, clock: ZERO, feedA: ZERO } } as AddressBook;
+    console.warn(
+      `[indexer] ${(e as Error).message}; using placeholder addresses`,
+    );
+    return {
+      chainId,
+      startBlock: 0,
+      shared: { calendar: ZERO, clock: ZERO, feedA: ZERO },
+    } as AddressBook;
   }
 }
 
 export type Stack = "equity" | "nav";
 
 /** Distinct `equity.<key>` / `nav.<key>` addresses (one market singleton and one vault per stack, R-01). */
-export function stackAddresses(book: Pick<AddressBook, "equity" | "nav">, key: "market" | "vault"): `0x${string}`[] {
-  const out = [book.equity?.[key], book.nav?.[key]].filter((a): a is `0x${string}` => !!a);
+export function stackAddresses(
+  book: Pick<AddressBook, "equity" | "nav">,
+  key: "market" | "vault" | "pool" | "auctionHouse",
+): `0x${string}`[] {
+  // the NAV stack has no auction house (its settlement adapter replaces it)
+  const get = (st: unknown) =>
+    (st as Partial<Record<typeof key, `0x${string}`>> | null | undefined)?.[
+      key
+    ];
+  const out = [get(book.equity), get(book.nav)].filter(
+    (a): a is `0x${string}` => !!a,
+  );
   return [...new Set(out.map((a) => a.toLowerCase() as `0x${string}`))];
 }
 
 /** Which stack a market or vault address belongs to (equity when both stacks share one address). */
-export function stackOf(book: Pick<AddressBook, "equity" | "nav">, key: "market" | "vault") {
-  const eq = book.equity?.[key]?.toLowerCase();
-  const nav = book.nav?.[key]?.toLowerCase();
+export function stackOf(
+  book: Pick<AddressBook, "equity" | "nav">,
+  key: "market" | "vault" | "pool" | "auctionHouse",
+) {
+  const get = (st: unknown) =>
+    (st as Partial<Record<typeof key, string>> | null | undefined)?.[key];
+  const eq = get(book.equity)?.toLowerCase();
+  const nav = get(book.nav)?.toLowerCase();
   return (addr: string): Stack => {
     const a = addr.toLowerCase();
     return a === eq ? "equity" : a === nav ? "nav" : "equity";

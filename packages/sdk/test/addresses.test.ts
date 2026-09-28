@@ -63,14 +63,14 @@ describe("ids and enums", () => {
   });
 });
 
-describe("ABIs (deployments/abis/v1)", () => {
+describe("ABIs (deployments/abis/v2)", () => {
   it("exposes the price feed and clock", () => {
     const names = (ICredencePriceFeedAbi as readonly { type: string; name?: string }[]).map((x) => x.name);
     expect(names).toContain("submit");
     expect(names).toContain("ReportAccepted");
     expect((IAssetClockAbi as readonly { name?: string }[]).some((x) => x.name === "StateChanged")).toBe(true);
     expect(Object.keys(abis).length).toBeGreaterThanOrEqual(37);
-    expect(ABI_VERSION).toBe("v1");
+    expect(ABI_VERSION).toBe("v2");
   });
 
   it("ReportAccepted carries marketStatus (R-25) and the market/vault v1 views exist", () => {

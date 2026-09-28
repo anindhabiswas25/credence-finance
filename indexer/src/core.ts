@@ -6,12 +6,26 @@
 // collateral event), so summing event deltas would drift. A read pinned to the event's block is
 // deterministic, reorg-safe and cached by Ponder, and the event itself still drives when a row changes.
 import { ponder, type Context } from "ponder:registry";
-import { clockState, market, position, positionEvent, sigmaPoint, vaultRequest, vaultState } from "ponder:schema";
+import {
+  auction,
+  clockState,
+  coverPolicy,
+  lotPosition,
+  market,
+  position,
+  positionEvent,
+  sigmaPoint,
+  vaultRequest,
+  vaultState,
+} from "ponder:schema";
 import { ICredenceMarketAbi, ISeniorVaultAbi } from "@credence/sdk";
 import { indexerBook, stackOf } from "./book";
 
 const chainId = Number(process.env.PONDER_CHAIN_ID ?? 412346);
-const book = indexerBook(chainId, process.env.DEPLOYMENTS_DIR ?? "../deployments");
+const book = indexerBook(
+  chainId,
+  process.env.DEPLOYMENTS_DIR ?? "../deployments",
+);
 const marketStack = stackOf(book, "market");
 const vaultStack = stackOf(book, "vault");
 
@@ -26,13 +40,22 @@ interface Ev {
 export function jsonable(v: unknown): unknown {
   if (typeof v === "bigint") return v.toString();
   if (Array.isArray(v)) return v.map(jsonable);
-  if (v && typeof v === "object") return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, jsonable(x)]));
+  if (v && typeof v === "object")
+    return Object.fromEntries(
+      Object.entries(v).map(([k, x]) => [k, jsonable(x)]),
+    );
   return v;
 }
 
 async function refreshMarket(context: Context, event: Ev, id: Hex) {
   const addr = event.log.address;
-  const s = await context.client.readContract({ abi: ICredenceMarketAbi, address: addr, functionName: "marketState", args: [id], blockNumber: event.block.number });
+  const s = await context.client.readContract({
+    abi: ICredenceMarketAbi,
+    address: addr,
+    functionName: "marketState",
+    args: [id],
+    blockNumber: event.block.number,
+  });
   const fields = {
     totalSupplyAssets: BigInt(s.totalSupplyAssets),
     totalBorrowAssets: BigInt(s.totalBorrowAssets),
@@ -50,7 +73,13 @@ async function refreshMarket(context: Context, event: Ev, id: Hex) {
     return row;
   }
   // First sight without MarketCreated (e.g. startBlock after creation): read the params too.
-  const p = await context.client.readContract({ abi: ICredenceMarketAbi, address: addr, functionName: "marketParams", args: [id], blockNumber: event.block.number });
+  const p = await context.client.readContract({
+    abi: ICredenceMarketAbi,
+    address: addr,
+    functionName: "marketParams",
+    args: [id],
+    blockNumber: event.block.number,
+  });
   return insertMarket(context, event, id, p, fields);
 }
 
@@ -65,7 +94,13 @@ type Params = {
   borrowCap: bigint;
 };
 
-async function insertMarket(context: Context, event: Ev, id: Hex, p: Params, state?: Record<string, bigint>) {
+async function insertMarket(
+  context: Context,
+  event: Ev,
+  id: Hex,
+  p: Params,
+  state?: Record<string, bigint>,
+) {
   const values = {
     marketId: id,
     stack: marketStack(event.log.address),
@@ -95,11 +130,29 @@ async function insertMarket(context: Context, event: Ev, id: Hex, p: Params, sta
   return values;
 }
 
-async function refreshPosition(context: Context, event: Ev, id: Hex, owner: Hex) {
-  const at = { address: event.log.address, blockNumber: event.block.number } as const;
+async function refreshPosition(
+  context: Context,
+  event: Ev,
+  id: Hex,
+  owner: Hex,
+) {
+  const at = {
+    address: event.log.address,
+    blockNumber: event.block.number,
+  } as const;
   const [p, debt] = await Promise.all([
-    context.client.readContract({ abi: ICredenceMarketAbi, functionName: "position", args: [id, owner], ...at }),
-    context.client.readContract({ abi: ICredenceMarketAbi, functionName: "debtOf", args: [id, owner], ...at }),
+    context.client.readContract({
+      abi: ICredenceMarketAbi,
+      functionName: "position",
+      args: [id, owner],
+      ...at,
+    }),
+    context.client.readContract({
+      abi: ICredenceMarketAbi,
+      functionName: "debtOf",
+      args: [id, owner],
+      ...at,
+    }),
   ]);
   const fields = {
     collateral: BigInt(p.collateral),
@@ -112,14 +165,27 @@ async function refreshPosition(context: Context, event: Ev, id: Hex, owner: Hex)
     updatedBlock: event.block.number,
     updatedAt: event.block.timestamp,
   };
-  await context.db.insert(position).values({ marketId: id, owner, ...fields }).onConflictDoUpdate(fields);
+  await context.db
+    .insert(position)
+    .values({ marketId: id, owner, ...fields })
+    .onConflictDoUpdate(fields);
 }
 
-async function logEvent(context: Context, event: Ev, id: Hex | null, owner: Hex, kind: string, amounts: Record<string, unknown>) {
+async function logEvent(
+  context: Context,
+  event: Ev,
+  id: Hex | null,
+  owner: Hex,
+  kind: string,
+  amounts: Record<string, unknown>,
+) {
   let cs: number | null = null;
   if (id) {
     const m = await context.db.find(market, { marketId: id });
-    if (m) cs = (await context.db.find(clockState, { assetId: m.assetId }))?.state ?? null;
+    if (m)
+      cs =
+        (await context.db.find(clockState, { assetId: m.assetId }))?.state ??
+        null;
   }
   await context.db
     .insert(positionEvent)
@@ -138,7 +204,14 @@ async function logEvent(context: Context, event: Ev, id: Hex | null, owner: Hex,
 }
 
 /** A position event: refresh the market and the position, append the history row. */
-async function onPosition(context: Context, event: Ev, id: Hex, owner: Hex, kind: string, args: Record<string, unknown>) {
+async function onPosition(
+  context: Context,
+  event: Ev,
+  id: Hex,
+  owner: Hex,
+  kind: string,
+  args: Record<string, unknown>,
+) {
   await refreshMarket(context, event, id);
   await refreshPosition(context, event, id, owner);
   const { id: _id, owner: _owner, ...amounts } = args;
@@ -147,7 +220,12 @@ async function onPosition(context: Context, event: Ev, id: Hex, owner: Hex, kind
 
 // ── markets ──
 ponder.on("Market:MarketCreated", async ({ event, context }) => {
-  await insertMarket(context, event, event.args.id, event.args.p as unknown as Params);
+  await insertMarket(
+    context,
+    event,
+    event.args.id,
+    event.args.p as unknown as Params,
+  );
 });
 ponder.on("Market:Accrued", async ({ event, context }) => {
   await refreshMarket(context, event, event.args.id);
@@ -157,53 +235,275 @@ ponder.on("Market:FeesClaimed", async ({ event, context }) => {
 });
 ponder.on("Market:CapsSet", async ({ event, context }) => {
   await refreshMarket(context, event, event.args.id);
-  await context.db.update(market, { marketId: event.args.id }).set({ supplyCap: BigInt(event.args.supplyCap), borrowCap: BigInt(event.args.borrowCap) });
+  await context.db.update(market, { marketId: event.args.id }).set({
+    supplyCap: BigInt(event.args.supplyCap),
+    borrowCap: BigInt(event.args.borrowCap),
+  });
 });
 ponder.on("Market:RiskParamsSet", async ({ event, context }) => {
   await refreshMarket(context, event, event.args.id);
-  await context.db.update(market, { marketId: event.args.id }).set({ maxLtv: BigInt(event.args.maxLtv), lt: BigInt(event.args.lt) });
+  await context.db
+    .update(market, { marketId: event.args.id })
+    .set({ maxLtv: BigInt(event.args.maxLtv), lt: BigInt(event.args.lt) });
 });
 
 // ── positions ──
-ponder.on("Market:CollateralAdded", async ({ event, context }) => onPosition(context, event, event.args.id, event.args.owner, "collateral_added", event.args));
-ponder.on("Market:CollateralWithdrawn", async ({ event, context }) => onPosition(context, event, event.args.id, event.args.owner, "collateral_withdrawn", event.args));
-ponder.on("Market:Borrow", async ({ event, context }) => onPosition(context, event, event.args.id, event.args.owner, "borrow", event.args));
-ponder.on("Market:Repay", async ({ event, context }) => onPosition(context, event, event.args.id, event.args.owner, "repay", event.args));
-ponder.on("Market:CoverBought", async ({ event, context }) => onPosition(context, event, event.args.id, event.args.owner, "cover_bought", event.args));
-ponder.on("Market:BellEnforced", async ({ event, context }) => onPosition(context, event, event.args.id, event.args.owner, "bell_enforced", event.args));
-ponder.on("Market:AutoCoverSet", async ({ event, context }) => onPosition(context, event, event.args.id, event.args.owner, "auto_cover_set", event.args));
-ponder.on("Market:Flagged", async ({ event, context }) => onPosition(context, event, event.args.id, event.args.owner, "flagged", event.args));
-ponder.on("Market:Dequeued", async ({ event, context }) => onPosition(context, event, event.args.id, event.args.owner, "dequeued", event.args));
-ponder.on("Market:Shortfall", async ({ event, context }) => onPosition(context, event, event.args.id, event.args.owner, "shortfall", event.args));
+ponder.on("Market:CollateralAdded", async ({ event, context }) =>
+  onPosition(
+    context,
+    event,
+    event.args.id,
+    event.args.owner,
+    "collateral_added",
+    event.args,
+  ),
+);
+ponder.on("Market:CollateralWithdrawn", async ({ event, context }) =>
+  onPosition(
+    context,
+    event,
+    event.args.id,
+    event.args.owner,
+    "collateral_withdrawn",
+    event.args,
+  ),
+);
+ponder.on("Market:Borrow", async ({ event, context }) =>
+  onPosition(
+    context,
+    event,
+    event.args.id,
+    event.args.owner,
+    "borrow",
+    event.args,
+  ),
+);
+ponder.on("Market:Repay", async ({ event, context }) =>
+  onPosition(
+    context,
+    event,
+    event.args.id,
+    event.args.owner,
+    "repay",
+    event.args,
+  ),
+);
+ponder.on("Market:CoverBought", async ({ event, context }) =>
+  onPosition(
+    context,
+    event,
+    event.args.id,
+    event.args.owner,
+    "cover_bought",
+    event.args,
+  ),
+);
+ponder.on("Market:BellEnforced", async ({ event, context }) =>
+  onPosition(
+    context,
+    event,
+    event.args.id,
+    event.args.owner,
+    "bell_enforced",
+    event.args,
+  ),
+);
+ponder.on("Market:AutoCoverSet", async ({ event, context }) =>
+  onPosition(
+    context,
+    event,
+    event.args.id,
+    event.args.owner,
+    "auto_cover_set",
+    event.args,
+  ),
+);
+ponder.on("Market:Flagged", async ({ event, context }) =>
+  onPosition(
+    context,
+    event,
+    event.args.id,
+    event.args.owner,
+    "flagged",
+    event.args,
+  ),
+);
+ponder.on("Market:Dequeued", async ({ event, context }) =>
+  onPosition(
+    context,
+    event,
+    event.args.id,
+    event.args.owner,
+    "dequeued",
+    event.args,
+  ),
+);
+ponder.on("Market:Shortfall", async ({ event, context }) =>
+  onPosition(
+    context,
+    event,
+    event.args.id,
+    event.args.owner,
+    "shortfall",
+    event.args,
+  ),
+);
 
-// Lot events carry the auction id, not the market id: find the owner's position in that auction.
-async function marketOfAuction(context: Context, event: Ev, auctionId: bigint): Promise<Hex | null> {
-  const info = await context.client.readContract({ abi: ICredenceMarketAbi, address: event.log.address, functionName: "lotInfo", args: [auctionId], blockNumber: event.block.number });
-  const id = (info as unknown as { marketId?: Hex }).marketId;
-  return id && id !== "0x0000000000000000000000000000000000000000000000000000000000000000" ? id : null;
+// Lot events: `LotReleased` names the auction, whose row (AuctionCreated, earlier) names the market.
+// `PositionSettled` (v2) and `Shortfall` carry the settlement; both land on `lot_position` (projections).
+// Shortfall (same tx as the PositionSettled it belongs to) is matched through the tx hash.
+const settledIn = new Map<string, bigint>(); // `${tx}:${owner}` → auctionId, for a Shortfall after its PositionSettled
+const shortfallIn = new Map<
+  string,
+  { s: bigint; pool: bigint; reserve: bigint; senior: bigint }
+>();
+
+async function marketOfAuction(
+  context: Context,
+  auctionId: bigint,
+): Promise<Hex | null> {
+  return (await context.db.find(auction, { auctionId }))?.marketId ?? null;
 }
 ponder.on("Market:LotReleased", async ({ event, context }) => {
-  const id = await marketOfAuction(context, event, event.args.auctionId);
+  const { auctionId, owner, qty } = event.args;
+  const id = await marketOfAuction(context, auctionId);
+  await context.db
+    .insert(lotPosition)
+    .values({ auctionId, owner: owner.toLowerCase() as Hex, marketId: id, qty })
+    .onConflictDoUpdate({ qty });
   if (id) {
     await refreshMarket(context, event, id);
-    await refreshPosition(context, event, id, event.args.owner);
+    await refreshPosition(context, event, id, owner);
   }
-  await logEvent(context, event, id, event.args.owner, "lot_released", { auctionId: event.args.auctionId, qty: event.args.qty });
+  await logEvent(context, event, id, owner, "lot_released", { auctionId, qty });
 });
 ponder.on("Market:PositionSettled", async ({ event, context }) => {
-  const id = await marketOfAuction(context, event, event.args.auctionId);
-  if (id) {
-    await refreshMarket(context, event, id);
-    await refreshPosition(context, event, id, event.args.owner);
+  const {
+    marketId,
+    borrower,
+    auctionId,
+    collateralSold,
+    proceeds,
+    penalty,
+    shortfall,
+    refund,
+    debtAfter,
+  } = event.args;
+  const owner = borrower.toLowerCase() as Hex;
+  const k = `${event.transaction.hash}:${owner}`;
+  const loss = shortfallIn.get(k);
+  shortfallIn.delete(k);
+  settledIn.set(k, auctionId);
+  const fields = {
+    marketId,
+    collateralSold,
+    proceeds,
+    penalty,
+    shortfall,
+    refund,
+    debtAfter,
+    settledAt: event.block.timestamp,
+    ...(loss
+      ? {
+          paidByPool: loss.pool,
+          paidByReserve: loss.reserve,
+          seniorLoss: loss.senior,
+        }
+      : {}),
+  };
+  await context.db
+    .insert(lotPosition)
+    .values({ auctionId, owner, qty: collateralSold, ...fields })
+    .onConflictDoUpdate(fields);
+  await refreshMarket(context, event, marketId);
+  await refreshPosition(context, event, marketId, borrower);
+  await logEvent(context, event, marketId, borrower, "position_settled", {
+    auctionId,
+    collateralSold,
+    proceeds,
+    penalty,
+    shortfall,
+    refund,
+    debtAfter,
+  });
+});
+ponder.on("Market:Shortfall", async ({ event, context }) => {
+  const { id, owner, s, paidPool, paidReserve, seniorLoss } = event.args;
+  const k = `${event.transaction.hash}:${owner.toLowerCase()}`;
+  const auctionId = settledIn.get(k);
+  if (auctionId === undefined)
+    shortfallIn.set(k, {
+      s,
+      pool: paidPool,
+      reserve: paidReserve,
+      senior: seniorLoss,
+    });
+  else
+    await context.db
+      .update(lotPosition, { auctionId, owner: owner.toLowerCase() as Hex })
+      .set({ paidByPool: paidPool, paidByReserve: paidReserve, seniorLoss });
+  await onPosition(context, event, id, owner, "shortfall", event.args);
+});
+
+// Cover: the pool's CoverWritten (earlier in the tx) created the policy; the market's CoverBought names
+// it and says whether auto-cover wrote it, and AutoCoverApplied adds the debt after the premium.
+const policyIn = new Map<string, string>(); // `${tx}:${owner}` → cover_policy id
+const poolOfMarket = (addr: string) => {
+  const st = marketStack(addr);
+  return (st === "equity" ? book.equity?.pool : book.nav?.pool)?.toLowerCase();
+};
+ponder.on("Market:CoverBought", async ({ event, context }) => {
+  const a = event.args;
+  const p = poolOfMarket(event.log.address);
+  if (p) {
+    const pid = `${p}:${a.policyId}`;
+    if (await context.db.find(coverPolicy, { id: pid })) {
+      await context.db
+        .update(coverPolicy, { id: pid })
+        .set({ closureId: BigInt(a.closureId), auto: a.auto_ });
+      policyIn.set(`${event.transaction.hash}:${a.owner.toLowerCase()}`, pid);
+    }
   }
-  const { owner: _o, ...amounts } = event.args;
-  await logEvent(context, event, id, event.args.owner, "position_settled", amounts);
+  await onPosition(
+    context,
+    event,
+    event.args.id,
+    event.args.owner,
+    "cover_bought",
+    event.args,
+  );
+});
+ponder.on("Market:AutoCoverApplied", async ({ event, context }) => {
+  const { marketId, borrower, premium, debtAfter, closureId } = event.args;
+  const k = `${event.transaction.hash}:${borrower.toLowerCase()}`;
+  const pid = policyIn.get(k);
+  policyIn.delete(k);
+  if (pid)
+    await context.db
+      .update(coverPolicy, { id: pid })
+      .set({ auto: true, debtAfter });
+  await onPosition(context, event, marketId, borrower, "auto_cover_applied", {
+    closureId,
+    premium,
+    debtAfter,
+  });
 });
 
 // ── Senior Vault ──
 async function refreshVault(context: Context, event: Ev) {
-  const at = { abi: ISeniorVaultAbi, address: event.log.address, blockNumber: event.block.number } as const;
-  const [totalAssets, totalSupply, idle, queueLength, pendingRedeemShares, claimableAssets] = await Promise.all([
+  const at = {
+    abi: ISeniorVaultAbi,
+    address: event.log.address,
+    blockNumber: event.block.number,
+  } as const;
+  const [
+    totalAssets,
+    totalSupply,
+    idle,
+    queueLength,
+    pendingRedeemShares,
+    claimableAssets,
+  ] = await Promise.all([
     context.client.readContract({ ...at, functionName: "totalAssets" }),
     context.client.readContract({ ...at, functionName: "totalSupply" }),
     context.client.readContract({ ...at, functionName: "idle" }),
@@ -211,40 +511,91 @@ async function refreshVault(context: Context, event: Ev) {
     context.client.readContract({ ...at, functionName: "pendingRedeemShares" }),
     context.client.readContract({ ...at, functionName: "claimableAssets" }),
   ]);
-  const fields = { vault: event.log.address, totalAssets, totalSupply, idle, queueLength, pendingRedeemShares, claimableAssets, updatedBlock: event.block.number, updatedAt: event.block.timestamp };
-  await context.db.insert(vaultState).values({ stack: vaultStack(event.log.address), ...fields }).onConflictDoUpdate(fields);
+  const fields = {
+    vault: event.log.address,
+    totalAssets,
+    totalSupply,
+    idle,
+    queueLength,
+    pendingRedeemShares,
+    claimableAssets,
+    updatedBlock: event.block.number,
+    updatedAt: event.block.timestamp,
+  };
+  await context.db
+    .insert(vaultState)
+    .values({ stack: vaultStack(event.log.address), ...fields })
+    .onConflictDoUpdate(fields);
 }
 
 for (const ev of ["Deposit", "Withdraw", "Allocated", "CapSet"] as const) {
-  ponder.on(`SeniorVault:${ev}`, async ({ event, context }) => refreshVault(context, event));
+  ponder.on(`SeniorVault:${ev}`, async ({ event, context }) =>
+    refreshVault(context, event),
+  );
 }
 
 ponder.on("SeniorVault:RedeemRequested", async ({ event, context }) => {
   const stack = vaultStack(event.log.address);
-  const r = await context.client.readContract({ abi: ISeniorVaultAbi, address: event.log.address, functionName: "redeemRequest", args: [event.args.id], blockNumber: event.block.number });
+  const r = await context.client.readContract({
+    abi: ISeniorVaultAbi,
+    address: event.log.address,
+    functionName: "redeemRequest",
+    args: [event.args.id],
+    blockNumber: event.block.number,
+  });
   await context.db
     .insert(vaultRequest)
-    .values({ id: `${stack}:${event.args.id}`, stack, requestId: event.args.id, owner: event.args.owner, receiver: r.receiver, shares: event.args.shares, status: "requested", requestedAt: event.block.timestamp })
+    .values({
+      id: `${stack}:${event.args.id}`,
+      stack,
+      requestId: event.args.id,
+      owner: event.args.owner,
+      receiver: r.receiver,
+      shares: event.args.shares,
+      status: "requested",
+      requestedAt: event.block.timestamp,
+    })
     .onConflictDoNothing();
   await refreshVault(context, event);
 });
 ponder.on("SeniorVault:RedeemProcessed", async ({ event, context }) => {
   const stack = vaultStack(event.log.address);
-  await context.db.update(vaultRequest, { id: `${stack}:${event.args.id}` }).set({ assets: event.args.assets, status: "processed", processedAt: event.block.timestamp });
+  await context.db
+    .update(vaultRequest, { id: `${stack}:${event.args.id}` })
+    .set({
+      assets: event.args.assets,
+      status: "processed",
+      processedAt: event.block.timestamp,
+    });
   await refreshVault(context, event);
 });
 ponder.on("SeniorVault:RedeemClaimed", async ({ event, context }) => {
   const stack = vaultStack(event.log.address);
-  await context.db.update(vaultRequest, { id: `${stack}:${event.args.id}` }).set({ receiver: event.args.receiver, status: "claimed", claimedAt: event.block.timestamp });
+  await context.db
+    .update(vaultRequest, { id: `${stack}:${event.args.id}` })
+    .set({
+      receiver: event.args.receiver,
+      status: "claimed",
+      claimedAt: event.block.timestamp,
+    });
   await refreshVault(context, event);
 });
 
 // ── σ ──
 ponder.on("RiskEngine:SigmaUpdated", async ({ event, context }) => {
   const { asset, closureType, sigma } = event.args;
-  const fields = { sigma, block: event.block.number, ts: event.block.timestamp };
+  const fields = {
+    sigma,
+    block: event.block.number,
+    ts: event.block.timestamp,
+  };
   await context.db
     .insert(sigmaPoint)
-    .values({ assetId: asset, closureType: Number(closureType), day: event.block.timestamp / 86_400n, ...fields })
+    .values({
+      assetId: asset,
+      closureType: Number(closureType),
+      day: event.block.timestamp / 86_400n,
+      ...fields,
+    })
     .onConflictDoUpdate(fields);
 });
