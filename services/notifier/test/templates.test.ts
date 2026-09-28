@@ -201,3 +201,137 @@ describe("Bell outcome", () => {
     ).toThrow(BadPayload);
   });
 });
+
+describe("S3 events (§10.5) carry exact amounts", () => {
+  const O = "https://app.test";
+  it("queued at reopen: countdown with the cure amounts", () => {
+    const { rendered } = render(
+      "reopen_queued",
+      {
+        marketId: "0xabc",
+        asset: "NVDA",
+        token: "tNVDA",
+        auctionId: "12",
+        closureId: "7",
+        healthFactor: "870000000000000000",
+        openPrint: "171230000000000000000",
+        cureRepay: "4012345678",
+        cureCollateral: "23456700000000000001",
+        deadline: Date.UTC(2026, 9, 5, 13, 32) / 1000,
+        loanDecimals: 6,
+        collateralDecimals: 18,
+      },
+      O,
+    );
+    expect(rendered.push.body).toBe(
+      "You can leave the queue by repaying $4,012.35 or adding 23.457 tNVDA until 09:32:00 ET.",
+    );
+    expect(rendered.text).toContain(
+      "NVDA reopened at $171.23 and your loan's health factor is 0.87",
+    );
+  });
+  it("auction settled: tokens sold, p* vs open print, penalty, refund, new HF", () => {
+    const { rendered } = render(
+      "auction_settled",
+      {
+        marketId: "0xabc",
+        asset: "NVDA",
+        token: "tNVDA",
+        auctionId: "12",
+        kind: "REOPEN",
+        collateralSold: "96920000000000000000",
+        pStar: "167500000000000000000",
+        openPrint: "171230000000000000000",
+        proceeds: "16234100000",
+        penalty: "811705000",
+        repaid: "15422395000",
+        refund: "0",
+        shortfall: "0",
+        debtAfter: "51606605000",
+        healthFactorAfter: "1052300000000000000",
+      },
+      O,
+    );
+    expect(rendered.text).toContain(
+      "96.9200 tNVDA sold at $167.50 (open print $171.23, −2.18%), for $16,234.10.",
+    );
+    expect(rendered.text).toContain(
+      "Liquidation penalty $811.71; $15,422.40 repaid your loan; $0.00 refunded to you.",
+    );
+    expect(rendered.text).toContain(
+      "Your remaining debt is $51,606.61 and your health factor is now 1.05.",
+    );
+    expect(rendered.text).not.toContain("shortfall");
+  });
+  it("auction settled with a shortfall and no debt left", () => {
+    const { rendered } = render(
+      "auction_settled",
+      {
+        marketId: "0xabc",
+        asset: "TSLA",
+        token: "tTSLA",
+        auctionId: "3",
+        kind: "EMERGENCY",
+        collateralSold: "10000000000000000000",
+        pStar: "300000000000000000000",
+        openPrint: null,
+        proceeds: "3000000000",
+        penalty: "0",
+        repaid: "3000000000",
+        refund: "0",
+        shortfall: "125000000",
+        debtAfter: "0",
+        healthFactorAfter: null,
+      },
+      O,
+    );
+    expect(rendered.text).toContain("a shortfall of $125.00 was absorbed");
+    expect(rendered.text).toContain("Your loan is fully repaid.");
+  });
+  it("epoch settled: P&L breakdown and share price", () => {
+    const { rendered } = render(
+      "epoch_settled",
+      {
+        stack: "equity",
+        epochId: "42",
+        premiums: "35950000",
+        fees: "1234567",
+        penalties: "270568333",
+        bonds: "0",
+        losses: "0",
+        sharePriceBefore: "1000000",
+        sharePriceAfter: "1003076",
+        shares: "1000000000000000000000",
+        value: "1003076000",
+      },
+      O,
+    );
+    expect(rendered.text).toContain(
+      "Premiums $35.95, risk fees $1.23, penalties $270.57, forfeited bonds $0.00; losses paid $0.00.",
+    );
+    expect(rendered.text).toContain(
+      "The new share price is $1.003076 (was $1.000000). Your 1,000.0000 shares are worth $1,003.08.",
+    );
+  });
+  it("withdrawal claimable: amount and claim link; channels per §10.5", () => {
+    const { rendered } = render(
+      "withdrawal_claimable",
+      {
+        stack: "equity",
+        epochId: "42",
+        shares: "500000000000000000000",
+        assets: "501538000",
+      },
+      O,
+    );
+    expect(rendered.subject).toBe("Withdrawal ready: claim $501.54");
+    expect(rendered.text).toContain(
+      "https://app.test/underwrite?claim=equity:42",
+    );
+  });
+  it("rejects a malformed payload", () => {
+    expect(() => render("auction_settled", { asset: "NVDA" }, O)).toThrow(
+      BadPayload,
+    );
+  });
+});

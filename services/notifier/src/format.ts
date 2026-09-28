@@ -58,3 +58,64 @@ export function etTime(unixS: number): string {
   );
   return `${parts.weekday} ${parts.hour}:${parts.minute} ET`;
 }
+
+/** base / 10^decimals, nearest at `dp` decimals (informational figures: prices, ratios of value). */
+export function decimalNearest(
+  base: bigint | string,
+  decimals: number,
+  dp: number,
+): string {
+  const v = BigInt(base);
+  if (v < 0n) throw new Error("negative amount");
+  const shift = decimals - dp;
+  const scaled =
+    shift >= 0
+      ? (v + 10n ** BigInt(shift) / 2n) / 10n ** BigInt(shift)
+      : v * 10n ** BigInt(-shift);
+  const s = scaled.toString().padStart(dp + 1, "0");
+  const int = s.slice(0, s.length - dp);
+  return dp > 0 ? `${group(int)}.${s.slice(s.length - dp)}` : group(int);
+}
+
+/** An amount the user receives or a figure they read (not one they must pay): nearest cent. */
+export function usdNearest(base: bigint | string, decimals = 6): string {
+  return `$${decimalNearest(base, decimals, 2)}`;
+}
+
+/** A WAD price per token: "$171.23". */
+export function price(wad: bigint | string): string {
+  return usdNearest(wad, 18);
+}
+
+/** A WAD ratio as a plain number, 2 decimals: "0.87". */
+export function ratio(wad: bigint | string): string {
+  return decimalNearest(wad, 18, 2);
+}
+
+/** Signed percentage change of `a` against `b` (both WAD prices): "−2.15%". */
+export function change(a: bigint | string, b: bigint | string): string {
+  const x = BigInt(a);
+  const y = BigInt(b);
+  if (y === 0n) return "n/a";
+  const bps100 = ((x - y) * 1_000_000n) / y; // ten-thousandths
+  const r = bps100 < 0n ? -bps100 : bps100;
+  const h = (r + 50n) / 100n; // hundredths of a percent, nearest
+  const s = h.toString().padStart(3, "0");
+  return `${bps100 < 0n ? "−" : "+"}${s.slice(0, -2)}.${s.slice(-2)}%`;
+}
+
+const ET_S = new Intl.DateTimeFormat("en-US", {
+  timeZone: "America/New_York",
+  hour: "2-digit",
+  minute: "2-digit",
+  second: "2-digit",
+  hourCycle: "h23",
+});
+
+/** "09:32:00 ET" (the reopen countdown needs seconds). */
+export function etClock(unixS: number): string {
+  const parts = Object.fromEntries(
+    ET_S.formatToParts(new Date(unixS * 1000)).map((p) => [p.type, p.value]),
+  );
+  return `${parts.hour}:${parts.minute}:${parts.second} ET`;
+}
