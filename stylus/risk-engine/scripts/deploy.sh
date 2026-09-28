@@ -50,7 +50,9 @@ read -r AUCTION A_TX A_SIZE A_SHA < <(deploy_program credence-auction-math "$ROU
 
 # 3. wire
 cast send --rpc-url "$RPC" --private-key "$KEY" "$ROUTER" "initializeWiring(address,address)" "$PRICING" "$AUCTION" >/dev/null
-[ "$(cast call --rpc-url "$RPC" "$ROUTER" 'pricing()(address)')" = "$PRICING" ] || { echo "wiring failed" >&2; exit 1; }
+lc() { tr '[:upper:]' '[:lower:]'; }
+[ "$(cast call --rpc-url "$RPC" "$ROUTER" 'pricing()(address)' | lc)" = "$(echo "$PRICING" | lc)" ] \
+  || { echo "wiring failed: router $ROUTER, pricing $PRICING" >&2; exit 1; }
 
 BOOK="$ROOT/deployments/$CHAIN_ID.local.json"
 mkdir -p "$ROOT/deployments"

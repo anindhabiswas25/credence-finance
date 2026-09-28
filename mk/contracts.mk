@@ -142,11 +142,11 @@ RISK_FILE   ?= $(RISK_BUNDLE)
 risk-validate-set: ## Validate a scenario-set / joint-set / risk-bundle file (RISK_FILE=…) with risk-cli
 	cargo run -q --release -p credence-risk-cli -- validate-set $(RISK_FILE)
 
-risk-load-set: ## Validate RISK_BUNDLE, then load it into the engine on LOCAL_RPC (RISK_ENGINE= or the address book)
+risk-load-set: ## Validate RISK_BUNDLE, load it into the engine on LOCAL_RPC (RISK_ENGINE= or the address book) and verify every hash
 	cargo run -q --release -p credence-risk-cli -- validate-set $(RISK_BUNDLE) > /dev/null
-	cd $(CONTRACTS_DIR) && PRIVATE_KEY=$(DEVNODE_KEY) RISK_BUNDLE=$(abspath $(RISK_BUNDLE)) \
-	  RISK_BUNDLE_DIR=$(abspath $(dir $(RISK_BUNDLE))) \
-	  forge script script/LoadScenarioSet.s.sol:LoadScenarioSet --rpc-url $(LOCAL_RPC) --broadcast --slow
+	RISK_ENGINE=$${RISK_ENGINE:-$$(jq -r .shared.riskEngine deployments/$$(cast chain-id --rpc-url $(LOCAL_RPC)).local.json)} \
+	  PRIVATE_KEY=$(DEVNODE_KEY) LOCAL_RPC=$(LOCAL_RPC) RISK_BUNDLE=$(abspath $(RISK_BUNDLE)) \
+	  RISK_BUNDLE_DIR=$(abspath $(dir $(RISK_BUNDLE))) bash $(CONTRACTS_DIR)/script/load_risk_bundle.sh
 
 # risk-py (PyO3 + maturin). maturin is not installed globally: a pinned `uvx maturin` builds into a project venv
 # (board DECISION 09:10). QE: `make risk-py-develop RISK_PY_VENV=calibration/.venv CARGO_TARGET_DIR=target/quant`.

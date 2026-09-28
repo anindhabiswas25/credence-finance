@@ -8,7 +8,8 @@ import {RiskParams} from "../src/libraries/Types.sol";
 /// @title Load a risk bundle (ADR-0106) into the Risk Engine: RiskParams, σ floors, scenario sets, joint columns,
 ///        initial σ; then read every hash back from the engine and compare it with the file.
 /// @notice Validate first: `risk-cli validate-set <bundle>` checks sorting, canonical packing and every hash
-///         (`make risk-load-set` does both). This script re-checks keccak256(packed) per set before it sends
+///         (`make risk-load-set` does both). For a Stylus engine use `plan()` + `script/load_risk_bundle.sh`
+///         (forge cannot execute WASM, so it cannot simulate calls into the engine). This script re-checks keccak256(packed) per set before it sends
 ///         anything, so a hand-edited file cannot reach the engine.
 /// @dev Env: `RISK_BUNDLE` (path), `RISK_BUNDLE_DIR` (where the referenced files live; default = the bundle's
 ///      directory as computed by make), `RISK_ENGINE` (default: `.shared.riskEngine` of the local address book),
@@ -39,6 +40,108 @@ contract LoadScenarioSet is Script {
         vm.stopBroadcast();
         verify(IRiskEngine(engine), bundle, dir);
         console2.log("risk bundle loaded and verified on engine", engine);
+    }
+
+    /// @notice For a Stylus engine (forge's EVM cannot execute WASM, so it cannot simulate the writes): write every
+    ///      call of the bundle as `{to, data, what}` to `PLAN_OUT` (default ../deployments/<chainId>.risk-load.local.json)
+    ///      together with the hashes to verify, for `script/load_risk_bundle.sh` to send with cast. The same keccak
+    ///      pre-checks as `load` run here. Env as `run`, plus SENDER (the address that will send; decides σ).
+    function plan() external {
+        string memory bundle = vm.envString("RISK_BUNDLE");
+        string memory dir = vm.envString("RISK_BUNDLE_DIR");
+        address engine = vm.envAddress("RISK_ENGINE");
+        address sender = vm.envAddress("SENDER");
+        string memory b = vm.readFile(bundle);
+        string memory calls = "[";
+        string memory checks = "[";
+        calls = _add(calls, engine, abi.encodeCall(IRiskEngine.setParams, (_params(b))), "setParams", true);
+        (bytes32[] memory fIds, uint8[] memory fTypes, uint256[] memory floors) =
+            _triples(b, ".sigmaFloors", ".floors");
+        for (uint256 i; i < fIds.length; ++i) {
+            calls = _add(
+                calls, engine, abi.encodeCall(IRiskEngine.setSigmaFloor, (fIds[i], fTypes[i], floors[i])), "setSigmaFloor", false
+            );
+        }
+        string[] memory sets = _strings(b, ".scenarioSets");
+        for (uint256 i; i < sets.length; ++i) {
+            string memory s = vm.readFile(string.concat(dir, "/", sets[i]));
+            uint256[] memory words = _words(s, ".packed");
+            bytes32 h = vm.parseJsonBytes32(s, ".scenarioHash");
+            bytes32 got = keccak256(abi.encodePacked(words));
+            if (got != h) revert Mismatch(string.concat("scenarioHash of ", sets[i]), h, got);
+            bytes32 id = vm.parseJsonBytes32(s, ".assetId");
+            uint8 t = _type(s, ".closureType");
+            calls = _add(
+                calls,
+                engine,
+                abi.encodeCall(IRiskEngine.setScenarioSet, (id, t, words, uint32(vm.parseJsonUint(s, ".n")))),
+                sets[i],
+                false
+            );
+            checks = _check(checks, abi.encodeCall(IRiskEngine.scenarioHash, (id, t)), h, sets[i], i == 0);
+        }
+        if (vm.keyExistsJson(b, ".jointSet")) {
+            string memory j = vm.readFile(string.concat(dir, "/", vm.parseJsonString(b, ".jointSet")));
+            bytes32[] memory ids = vm.parseJsonBytes32Array(j, ".assetIds");
+            bytes32[] memory hashes = vm.parseJsonBytes32Array(j, ".columnHashes");
+            for (uint256 i; i < ids.length; ++i) {
+                uint256[] memory words = _words(j, string.concat(".columns[", vm.toString(i), "]"));
+                bytes32 got = keccak256(abi.encodePacked(words));
+                if (got != hashes[i]) revert Mismatch("joint columnHash", hashes[i], got);
+                calls = _add(calls, engine, abi.encodeCall(IRiskEngine.setJointColumn, (ids[i], words)), "jointColumn", false);
+                checks = _check(
+                    checks, abi.encodeCall(IRiskEngine.jointHash, (ids[i])), hashes[i], "jointColumn", sets.length == 0 && i == 0
+                );
+            }
+        }
+        if (sender == IRiskEngine(engine).sigmaOracle()) {
+            (bytes32[] memory ids, uint8[] memory types, uint256[] memory values) = _triples(b, ".sigmas", ".values");
+            for (uint256 i; i < ids.length; ++i) {
+                calls = _add(calls, engine, abi.encodeCall(IRiskEngine.updateSigma, (ids[i], types[i], values[i])), "updateSigma", false);
+            }
+        }
+        string memory out = vm.envOr(
+            "PLAN_OUT",
+            string.concat(vm.projectRoot(), "/../deployments/", vm.toString(block.chainid), ".risk-load.local.json")
+        );
+        vm.writeFile(out, string.concat('{ "calls": ', calls, "], \"checks\": ", checks, "] }\n"));
+        console2.log("load plan:", out);
+    }
+
+    function _add(string memory acc, address to, bytes memory data, string memory what, bool first)
+        internal
+        pure
+        returns (string memory)
+    {
+        return string.concat(
+            acc,
+            first ? "" : ",",
+            '\n  { "to": "',
+            vm.toString(to),
+            '", "what": "',
+            what,
+            '", "data": "',
+            vm.toString(data),
+            '" }'
+        );
+    }
+
+    function _check(string memory acc, bytes memory data, bytes32 want, string memory what, bool first)
+        internal
+        pure
+        returns (string memory)
+    {
+        return string.concat(
+            acc,
+            first ? "" : ",",
+            '\n  { "what": "',
+            what,
+            '", "data": "',
+            vm.toString(data),
+            '", "want": "',
+            vm.toString(want),
+            '" }'
+        );
     }
 
     /// @notice Send every write of the bundle to `engine`. `sender` decides whether initial σ is written.
