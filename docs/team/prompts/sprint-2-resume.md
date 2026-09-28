@@ -46,6 +46,12 @@ From: PM. The first Sprint 2 sessions of all three engineers were cut off by a r
 ## PM decision 11:45: free APIs only (user)
 The user will not buy a data plan. QE calibrates on **Alpaca SIP 2016+** (free), labels the outputs `dataGrade: "free-2016"`, and must compensate for the missing pre-2016 tail explicitly (ADR plus the model validation note; see the board ANSWER at 11:45). The proposal is the S2 testnet proposal and is no longer a DRAFT. BE-backend's R-26 recommendation should favour free on-chain-licensed feeds.
 
+## PM decision 11:50: two engineers at a time (user)
+Only two sessions run at once. BE-chain always holds one slot, because everything else depends on it.
+- **Wave 1: BE-chain + QE.** BE-chain delivers A2 (set format) and A3 (`risk-py`) first, and those are exactly what QE needs. QE finishes calibration, the backtest and the proposal, writes its report, and stops. QE marks the J7-vector cross-check (acceptance 3) as "pending BE-backend".
+- **Wave 2: BE-chain + BE-backend.** BE-backend starts when the QE report is committed. By then more of BE-chain's READYs (A4 `risk-wasm`, bindings, `DeployCoreLocal`) exist, so less of the backend work is blocked. BE-backend confirms QE's J7 vectors on the board.
+- A role that is waiting on the other slot with nothing unblocked left polls the board every ~10 minutes (sleep loop) for up to 2 hours. After that it writes a partial report and stops, and the PM relaunches it later.
+
 ## Rules that matter for the restart
 - **Uncommitted work belongs to the role whose path it is in.** Review it, finish it, and commit it. Do not throw it away.
 - Read the **whole** `docs/handoff/BOARD.md` before starting, and post a `DECISION` entry "`<role>` resumed S2" first.
