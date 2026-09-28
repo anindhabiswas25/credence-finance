@@ -279,11 +279,9 @@ impl Keeper {
             .await?;
             return Ok(());
         };
-        if safe >= ctx.max_ltv_eff {
-            jobs::set_payload(conn, &key, &json!({ "binding": false, "safeLtv": s(safe) })).await?;
-            jobs::mark(conn, &key, "done", None).await?;
-            return Ok(());
-        }
+        // §10.2 "binding (safe LTV < max LTV) for any live position": with the safe LTV capped at the max
+        // LTV, a position above it (after a price move) still NEEDS_ACTION, so every position is checked
+        let binding = safe < ctx.max_ltv_eff;
         let mut sent = 0usize;
         for owner in self.borrowers(conn, core, m.id).await? {
             let (mut p, debt) = read_position(self.rpc.primary(), ctx, owner).await?;
@@ -354,7 +352,7 @@ impl Keeper {
         jobs::set_payload(
             conn,
             &key,
-            &json!({ "binding": true, "safeLtv": s(safe), "enqueued": sent, "block": ctx.block }),
+            &json!({ "binding": binding, "safeLtv": s(safe), "enqueued": sent, "block": ctx.block }),
         )
         .await?;
         jobs::mark(conn, &key, "done", None).await?;
@@ -604,7 +602,9 @@ impl Keeper {
             if jobs::exists(conn, &key).await? {
                 continue;
             }
-            let ctx = read_ctx(self.rpc.primary(), m.market, m.id, None).await?;
+            let Ok(ctx) = read_ctx(self.rpc.primary(), m.market, m.id, None).await else {
+                continue; // e.g. no price yet for this asset: the other markets still run
+            };
             if !ctx.pending_fees {
                 continue;
             }
