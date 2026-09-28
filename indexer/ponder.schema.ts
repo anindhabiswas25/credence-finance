@@ -337,10 +337,12 @@ export const auction = onchainTable(
     fixedAt: t.bigint(),
     clearedAt: t.bigint(),
     settledAt: t.bigint(),
+    updatedBlock: t.bigint().notNull(), // the WS `auctions` channel streams rows by it
   }),
   (table) => ({
     byStatus: index().on(table.status, table.kind),
     byAsset: index().on(table.assetId),
+    byUpdated: index().on(table.updatedBlock),
   }),
 );
 

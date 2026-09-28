@@ -288,16 +288,6 @@ ponder.on("Market:Repay", async ({ event, context }) =>
     event.args,
   ),
 );
-ponder.on("Market:CoverBought", async ({ event, context }) =>
-  onPosition(
-    context,
-    event,
-    event.args.id,
-    event.args.owner,
-    "cover_bought",
-    event.args,
-  ),
-);
 ponder.on("Market:BellEnforced", async ({ event, context }) =>
   onPosition(
     context,
@@ -335,16 +325,6 @@ ponder.on("Market:Dequeued", async ({ event, context }) =>
     event.args.id,
     event.args.owner,
     "dequeued",
-    event.args,
-  ),
-);
-ponder.on("Market:Shortfall", async ({ event, context }) =>
-  onPosition(
-    context,
-    event,
-    event.args.id,
-    event.args.owner,
-    "shortfall",
     event.args,
   ),
 );
