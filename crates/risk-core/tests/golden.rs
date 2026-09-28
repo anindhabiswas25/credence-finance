@@ -1,13 +1,13 @@
 //! Appendix A.1 golden vectors G-01…G-22 (Build Guide). Each test states the doc's expected figure and its
-//! stated precision. Where the doc's own inputs are rounded (G-10, G-11), the test asserts the engine's exact
-//! value derived by hand from the stated inputs, and that it sits within a documented tolerance of the doc
-//! (see the sprint report, "Spec issues").
+//! stated precision. Guide v1.1 states G-06..G-11 and G-17 with full-precision inputs, and with those the doc
+//! figures follow exactly (no special-casing).
 
 use alloy_primitives::B256;
 use credence_risk_core::fixed::{collateral_value, health_factor_down};
 use credence_risk_core::{
-    blended_price, clear, cure_amounts, kinked_rate, liquidation_lot, preclose_lot, quote_cover,
-    safe_ltv, senior_rate, settle_position, utilization, PremiumParams, SliceZ, U256, WAD,
+    blended_price, clear, cure_amounts, gap_factor_at, kinked_rate, liquidation_lot, preclose_lot,
+    quote_cover, safe_ltv, senior_rate, settle_position, utilization, PremiumParams, SliceZ, U256,
+    WAD,
 };
 
 // ───────────── helpers ─────────────
@@ -115,87 +115,97 @@ fn g05_safe_ltv_sigma3_capped() {
     );
 }
 
+// v1.1: G-06..G-08 use the exact t₃ quantile z = −5.897362714633 (full precision, through `gap_factor_at`;
+// the engine itself stores z as int16 thousandths, covered by G-05 and the differential suite).
+const Z_T3: &str = "5.897362714633";
+
+fn g_safe_exact(sigma: &str) -> U256 {
+    let mv = wad(sigma) * wad(Z_T3) / WAD; // σ·|z| is exact in WAD for these inputs
+    gap_factor_at(mv, true, U256::ZERO, wad(KAPPA))
+        .unwrap()
+        .min(wad("0.75"))
+}
+
 #[test]
 fn g06_safe_ltv_sigma4() {
+    assert_close(
+        g_safe_exact("0.04"),
+        wad("0.741182326672"),
+        U256::from(1_000_000_000_000u64),
+        "G-06",
+    );
+    // the int16 engine input z = −5897 stays within 1e14 (what the chain computes)
     assert_close(
         g_safe("0.04"),
         wad("0.741182"),
         U256::from(100_000_000_000_000u64),
-        "G-06",
+        "G-06 int16",
     );
 }
 
 #[test]
 fn g07_safe_ltv_sigma45() {
     assert_close(
+        g_safe_exact("0.045"),
+        wad("0.712580117506"),
+        U256::from(1_000_000_000_000u64),
+        "G-07",
+    );
+    assert_close(
         g_safe("0.045"),
         wad("0.712580"),
         U256::from(100_000_000_000_000u64),
-        "G-07",
+        "G-07 int16",
     );
 }
 
 #[test]
 fn g08_safe_ltv_sigma6() {
     assert_close(
+        g_safe_exact("0.06"),
+        wad("0.626773490008"),
+        U256::from(1_000_000_000_000u64),
+        "G-08",
+    );
+    assert_close(
         g_safe("0.06"),
         wad("0.626773"),
         U256::from(100_000_000_000_000u64),
-        "G-08",
+        "G-08 int16",
     );
 }
 
-// ───────────── G-09 … G-11: cures (F-4.2) ─────────────
+// ───────────── G-09 … G-11: cures (F-4.2), v1.1 full-precision LTV_s ─────────────
+
+fn cures(d: &str, q: &str, v: &str, ltv_s: &str) -> credence_risk_core::Cures {
+    cure_amounts(usdc(d), tok(q), wad(v), wad(ltv_s), 18, 6).unwrap()
+}
 
 #[test]
 fn g09_cures() {
-    let c = cure_amounts(
-        usdc("13500"),
-        tok("100"),
-        wad("180"),
-        wad("0.741182"),
-        18,
-        6,
-    )
-    .unwrap();
-    // exact: 13,500 − 0.741182 × 18,000 = 158.724
-    assert_eq!(c.repay, usdc("158.724"));
-    assert_close(c.repay, usdc("158.72"), usdc("0.01"), "G-09 repay");
-    assert_close(c.add_collateral, tok("1.1897"), tok("0.0001"), "G-09 add");
+    let c = cures("13500", "100", "180", "0.741182326672");
+    // exact: 13,500 − 0.741182326672 × 18,000 = 158.718119904 → rounded up to the micro-dollar
+    assert_eq!(c.repay, usdc("158.718120"));
+    assert_close(c.repay, usdc("158.72"), usdc("0.005"), "G-09 repay");
+    assert_close(c.add_collateral, tok("1.1897"), tok("0.00005"), "G-09 add");
 }
 
 #[test]
 fn g10_cures() {
-    let c = cure_amounts(
-        usdc("67028.99"),
-        tok("500"),
-        wad("180"),
-        wad("0.712580"),
-        18,
-        6,
-    )
-    .unwrap();
-    // exact from the stated inputs: 67,028.99 − 0.712580 × 90,000 = 2,896.79 (doc: 2,896.78, from an unrounded LTV)
-    assert_eq!(c.repay, usdc("2896.79"));
-    assert_close(c.repay, usdc("2896.78"), usdc("0.01"), "G-10 repay");
-    assert_close(c.add_collateral, tok("22.584"), tok("0.001"), "G-10 add");
+    let c = cures("67028.99", "500", "180", "0.712580117506");
+    // exact: 67,028.99 − 0.712580117506 × 90,000 = 2,896.77942446 → the doc's 2,896.78
+    assert_eq!(c.repay, usdc("2896.779425"));
+    assert_close(c.repay, usdc("2896.78"), usdc("0.005"), "G-10 repay");
+    assert_close(c.add_collateral, tok("22.584"), tok("0.0005"), "G-10 add");
 }
 
 #[test]
 fn g11_cures() {
-    let c = cure_amounts(
-        usdc("55535.10"),
-        tok("300"),
-        wad("250"),
-        wad("0.626773"),
-        18,
-        6,
-    )
-    .unwrap();
-    // exact from the stated inputs: 55,535.10 − 0.626773 × 75,000 = 8,527.125 (doc: 8,527.09, from LTV 0.62677347…)
-    assert_eq!(c.repay, usdc("8527.125"));
-    assert_close(c.repay, usdc("8527.09"), usdc("0.05"), "G-11 repay");
-    assert_close(c.add_collateral, tok("54.419"), tok("0.001"), "G-11 add");
+    let c = cures("55535.10", "300", "250", "0.626773490008");
+    // exact: 55,535.10 − 0.626773490008 × 75,000 = 8,527.0882494 → the doc's 8,527.09
+    assert_eq!(c.repay, usdc("8527.088250"));
+    assert_close(c.repay, usdc("8527.09"), usdc("0.005"), "G-11 repay");
+    assert_close(c.add_collateral, tok("54.419"), tok("0.0005"), "G-11 add");
 }
 
 // ───────────── G-12 … G-16: liquidation lot (F-4.5a) ─────────────
@@ -265,26 +275,32 @@ fn g16_lot_priya_scenario_a_full_close() {
 #[test]
 fn g17_preclose_lot_maya() {
     let d = usdc("55536.02");
+    let ltv_s = wad("0.626773490008");
     let x = preclose_lot(
         d,
         tok("300"),
         wad("250"),
         wad("247.50"),
-        wad("0.626773"),
+        ltv_s,
         wad("0.01"),
         18,
         6,
     )
     .unwrap();
-    // exact from the stated inputs: 8,528.045 / 88.33175 = 96.545636… (doc: 96.5454, from an unrounded LTV_s)
-    assert_close(x, tok("96.545636"), tok("0.000001"), "G-17 exact");
-    assert_close(x, tok("96.5454"), tok("0.0005"), "G-17 doc");
-    // cleared at R: LTV after = 0.626773 (to rounding)
+    // exact: 8,528.0082494 / 88.331627498 = 96.5453540363… → the doc's 96.5454
+    assert_close(
+        x,
+        tok("96.545354036334"),
+        tok("0.000000000001"),
+        "G-17 exact",
+    );
+    assert_close(x, tok("96.5454"), tok("0.00005"), "G-17 doc");
+    // cleared at R: LTV after = LTV_s (to rounding)
     let proceeds = collateral_value(x, wad("247.50"), 18, 6).unwrap();
     let debt_after = d - proceeds * U256::from(99u8) / U256::from(100u8);
     let coll_after = collateral_value(tok("300") - x, wad("250"), 18, 6).unwrap();
     let ltv = debt_after * WAD / coll_after;
-    assert_close(ltv, wad("0.626773"), wad("0.000001"), "G-17 LTV after");
+    assert_close(ltv, ltv_s, wad("0.0000001"), "G-17 LTV after");
 }
 
 // ───────────── G-18 … G-19: clearing (F-4.5c) ─────────────

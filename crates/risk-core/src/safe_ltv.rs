@@ -16,20 +16,26 @@ pub const SIGMA_DAILY_FLOOR: U256 = U256::from_limbs([900_000_000_000_000_000, 0
 /// This is the post-gap, post-liquidation-cost value of one unit of collateral in scenario z. Rounding down
 /// is conservative everywhere it is used (safe LTV down, losses up, uncovered bounds up).
 pub fn gap_factor(z: i16, sigma: U256, dividend: U256, kappa: U256) -> MathResult<U256> {
+    let az = U256::from(z.unsigned_abs());
+    if z >= 0 {
+        gap_factor_at(mul_div_down(sigma, az, THOUSAND)?, false, dividend, kappa)
+    } else {
+        gap_factor_at(mul_div_up(sigma, az, THOUSAND)?, true, dividend, kappa)
+    }
+}
+
+/// The same formula with the price move σ·|z| given directly in WAD (full precision; `down` = a negative z):
+/// g = max(0, 1 ± move − d) × (1 − κ), rounded DOWN. `gap_factor` rounds σ·|z| against the user before calling it.
+pub fn gap_factor_at(move_wad: U256, down: bool, dividend: U256, kappa: U256) -> MathResult<U256> {
     if kappa > WAD {
         return Err(MathError::InvalidInput);
     }
-    let az = U256::from(z.unsigned_abs());
-    let mut base = WAD;
-    if z >= 0 {
-        base = base
-            .checked_add(mul_div_down(sigma, az, THOUSAND)?)
-            .ok_or(MathError::Overflow)?;
+    let base = if down {
+        WAD.saturating_sub(move_wad)
     } else {
-        base = base.saturating_sub(mul_div_up(sigma, az, THOUSAND)?);
-    }
-    base = base.saturating_sub(dividend);
-    mul_wad_down(base, WAD - kappa)
+        WAD.checked_add(move_wad).ok_or(MathError::Overflow)?
+    };
+    mul_wad_down(base.saturating_sub(dividend), WAD - kappa)
 }
 
 /// LTV_safe = min(LTV_max_eff, g(z_{i*})) for the quantile scenario z (F-4.2), rounded down.
