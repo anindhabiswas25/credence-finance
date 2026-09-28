@@ -35,9 +35,9 @@ library LocalBook {
         address reserve;
         address treasury;
         address tips;
-        address pool; // S2: a local stand-in until the S3 UnderwriterPool
-        address auctionHouse; // equity (S2: local stand-in)
-        address settlement; // NAV (S2: local stand-in)
+        address pool; // the UnderwriterPool (S3)
+        address auctionHouse; // equity: the AuctionHouse (S3)
+        address settlement; // NAV: a local stand-in until the S4 SettlementAdapter
         string[] tickers; // market name (ticker) → marketId
         bytes32[] marketIds;
     }
@@ -88,7 +88,11 @@ library LocalBook {
         }
     }
 
-    function _meta(string memory j, string memory k, address fallback_) private view returns (EngineMeta memory m) {
+    function _meta(string memory j, string memory k, address fallback_)
+        private
+        view
+        returns (EngineMeta memory m)
+    {
         m.program = vm.keyExistsJson(j, string.concat(k, ".address"))
             ? vm.parseJsonAddress(j, string.concat(k, ".address"))
             : fallback_;
@@ -118,7 +122,9 @@ library LocalBook {
         s = string.concat(s, '  "assetIds": ', _b32Map(b.assetNames, b.assetIds), ",\n");
         if (b.shared.riskEngine != address(0) && b.hasEngineMeta) {
             s = string.concat(s, '  "stylus": { "riskEngine": ', _engine(b.engine, b.shared.riskEngine));
-            if (b.hasAuctionMeta) s = string.concat(s, ', "auctionMath": ', _engine(b.auctionMath, address(0)));
+            if (b.hasAuctionMeta) {
+                s = string.concat(s, ', "auctionMath": ', _engine(b.auctionMath, address(0)));
+            }
             s = string.concat(s, " },\n");
         }
         s = string.concat(s, '  "addressBookVersion": 2\n}\n'); // v2 (S3): the S1 flat keys are gone
