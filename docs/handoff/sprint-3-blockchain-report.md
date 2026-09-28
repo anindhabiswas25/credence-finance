@@ -16,19 +16,19 @@ the pool pays the 5,011.69 shortfall, senior loss 0, and epoch settlement follow
 15 risk invariants hold at 256 × 128: INV-POOL-01/02, INV-AH-01..04, and the S2 lending invariants against the real
 pool. On the devnode, a real `writeCover` and a real `clear` go through the Stylus engine and equal `risk-cli`.
 
-The A1 smoke test turned up a gas-griefing bug in every `try/catch` (fixed, ADR-0109). One writeCover costs about
-3.2M gas on the Stylus engine, so a J3 Bell batch holds about 7 auto-covered positions (§6 and the board).
+The A1 smoke test turned up a gas-griefing bug in every `try/catch` (fixed, ADR-0109). One auto-cover costs about
+2.2M gas inside a Bell batch on the Stylus engine, so a J3 batch holds 10 positions (board 04:40, §6).
 
 ## 2. Acceptance checklist
 
 | # | Item | Status | Proof (command + key output) |
 | --- | --- | --- | --- |
-| 1 | `make contracts-build contracts-test risk-test contracts-coverage abis-check` from a clean clone; ≥ 95% on the S2 dirs + pool + auction | ✅ | `forge test` → **193 passed, 0 failed** (26 suites, invariants at 256 × 128 included); `make risk-test` → golden 22, props 9, unit 10, cli 4, bindings 2 (0 failed); `make contracts-coverage` → core 97.76%, governance 100.00%, clock 98.69%, oracle 96.69%, **pool 98.65%, auction 97.95%**; `make abis-check` → v0→v1 `46 ABIs, 4 allowed breaks`, v1→v2 `49 ABIs, 25 allowed breaks` (listed in `deployments/abis/v2/CHANGELOG.md`, ADR-0110). Clean-clone re-run: see §10 |
+| 1 | `make contracts-build contracts-test risk-test contracts-coverage abis-check` from a clean clone; ≥ 95% on the S2 dirs + pool + auction | ✅ | `forge test` → **193 passed, 0 failed** (26 suites, invariants at 256 × 128 included; clean clone of `4908b1c`: `make contracts-build contracts-test risk-test contracts-coverage abis-check` → exit 0 in 794 s); `make risk-test` → golden 22, props 9, unit 10, cli 4, bindings 2 (0 failed); `make contracts-coverage` → core 97.76%, governance 100.00%, clock 98.69%, oracle 96.69%, **pool 98.65%, auction 97.95%**; `make abis-check` → v0→v1 `46 ABIs, 4 allowed breaks`, v1→v2 `49 ABIs, 25 allowed breaks` (listed in `deployments/abis/v2/CHANGELOG.md`, ADR-0110). The gas bounds in `RiskGasTest` are skipped only in the (unoptimised) coverage build |
 | 2 | A1–A3 delivered, each with a READY before the main build; after A1, BE-backend's `api-bell-e2e` passes | ✅ | Board: A1 READY 00:25 (DECISIONs 22:03 / 22:40 / 23:20 / 23:55 before each book rewrite), A2 READY 00:40, A3 READY 01:05 (ANSWER to BE-backend 22:20). BE-backend ANSWER 00:40: `api-bell-e2e` **100 positions, mismatches 0**, with their own script and from scratch. My smoke run against the item-D book (real pool): `ACCOUNT_SALT=s3-chain-smoke make api-bell-e2e` → `/bell vs chain: 100 positions checked (NEEDS_ACTION 13), mismatches 0` |
 | 3 | INV-POOL-01/02 and INV-AH-01..04 at 256 × 128; S2 invariants against the real pool | ✅ | `forge test --match-contract RiskInvariantsTest` → 15 invariants PASS, runs 256, calls 32,768; depth: 4 sessions, backstops, forfeited bonds, claims, 4 epoch settlements. S2 `MarketInvariantsTest` (mocks) still passes |
 | 4 | Scenario A through Monday's REOPEN settlement and epoch settlement to the cent; gap-loss variant | ✅ (see §6 on the 2 cents) | `forge test --match-contract ScenarioAFullWeekTest -vv` → Friday debts to the cent, PRECLOSE batch at $249.50, REOPEN: bonds 3,732 / 3,723.30, **p* 124.11**, Mo 37,233, Omar 24,822, **proceeds 62,055**, shortfall = debt − proceeds to the unit (**5,011.69 ± 0.03**, §6), senior loss 0, INV-POOL-01 exact, share price = NAV / 40,000 shares. Gap-loss: pool backstops **200 NVDA at 122.22**, p̄ 123.528 |
 | 5 | DeployCoreLocal deploys the real pool and auction house on the devnode against the Stylus router; `make devnode-integration` shows a real writeCover and a real clear | ✅ | Board 03:20 READY: the main book has `equity.pool`, `equity.auctionHouse`, `nav.pool`. `make devnode-integration` → `pool.writeCover premium (Stylus quoteCover at the pool's u_after 8234706907058892) = 3287266` == risk-cli; `clear p* = 178.2`, fills and qPool == risk-cli `clear`; pool inventory = qPool; `auction settled = true` |
-| 6 | Gas: writeCover, enforceBell (full batch), clear (64 bids), settlePositions measured; max J3 batch within 24M on the board | ✅ | §4 gas table; J3 posted on the board (BE-chain entry after 03:20) |
+| 6 | Gas: writeCover, enforceBell (full batch), clear (64 bids), settlePositions measured; max J3 batch within 24M on the board | ✅ | `make devnode-gas`: writeCover 3,163,135; enforceBell with 9 auto-covers 20,635,874 → **J3 = 10** (board 04:40); clear with 64 bids 1,505,635; settlePositions 128 positions 10,260,293 (EVM), 339,942 for one on the devnode. §4 table |
 | 7 | Report + ADRs for every deviation | ✅ | this file; ADR-0109 (gas-guarded try/catch), ADR-0110 (pool, auction house, interfaces v2, lot size) |
 
 ## 3. What was built
@@ -66,10 +66,10 @@ Solidity ports):
 
 | Call | Gas | Where |
 | --- | ---: | --- |
-| `buyCover` → one `writeCover` (coverLossVector + poolCapacity over 6 markets + quoteCover) | GAS_COVER | devnode |
-| `enforceBell`, every borrower auto-covered, per batch size | GAS_BELL | devnode (estimates) |
-| **largest J3 batch within 24M** | **J3_BATCH** | devnode |
-| `clear`, 64 bids | GAS_CLEAR64 | devnode |
+| `buyCover` → one `writeCover` (coverLossVector + poolCapacity over 6 markets + quoteCover) | 3,163,135 | devnode |
+| `enforceBell`, every borrower auto-covered | ≈ 2.2M per borrower + 1.1M fixed; **9 auto-covers sent = 20,635,874** | devnode |
+| **largest J3 batch within 24M** | **10** (≈ 22.9M; 11 ≈ 25.1M) | devnode |
+| `clear`, 64 bids | 1,505,635 | devnode |
 | `fixLots` / `clear` / `settlePositions`, 1 position | 549,416 / 570,182 / 339,942 | devnode |
 | `flagForAuction`, 256 positions (2 tranches) | 23,252,942 | EVM |
 | `fixLots`, 128 positions (+ ≈ 50k per position for Stylus `liquidationLot`) | 5,780,508 (≈ 12M on Stylus) | EVM |
@@ -99,8 +99,8 @@ Solidity ports):
 3. **INV-POOL-01 and R-09.** With the fee receivable in NAV, "riskFees" must be the receivable's growth during the
    epoch plus the fees swept to cash (implemented). Backstop inventory marked at min(cost, V(1 − κ)) adds an unrealised
    term. The invariant is checked with both terms; the wording could say so.
-4. **Gas vs the Bell batch.** One auto-cover costs about 3.2M gas on the current Stylus engine (two programs, router
-   hop, poolCapacity over every market). A 24M J3 batch therefore covers about 7 positions, so a busy Friday needs many
+4. **Gas vs the Bell batch.** One auto-cover costs about 2.2M gas inside a batch (3.16M as a lone buyCover) on the current Stylus engine (two programs, router
+   hop, poolCapacity over every market). A 24M J3 batch therefore covers 10 positions (measured), so a busy Friday needs many
    keeper transactions in the 15-minute Bell deadline window. Options for the PM: accept (keepers parallelise per
    market), a third Stylus program for capacity (ADR-0108 option), or a per-batch cached uncovered bound.
 
@@ -128,6 +128,6 @@ Solidity ports):
 make contracts-build contracts-test risk-test contracts-coverage abis-check
 cd contracts && forge test --match-contract "ScenarioAFullWeekTest|RiskInvariantsTest|RiskGasTest" -vv
 make infra-up && make devnode-integration      # real writeCover + clear on the Stylus engine (~25 min)
-make devnode-gas                                 # J3 batch, writeCover, clear with 64 bids (~2 h 15 min)
+make devnode-gas                                 # J3 batch, writeCover, clear with 64 bids (~2 h 15 min: it waits for bellAt)
 make local-deploy-core CALENDAR=synthetic        # the main book with the real pool and auction house
 ```
