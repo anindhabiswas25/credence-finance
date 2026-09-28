@@ -56,12 +56,7 @@ start notifier bash -c "cd services/notifier && DATABASE_URL=$DATABASE_URL INDEX
   NOTIFIER_BACKOFF_BASE_S=2 DEPLOYMENTS_FILE=$BOOK node src/main.ts"
 for i in $(seq 1 90); do curl -sf localhost:$P_API/readyz >/dev/null && break; sleep 2; done
 
-echo "── 3. seeding (the last manual transactions)"
-(cd services/api && node scripts/scenario-a/seed.ts)
-SEED_END_BLOCK=$(cast block-number --rpc-url "$RPC_URL")
-echo "seed end block $SEED_END_BLOCK"
-
-echo "── 4. keeper (J3/J4 live) + bidder bot"
+echo "── 3. keeper (J3/J4 live; it also ends the post-deploy REOPEN with completeReopen) + bidder bot"
 start keeper env CHAIN_ID=412346 RPC_URL=$RPC_URL DATABASE_URL=$DATABASE_URL CALENDAR_FILES=$CAL KEEPER_ASSETS=NVDA:XNAS,TSLA:XNAS,AAPL:XNAS \
   KEEPER_PRIVATE_KEY="$KEEPER_KEY" KEEPER_J3_LIVE=1 KEEPER_J4_LIVE=1 KEEPER_INSTANCE_ID=scenario-a INDEXER_SCHEMA=$VIEWS \
   KEEPER_GAS_MULTIPLIER_X10=${KEEPER_GAS_MULTIPLIER_X10:-13} KEEPER_J3_BATCH=${KEEPER_J3_BATCH:-10} METRICS_ADDR=127.0.0.1:9192 \
@@ -83,6 +78,11 @@ start keeper env CHAIN_ID=412346 RPC_URL=$RPC_URL DATABASE_URL=$DATABASE_URL CAL
   wait
 ) & PIDS+=($!)
 start bidder env RPC_URL=$RPC_URL BIDDER_CONFIG="$OUT/bidders.json" BIDDER_STATE="$OUT/bidder-state.json" "$BIN/credence-bidder"
+
+echo "── 4. seeding once the assets trade REGULAR (the last manual transactions)"
+(cd services/api && node scripts/scenario-a/seed.ts)
+SEED_END_BLOCK=$(cast block-number --rpc-url "$RPC_URL")
+echo "seed end block $SEED_END_BLOCK"
 
 echo "── 5. the closure cycle (waits for the Friday close and the Monday reopen)"
 (cd services/api && API=http://127.0.0.1:$P_API SEED_END_BLOCK=$SEED_END_BLOCK KEEPER_ADDRESS=$KEEPER_ADDRESS RELAYER_ADDRESS=$RELAYER_ADDRESS RELAYER_B_ADDRESS=$RELAYER_B_ADDRESS \

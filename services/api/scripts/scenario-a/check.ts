@@ -80,6 +80,36 @@ const events = <N extends string>(
 console.log(
   `scenario A: Friday close ${meta.fridayClose}, Monday open ${meta.mondayOpen}`,
 );
+// §10.4 / S3 D: before the Bell, /bell equals the market's own bellStatus, premium included (the real pool)
+await until(
+  "the Friday Bell window (T−2h) with the −1% drift in",
+  meta.fridayClose - 2 * 3600 + 90,
+  async () => (await now()) >= meta.fridayClose - 2 * 3600 + 60 || null,
+);
+for (const n of ["priya", "maya"]) {
+  const id = book.equity.markets.NVDA as Hex;
+  const r = await fetch(`${API}/v1/positions/${id}/${actors[n]}/bell`);
+  const b = (await r.json()) as {
+    block: string;
+    status: { code: number };
+    cure: { repay: { raw: string }; addCollateral: string };
+    premium: { raw: string } | null;
+  };
+  const [st, repay, coll, prem] = await pub.readContract({
+    abi: ICredenceMarketAbi,
+    address: market,
+    functionName: "bellStatus",
+    args: [id, actors[n]!],
+    blockNumber: BigInt(b.block),
+  });
+  ok(
+    Number(st) === b.status.code &&
+      repay.toString() === b.cure.repay.raw &&
+      coll.toString() === b.cure.addCollateral &&
+      (b.status.code !== 1 || prem.toString() === b.premium?.raw),
+    `/bell for ${n} == market.bellStatus at block ${b.block}: status ${st}, repay ${repay}, collateral ${coll}, premium ${prem} (API ${b.premium?.raw ?? "null"})`,
+  );
+}
 const autoCover = await until(
   "Priya auto-covered at the Bell (AutoCoverApplied)",
   meta.fridayClose,

@@ -52,6 +52,27 @@ const who = {
   noreveal: actor("bidder-noreveal"),
 };
 
+// the relayers' first prints put a fresh deploy's assets in REOPEN; the keeper ends it (J5 completeReopen)
+{
+  const Clock = parseAbi([
+    "function previewState(bytes32) view returns (uint8)",
+  ]);
+  for (const t of ["NVDA", "TSLA", "AAPL"]) {
+    for (let i = 0; ; i++) {
+      const st = await pub.readContract({
+        abi: Clock,
+        address: book.shared.clock as Address,
+        functionName: "previewState",
+        args: [book.assetIds[t] as Hex],
+      });
+      if (st === 0) break;
+      if (i > 120)
+        throw new Error(`${t} is not REGULAR after 10 min (state ${st})`);
+      await new Promise((r) => setTimeout(r, 5_000));
+    }
+  }
+  console.log("NVDA, TSLA, AAPL trade REGULAR");
+}
 // gas for everyone, and the keeper's and the relayer's own senders (never the seeding dev key: no nonce races)
 for (const a of [...Object.values(who), actor("keeper"), actor("relayer")]) {
   if ((await pub.getBalance({ address: a.address })) < parseEther("0.05"))
