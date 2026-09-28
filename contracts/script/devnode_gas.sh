@@ -70,8 +70,9 @@ for i in $(seq 0 $((N - 1))); do
   BK[$i]="$(cast wallet new --json | jq -r '(.data // .)[0].private_key')"; BA[$i]="$(cast wallet address --private-key "${BK[$i]}")"
   cast send --rpc-url "$RPC" --private-key "$KEY" "${BA[$i]}" --value 0.2ether >/dev/null
   send "$MARKET" 'addCollateral(bytes32,address,uint256)' "$ID" "${BA[$i]}" 100000000000000000000
-  [ $((i % 6)) = 5 ] && price "$A" 200000000000000000000
-  cast send --rpc-url "$RPC" --private-key "${BK[$i]}" "$MARKET" 'borrow(bytes32,uint256,address)' "$ID" 14400000000 "${BA[$i]}" >/dev/null
+  price "$A" 200000000000000000000   # the borrow cross-checks both feeds (60 s in REGULAR)
+  st="$(cast send --rpc-url "$RPC" --private-key "${BK[$i]}" "$MARKET" 'borrow(bytes32,uint256,address)' "$ID" 14400000000 "${BA[$i]}" --json | jq -r .status)"
+  [ "$st" = 0x1 ] || { echo "borrow $i failed" >&2; exit 1; }
 done
 say "$N AAPL positions at 72%"
 declare -a XK XA
