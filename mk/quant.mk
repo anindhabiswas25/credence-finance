@@ -10,8 +10,9 @@ RISK_CLI ?= target/quant/release/risk-cli
 
 .PHONY: cal-install cal-data cal-verify cal-crosscheck cal-all cal-sample cal-test cal-vectors cal-risk-cli cal-validate
 
-cal-install: ## QE: sync the calibration env (uv) and build risk-py into it
+cal-install: ## QE: sync the calibration env (uv), then build risk-py (credence_risk) into it with target/quant
 	cd calibration && $(UV) sync --frozen
+	$(MAKE) --no-print-directory risk-py-develop RISK_PY_VENV=calibration/.venv CARGO_TARGET_DIR=target/quant
 
 cal-data: ## QE: pull raw vendor data and rewrite the pinned manifest (VENDOR=alpaca|tiingo, END=YYYY-MM-DD)
 	$(CAL) python -m credence_cal.data pull --vendor $(VENDOR) $(if $(END),--end $(END))
@@ -19,7 +20,7 @@ cal-data: ## QE: pull raw vendor data and rewrite the pinned manifest (VENDOR=al
 cal-verify: ## QE: check calibration/data/raw against the committed manifest
 	$(CAL) python -m credence_cal.data verify --vendor $(VENDOR)
 
-cal-all: ## QE: rebuild every calibration output from the pinned raw data (VENDOR=alpaca|tiingo)
+cal-all: ## QE: rebuild every calibration output (sets, σ, validation, backtest, proposal) from the pinned raw data (VENDOR=alpaca|tiingo)
 	$(CAL) python -m credence_cal.pipeline all --vendor $(VENDOR)
 
 cal-vectors: ## QE: regenerate the σ spec test vectors (calibration/docs/sigma-vectors.json)

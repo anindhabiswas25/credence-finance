@@ -95,7 +95,7 @@ def build_year_sets(eng: Engine, z: pd.DataFrame, daily: dict[str, list[dict]], 
             out[(a, t)] = eng.load_set([int(v) for v in q])
             n[(a, t)] = info["n"]
     cols, jinfo = sets_mod.joint(zp, synthetic=synth)
-    joint = {a: eng.load_set([int(v) for v in cols[a]]) for a in LISTED}
+    joint = {a: eng.load_joint_column([int(v) for v in cols[a]]) for a in LISTED}
     floors = {}
     for a in LISTED:
         past = [d for d in daily[a] if d["date"] < cut]

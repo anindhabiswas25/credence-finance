@@ -88,7 +88,7 @@ def _capacity(eng: Engine, cols: dict, jinfo: dict, sigma_doc: dict) -> dict:
         ltv = 0.80 if a == "SPY" else 0.75
         c = REF_BOOK_USD * USD
         sig = int(sigma_doc["assets"][a]["sigmaWad"]["WEEKEND"])
-        lv = eng.loss_vector(eng.load_set([int(v) for v in cols[a]]), c, int(c * ltv), sig, 0, w(KAPPA))
+        lv = eng.loss_vector(eng.load_joint_column([int(v) for v in cols[a]]), c, int(c * ltv), sig, 0, w(KAPPA))
         tot_all += np.array(lv, dtype=object)
     with_syn = int(max(tot_all))
     hist_only = int(max(tot_all[n_syn:])) if n_syn < len(tot_all) else 0

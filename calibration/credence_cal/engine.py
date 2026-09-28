@@ -1,7 +1,7 @@
 """The only door to engine math (risk-core). Two interchangeable backends with one interface:
 
-- `PyEngine`: BE-chain's PyO3 bindings (`crates/risk-py`, built into calibration/.venv by
-  `make cal-install`). Fast; the default.
+- `PyEngine`: BE-chain's PyO3 bindings (`crates/risk-py`, module `credence_risk`, built into
+  calibration/.venv by `make cal-install`). Fast; the default.
 - `CliEngine`: BE-chain's `risk-cli` (JSON in/out, one process per call). Slow; used by the tests to
   cross-check `PyEngine` call by call, and as a fallback.
 
@@ -35,7 +35,8 @@ def pack_u64(values: list[int]) -> list[str]:
 
 
 class Engine(Protocol):
-    def load_set(self, z: list[int]) -> Any: ...
+    def load_set(self, z: list[int]) -> Any: ...  # ascending scenario set
+    def load_joint_column(self, z: list[int]) -> Any: ...  # K joint values in closure order (not sorted)
     def safe_ltv_from_set(self, s: Any, alpha: int, sigma: int, dividend: int, kappa: int, max_ltv: int) -> int: ...
     def quote_cover(self, s: Any, sigma: int, dividend: int, kappa: int, collateral_value: int, debt_projected: int,
                     closure_days: int, util_after: int, theta: int, cost_of_cap: int, eta: int, beta: int,
@@ -75,6 +76,9 @@ class CliEngine:
 
     def load_set(self, z: list[int]) -> list[int]:
         return list(z)
+
+    def load_joint_column(self, z: list[int]) -> list[int]:
+        return [int(v) for v in z]
 
     def safe_ltv_from_set(self, s, alpha, sigma, dividend, kappa, max_ltv):
         return int(self._call("safe-ltv-from-set", {"set": s, "alpha": str(alpha), "sigma": str(sigma),
@@ -138,10 +142,66 @@ class CliEngine:
         return out
 
 
-def default_engine() -> Engine:
-    try:
-        from .engine_py import PyEngine
+class PyEngine:
+    """risk-py backend (`credence_risk`, BE-chain A3): risk-core in-process through PyO3. Every method is a
+    passthrough with the same argument order; sets stay in Rust memory as `ScenarioSet` handles."""
 
+    def __init__(self):
+        import credence_risk  # type: ignore[import-not-found]
+
+        self.m = credence_risk
+
+    def load_set(self, z):
+        return self.m.load_set([int(v) for v in z])
+
+    def load_joint_column(self, z):
+        return [int(v) for v in z]  # risk-py takes joint columns as int16 lists (unsorted, closure order)
+
+    def safe_ltv_from_set(self, s, alpha, sigma, dividend, kappa, max_ltv):
+        return int(self.m.safe_ltv_from_set(s, alpha, sigma, dividend, kappa, max_ltv))
+
+    def quote_cover(self, s, sigma, dividend, kappa, collateral_value, debt_projected, closure_days, util_after, theta,
+                    cost_of_cap, eta, beta, min_premium):
+        p, el, es = self.m.quote_cover(s, sigma, dividend, kappa, collateral_value, debt_projected, closure_days,
+                                       util_after, theta, cost_of_cap, eta, beta, min_premium)
+        return int(p), int(el), int(es)
+
+    def loss_vector(self, joint, collateral_value, debt_projected, sigma, dividend, kappa):
+        return [int(x) for x in self.m.loss_vector(joint, collateral_value, debt_projected, sigma, dividend, kappa)]
+
+    def pool_capacity(self, current, add, uncovered, kappa, equity, u_max):
+        ok, util, worst = self.m.pool_capacity(current, add, list(uncovered), kappa, equity, u_max)
+        return bool(ok), int(util), int(worst)
+
+    def liquidation_lot(self, debt, qty, sizing_price, hf_price, lt, h_star, lam, coll_dec, loan_dec):
+        return int(self.m.liquidation_lot(debt, qty, sizing_price, hf_price, lt, h_star, lam, coll_dec, loan_dec))
+
+    def settle_position(self, x, q_before, blended_price, debt, lam, coll_dec, loan_dec):
+        o = self.m.settle_position(x, q_before, blended_price, debt, lam, coll_dec, loan_dec)
+        return {k: (bool(v) if k == "fullClose" else int(v)) for k, v in o.items()}
+
+    def kinked_rate(self, u, r0, s1, s2, u_kink):
+        return int(self.m.kinked_rate(u, r0, s1, s2, u_kink))
+
+    def projected_debt(self, debt, rate, days):
+        return int(self.m.projected_debt(debt, rate, days))
+
+    def sigma_min_allowed(self, current, days):
+        return int(self.m.sigma_min_allowed(current, days))
+
+    def build_set(self, asset, closure_type, z, meta):
+        return self.m.build_set(asset, int(closure_type), [int(v) for v in z], meta)[0]
+
+    def build_joint(self, columns, meta):
+        return self.m.build_joint([(a, [int(v) for v in z]) for a, z in columns], meta)[0]
+
+    def validate_file(self, path: Path) -> dict:
+        return self.m.validate_file(str(path))
+
+
+def default_engine() -> Engine:
+    """risk-py when it is installed (`make cal-install`), else risk-cli."""
+    try:
         return PyEngine()
     except ImportError:
         return CliEngine()
