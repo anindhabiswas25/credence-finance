@@ -7,15 +7,7 @@ import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {ReentrancyGuardTransient} from "@openzeppelin/contracts/utils/ReentrancyGuardTransient.sol";
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
-import {
-    CoverRequest,
-    Epoch,
-    EpochPhase,
-    Inventory,
-    Session,
-    ClockData,
-    KeeperJob
-} from "../libraries/Types.sol";
+import {CoverRequest, Epoch, EpochPhase, Inventory, ClockData, KeeperJob} from "../libraries/Types.sol";
 import {PackedInt} from "../libraries/PackedInt.sol";
 import {PoolLib} from "./PoolLib.sol";
 import {GasGuard} from "../libraries/GasGuard.sol";
@@ -41,8 +33,6 @@ contract UnderwriterPool is ERC20, ReentrancyGuardTransient, IUnderwriterPool {
     using Math for uint256;
 
     uint256 internal constant WAD = 1e18;
-    uint40 internal constant BELL_WINDOW = 2 hours; // §8.2.2
-    uint40 internal constant BELL_DEADLINE = 15 minutes;
     uint256 internal constant GDA_START_MARKUP = 1.02e18; // F-4.5e: k = 1.02 × V
     uint256 internal constant GDA_DECAY = 8_022_536_812_036; // ln 2 / 86,400 s (WAD per second): half-life 24 h
     uint256 internal constant GDA_EMISSION_PERIOD = 3 days; // r_e = inventory / 3 days
@@ -79,6 +69,8 @@ contract UnderwriterPool is ERC20, ReentrancyGuardTransient, IUnderwriterPool {
     mapping(uint64 epochId => bytes32[]) internal _epochAssets;
     mapping(uint64 epochId => mapping(bytes32 assetId => uint256)) internal _lossReserve;
     uint256 internal _totalLossReserve;
+    /// @dev R-09 fee receivable when the epoch opened: the epoch's risk fees = its growth + what was swept to cash.
+    mapping(uint64 epochId => uint256) internal _feeAtOpen;
 
     // ───────────── underwriter queues ─────────────
     mapping(uint64 epochId => mapping(address owner => uint256)) internal _depositOf;
@@ -415,6 +407,7 @@ contract UnderwriterPool is ERC20, ReentrancyGuardTransient, IUnderwriterPool {
             if (_hasActive && _active < epochId) revert EpochStillOpen(_active);
             _setTimes(epochId, ep);
             ep.navBefore = uint128(nav());
+            _feeAtOpen[epochId] = PoolLib.feeReceivable(market);
         } else if (!_hasActive || _active != epochId) {
             revert EpochNotOpen(epochId);
         }
@@ -438,6 +431,10 @@ contract UnderwriterPool is ERC20, ReentrancyGuardTransient, IUnderwriterPool {
         ep.pendingLossReserve = uint128(reserve);
         if (_hasActive && _active == epochId) _hasActive = false; // releases the premiums into NAV
         ep.phase = EpochPhase.SETTLED;
+        // risk fees earned in the epoch = receivable growth + what was swept to cash meanwhile (R-09)
+        uint256 recv = PoolLib.feeReceivable(market);
+        uint256 atOpen = _feeAtOpen[epochId];
+        ep.riskFees = uint128(ep.riskFees + recv > atOpen ? ep.riskFees + recv - atOpen : 0);
 
         uint256 navAfter = nav();
         uint256 price = _price(navAfter, totalSupply());
@@ -580,6 +577,7 @@ contract UnderwriterPool is ERC20, ReentrancyGuardTransient, IUnderwriterPool {
         _setTimes(e, ep);
         ep.phase = EpochPhase.OPEN;
         ep.navBefore = uint128(nav());
+        _feeAtOpen[e] = PoolLib.feeReceivable(market);
         (_active, _hasActive) = (e, true);
         emit EpochOpened(
             e,
@@ -616,15 +614,8 @@ contract UnderwriterPool is ERC20, ReentrancyGuardTransient, IUnderwriterPool {
     }
 
     function _setTimes(uint64 e, Epoch storage ep) internal {
-        ICalendarStore cal = calendar;
-        uint256 n = cal.sessionCount(venue);
-        if (e >= n) revert NoCalendarCoverage(venue);
-        Session memory s = cal.session(venue, e);
         ep.epochId = e;
-        ep.closeAt = s.close;
-        ep.bellWindowAt = s.close - BELL_WINDOW;
-        ep.bellAt = s.close - BELL_DEADLINE;
-        ep.reopenAt = e + 1 < n ? cal.session(venue, e + 1).open : 0;
+        (ep.bellWindowAt, ep.bellAt, ep.closeAt, ep.reopenAt) = PoolLib.epochTimes(calendar, venue, e);
     }
 
     function _processQueues(uint64 e, Epoch storage ep, uint256 price) internal {
@@ -666,41 +657,20 @@ contract UnderwriterPool is ERC20, ReentrancyGuardTransient, IUnderwriterPool {
         (uint64 w, bool inWindow) = _bellWindowEpoch(t);
         if (inWindow) return (w, w >= startEpoch);
         // after a close and before that closure settles (or its reopen + delay passes, if it was never opened)
-        uint64 c = _lastClosed(t);
+        (uint64 c, uint40 reopen) = PoolLib.lastClosed(calendar, venue, t);
         if (c == type(uint64).max || c < startEpoch) return (0, false);
         Epoch storage ep = _epochs[c];
         if (ep.phase == EpochPhase.SETTLED) return (0, false);
-        uint40 reopen =
-            c + 1 < calendar.sessionCount(venue) ? calendar.session(venue, c + 1).open : type(uint40).max;
         if (uint256(t) < uint256(reopen) + settleDelay || ep.depositAssetsQueued != 0) return (c, true);
         return (0, false);
     }
 
-    /// @dev The epoch whose Bell window [close − 2 h, close) contains `t`.
-    function _bellWindowEpoch(uint40 t) internal view returns (uint64 e, bool inWindow) {
-        (uint256 i, bool found) = calendar.findSession(venue, t);
-        if (!found) return (0, false);
-        Session memory s = calendar.session(venue, i);
-        if (t >= s.close - BELL_WINDOW && t < s.close) return (uint64(i), true);
-        return (uint64(i), false);
+    function _bellWindowEpoch(uint40 t) internal view returns (uint64, bool) {
+        return PoolLib.bellWindowEpoch(calendar, venue, t);
     }
 
-    /// @dev The first epoch whose Bell window has not opened at `t`.
     function _nextUnopened(uint40 t) internal view returns (uint64) {
-        (uint256 i, bool found) = calendar.findSession(venue, t);
-        if (!found) revert NoCalendarCoverage(venue);
-        return t >= calendar.session(venue, i).close - BELL_WINDOW ? uint64(i + 1) : uint64(i);
-    }
-
-    /// @dev The latest session whose close is ≤ t (type(uint64).max if none).
-    function _lastClosed(uint40 t) internal view returns (uint64) {
-        (uint256 i, bool found) = calendar.findSession(venue, t);
-        if (!found) {
-            uint256 n = calendar.sessionCount(venue);
-            return n == 0 ? type(uint64).max : uint64(n - 1);
-        }
-        if (t >= calendar.session(venue, i).close) return uint64(i);
-        return i == 0 ? type(uint64).max : uint64(i - 1);
+        return PoolLib.nextUnopened(calendar, venue, t);
     }
 
     /// @dev An asset's REOPEN for epoch `e` is over: no closure of it at or after `e` is still pending, and its

@@ -3,7 +3,9 @@ pragma solidity 0.8.30;
 
 import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
-import {Inventory, MarketState} from "../libraries/Types.sol";
+import {Inventory, Session} from "../libraries/Types.sol";
+import {ICredenceErrors} from "../libraries/Errors.sol";
+import {ICalendarStore} from "../interfaces/ICalendarStore.sol";
 import {GasGuard} from "../libraries/GasGuard.sol";
 import {ICredenceMarket} from "../interfaces/ICredenceMarket.sol";
 import {IRiskEngine} from "../interfaces/IRiskEngine.sol";
@@ -15,6 +17,57 @@ library PoolLib {
     using Math for uint256;
 
     uint256 internal constant WAD = 1e18;
+    uint40 internal constant BELL_WINDOW = 2 hours; // §8.2.2
+    uint40 internal constant BELL_DEADLINE = 15 minutes;
+
+    // ───────────── calendar (epochs = venue sessions, R-10) ─────────────
+
+    /// @notice Epoch `e`'s times: Bell window, Bell deadline, close, and the next session's open (0 if unknown).
+    function epochTimes(ICalendarStore cal, bytes32 venue, uint64 e)
+        external
+        view
+        returns (uint40 bellWindowAt, uint40 bellAt, uint40 closeAt, uint40 reopenAt)
+    {
+        uint256 n = cal.sessionCount(venue);
+        if (e >= n) revert ICredenceErrors.NoCalendarCoverage(venue);
+        closeAt = cal.session(venue, e).close;
+        (bellWindowAt, bellAt) = (closeAt - BELL_WINDOW, closeAt - BELL_DEADLINE);
+        reopenAt = e + 1 < n ? cal.session(venue, e + 1).open : 0;
+    }
+
+    /// @notice The epoch whose Bell window [close − 2 h, close) contains `t`.
+    function bellWindowEpoch(ICalendarStore cal, bytes32 venue, uint40 t)
+        external
+        view
+        returns (uint64, bool)
+    {
+        (uint256 i, bool found) = cal.findSession(venue, t);
+        if (!found) return (0, false);
+        Session memory s = cal.session(venue, i);
+        return (uint64(i), t >= s.close - BELL_WINDOW && t < s.close);
+    }
+
+    /// @notice The first epoch whose Bell window has not opened at `t`.
+    function nextUnopened(ICalendarStore cal, bytes32 venue, uint40 t) external view returns (uint64) {
+        (uint256 i, bool found) = cal.findSession(venue, t);
+        if (!found) revert ICredenceErrors.NoCalendarCoverage(venue);
+        return t >= cal.session(venue, i).close - BELL_WINDOW ? uint64(i + 1) : uint64(i);
+    }
+
+    /// @notice The latest session whose close is ≤ t (type(uint64).max if none) and the open that follows it
+    ///         (type(uint40).max if beyond the calendar).
+    function lastClosed(ICalendarStore cal, bytes32 venue, uint40 t)
+        external
+        view
+        returns (uint64 c, uint40 reopen)
+    {
+        (uint256 i, bool found) = cal.findSession(venue, t);
+        uint256 n = cal.sessionCount(venue);
+        if (!found) c = n == 0 ? type(uint64).max : uint64(n - 1);
+        else if (t >= cal.session(venue, i).close) c = uint64(i);
+        else c = i == 0 ? type(uint64).max : uint64(i - 1);
+        reopen = c != type(uint64).max && c + 1 < n ? cal.session(venue, c + 1).open : type(uint40).max;
+    }
 
     /// @notice engine.poolCapacity over every market of the stack. The market of the policy being written counts
     ///         without the policy's own collateral (it moves from uncovered to covered with this write).
@@ -42,14 +95,9 @@ library PoolLib {
         return eng.poolCapacity(current, add, assets, types, values, safes, j);
     }
 
-    /// @notice Σ over the stack's markets of the pool's fee receivable (R-09).
-    function feeReceivable(address market) external view returns (uint256 sum) {
-        if (market == address(0)) return 0;
-        bytes32[] memory ids = ICredenceMarket(market).marketIds();
-        for (uint256 i; i < ids.length; ++i) {
-            MarketState memory s = ICredenceMarket(market).marketState(ids[i]);
-            sum += s.poolFeeAccrued;
-        }
+    /// @notice Σ over the stack's markets of the pool's fee receivable, accrued to now (R-09).
+    function feeReceivable(address market) external view returns (uint256) {
+        return market == address(0) ? 0 : ICredenceMarket(market).poolFeeReceivable();
     }
 
     /// @notice R-12: Σ min(cost, V × (1 − κ) × qty). A price that cannot be read values the inventory at 0.

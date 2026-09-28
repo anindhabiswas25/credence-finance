@@ -447,6 +447,13 @@ contract CredenceMarket is ICredenceMarket, ReentrancyGuardTransient {
     }
 
     /// @inheritdoc ICredenceMarket
+    function poolFeeReceivable() external view returns (uint256 total) {
+        for (uint256 i; i < $.ids.length; ++i) {
+            total += $.accruedView($.ids[i]).poolFeeAccrued;
+        }
+    }
+
+    /// @inheritdoc ICredenceMarket
     function uncoveredExposure(bytes32 id)
         external
         view
