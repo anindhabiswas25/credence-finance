@@ -2,6 +2,7 @@
 pragma solidity 0.8.30;
 
 import {RiskFixture} from "../utils/RiskFixture.sol";
+import {VmSafe} from "forge-std/Vm.sol";
 import {Auction, AuctionKind} from "../../src/libraries/Types.sol";
 
 /// @notice Gas at the §8.7.1 maximum sizes, in the EVM with the Solidity engine stand-in (the risk-core ports):
@@ -70,6 +71,8 @@ contract RiskGasTest is RiskFixture {
         emit log_named_uint("fixLots (128 positions, engine = Solidity port)", gFix);
         emit log_named_uint("clear (64 bids, engine = Solidity port)", gClear);
         emit log_named_uint("settlePositions (128 positions)", gSettle);
+        // the coverage build is unoptimised: gas bounds hold for the real (optimised) build only
+        if (vm.isContext(VmSafe.ForgeContext.Coverage)) return;
         assertLt(gFlag, 24_000_000);
         assertLt(gFix, 24_000_000);
         assertLt(gClear, 24_000_000);
