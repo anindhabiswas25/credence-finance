@@ -5,8 +5,6 @@
 //! Bindings come from the frozen interface ABIs in `deployments/abis/v1` (the same JSON
 //! `credence-bindings` is generated from), so switching to that crate changes imports, not logic.
 
-use std::{collections::HashMap, path::Path};
-
 use alloy::{
     eips::BlockId,
     primitives::{Address, B256, U256},
@@ -16,7 +14,7 @@ use anyhow::{Context, Result};
 use credence_risk_core::{
     self as rc,
     fixed::{collateral_value, health_factor_down, ltv_up, mul_div_up},
-    PackedZ, PremiumParams, WAD,
+    WAD,
 };
 
 pub mod abi {
@@ -126,6 +124,8 @@ pub struct RiskCtx {
     pub sigma: U256,
     pub params: RiskParams,
     pub scenario_hash: B256,
+    /// The market's safe LTV for this closure; `None` if the engine has no set for it.
+    pub safe_ltv: Option<U256>,
     pub valuation_price: U256,
     pub coll_dec: u8,
     pub loan_dec: u8,
@@ -168,49 +168,36 @@ pub fn max_ltv_eff(max_ltv: U256, now: u64, own: (U256, u64), global: (U256, u64
     max_ltv.saturating_sub(cut)
 }
 
-/// CoverLogic.bellStatusView for one position given the engine's set.
-pub fn bell(ctx: &RiskCtx, p: &PositionSnap, set: &PackedZ<'_>) -> Result<Bell> {
-    let safe = rc::safe_ltv_from_set(
-        set,
-        ctx.params.alpha,
-        ctx.sigma,
-        U256::ZERO,
-        ctx.params.kappa,
-        ctx.max_ltv_eff,
-    )
-    .map_err(|e| anyhow::anyhow!("safe_ltv: {e:?}"))?;
+/// CoverLogic.bellStatusView for one position, at the market's safe LTV for the closure
+/// (`min(maxLtvEff, engine.safeLtv(asset, type, maxLtvEff, 0))`, read into the context).
+pub fn bell(ctx: &RiskCtx, p: &PositionSnap) -> Result<Bell> {
+    let safe = ctx
+        .safe_ltv
+        .context("the engine has no scenario set for this closure (safeLtv reverted)")?;
+    bell_at(ctx, p, safe)
+}
+
+/// The Bell at a given safe LTV (risk-core `bell_status`, cures converted like the market).
+pub fn bell_at(ctx: &RiskCtx, p: &PositionSnap, safe: U256) -> Result<Bell> {
     let ltv = ltv_up(p.debt_projected, p.collateral_value).unwrap_or(U256::MAX);
+    let zero = |status| Bell {
+        status,
+        safe_ltv: safe,
+        ltv,
+        cure_repay: U256::ZERO,
+        cure_collateral_value: U256::ZERO,
+        cure_collateral: U256::ZERO,
+    };
     if p.covered {
-        return Ok(Bell {
-            status: COVERED,
-            safe_ltv: safe,
-            ltv,
-            cure_repay: U256::ZERO,
-            cure_collateral_value: U256::ZERO,
-            cure_collateral: U256::ZERO,
-        });
+        return Ok(zero(COVERED));
     }
     if p.debt_projected.is_zero() {
-        return Ok(Bell {
-            status: SAFE,
-            safe_ltv: safe,
-            ltv,
-            cure_repay: U256::ZERO,
-            cure_collateral_value: U256::ZERO,
-            cure_collateral: U256::ZERO,
-        });
+        return Ok(zero(SAFE));
     }
     let r = rc::bell_status(p.collateral_value, p.debt_projected, safe, false)
         .map_err(|e| anyhow::anyhow!("bell_status: {e:?}"))?;
     if r.status != NEEDS_ACTION {
-        return Ok(Bell {
-            status: r.status,
-            safe_ltv: safe,
-            ltv,
-            cure_repay: U256::ZERO,
-            cure_collateral_value: U256::ZERO,
-            cure_collateral: U256::ZERO,
-        });
+        return Ok(zero(r.status));
     }
     let cure_collateral = if r.cure_collateral_value == U256::MAX {
         U256::MAX
@@ -227,34 +214,6 @@ pub fn bell(ctx: &RiskCtx, p: &PositionSnap, set: &PackedZ<'_>) -> Result<Bell> 
         cure_collateral_value: r.cure_collateral_value,
         cure_collateral,
     })
-}
-
-/// The Gap Cover premium the pool would charge (engine.quoteCover with the pool's uAfter).
-pub fn premium(
-    ctx: &RiskCtx,
-    p: &PositionSnap,
-    set: &PackedZ<'_>,
-    util_after: U256,
-) -> Result<U256> {
-    let q = rc::quote_cover(
-        set,
-        &PremiumParams {
-            sigma: ctx.sigma,
-            dividend: U256::ZERO,
-            kappa: ctx.params.kappa,
-            collateral_value: p.collateral_value,
-            debt_projected: p.debt_projected,
-            closure_days: ctx.closure_days as u16,
-            util_after,
-            theta: ctx.params.theta,
-            cost_of_cap: ctx.params.cost_of_cap,
-            eta: ctx.params.eta,
-            beta: ctx.params.beta,
-            min_premium: ctx.params.min_premium,
-        },
-    )
-    .map_err(|e| anyhow::anyhow!("quote_cover: {e:?}"))?;
-    Ok(q.premium)
 }
 
 /// CoverLogic._cure's branch for a NEEDS_ACTION borrower (the J3 dry-run's expected outcome).
@@ -300,63 +259,6 @@ pub fn health(ctx: &RiskCtx, collateral: U256, debt: U256) -> U256 {
     match collateral_value(collateral, ctx.valuation_price, ctx.coll_dec, ctx.loan_dec) {
         Ok(c) => health_factor_down(c, ctx.lt, debt).unwrap_or(U256::MAX),
         Err(_) => U256::MAX,
-    }
-}
-
-/// Scenario sets from ADR-0106 files, by on-chain `scenarioHash`.
-#[derive(Default)]
-pub struct SetStore {
-    sets: HashMap<B256, (u32, Vec<U256>)>,
-}
-
-impl SetStore {
-    pub fn load(dirs: &[impl AsRef<Path>]) -> Result<Self> {
-        let mut s = Self::default();
-        for d in dirs {
-            let Ok(rd) = std::fs::read_dir(d.as_ref()) else {
-                tracing::warn!(dir = %d.as_ref().display(), "scenario-set directory not found");
-                continue;
-            };
-            for e in rd.flatten() {
-                let path = e.path();
-                if path.extension().is_none_or(|x| x != "json") {
-                    continue;
-                }
-                let Ok(text) = std::fs::read_to_string(&path) else {
-                    continue;
-                };
-                if !text.contains("\"credence.scenario-set/v1\"") {
-                    continue;
-                }
-                let v: serde_json::Value =
-                    serde_json::from_str(&text).with_context(|| path.display().to_string())?;
-                match rc::setfile::parse_set(&v) {
-                    Ok(set) => {
-                        s.sets
-                            .insert(set.scenario_hash, (set.z.len() as u32, set.packed));
-                    }
-                    Err(e) => {
-                        tracing::warn!(path = %path.display(), error = ?e, "invalid scenario set skipped")
-                    }
-                }
-            }
-        }
-        tracing::info!(sets = s.sets.len(), "scenario sets loaded");
-        Ok(s)
-    }
-
-    pub fn get(&self, scenario_hash: &B256) -> Option<PackedZ<'_>> {
-        self.sets
-            .get(scenario_hash)
-            .and_then(|(n, w)| PackedZ::new(w, *n).ok())
-    }
-
-    pub fn len(&self) -> usize {
-        self.sets.len()
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.sets.is_empty()
     }
 }
 
@@ -413,6 +315,19 @@ pub async fn read_ctx(
         .decimals()
         .call()
         .await?;
+    let max_eff = max_ltv_eff(
+        U256::from(params.maxLtv),
+        now,
+        (U256::from(own.haircut), own.haircutUntil.to::<u64>()),
+        (U256::from(glob.haircut), glob.haircutUntil.to::<u64>()),
+    );
+    let safe_ltv = engine
+        .safeLtv(asset, t, max_eff, U256::ZERO)
+        .block(at)
+        .call()
+        .await
+        .ok()
+        .map(|v| v.min(max_eff));
     Ok(RiskCtx {
         block: blk.header.number,
         timestamp: now,
@@ -427,12 +342,7 @@ pub async fn read_ctx(
         bell_at: info.bellAt.to::<u64>(),
         upcoming_closure_id: info.closureId + 1,
         epoch_id: info.sessionCursor as u64,
-        max_ltv_eff: max_ltv_eff(
-            U256::from(params.maxLtv),
-            now,
-            (U256::from(own.haircut), own.haircutUntil.to::<u64>()),
-            (U256::from(glob.haircut), glob.haircutUntil.to::<u64>()),
-        ),
+        max_ltv_eff: max_eff,
         lt: U256::from(params.lt),
         preclose_kappa: U256::from(params.precloseKappa),
         preclose_lambda: U256::from(params.precloseLambda),
@@ -449,6 +359,7 @@ pub async fn read_ctx(
             min_premium: U256::from(rp.minPremium),
         },
         scenario_hash,
+        safe_ltv,
         valuation_price: v,
         coll_dec,
         loan_dec,
@@ -487,11 +398,13 @@ pub async fn read_position(
     Ok((snap, debt))
 }
 
-/// The pool's utilisation after this cover (its `previewCover`); 0 without a pool.
-pub async fn util_after(p: &DynProvider, ctx: &RiskCtx, s: &PositionSnap) -> Result<U256> {
-    if ctx.pool == Address::ZERO {
-        return Ok(U256::ZERO);
-    }
+/// The pool's quote for this position's cover: `(premium, uAfter)` from `previewCover`, exactly what
+/// the borrower would be charged (and what `CredenceMarket.bellStatus` reports).
+pub async fn preview_cover(
+    p: &DynProvider,
+    ctx: &RiskCtx,
+    s: &PositionSnap,
+) -> Result<(U256, U256)> {
     let req = abi::IUnderwriterPool::CoverRequest {
         marketId: ctx.market_id,
         assetId: ctx.asset_id,
@@ -508,7 +421,7 @@ pub async fn util_after(p: &DynProvider, ctx: &RiskCtx, s: &PositionSnap) -> Res
         .block(BlockId::number(ctx.block))
         .call()
         .await?;
-    Ok(r.uAfter)
+    Ok((r.premium, r.uAfter))
 }
 
 #[cfg(test)]
@@ -552,6 +465,7 @@ mod tests {
                 min_premium: U256::from(500_000u64),
             },
             scenario_hash: B256::ZERO,
+            safe_ltv: None,
             valuation_price: wad("180"),
             coll_dec: 18,
             loan_dec: 6,
@@ -590,8 +504,18 @@ mod tests {
         ))
         .unwrap();
         let set = rc::setfile::parse_set(&serde_json::from_str(&text).unwrap()).unwrap();
-        let z = PackedZ::new(&set.packed, set.z.len() as u32).unwrap();
-        let c = ctx();
+        let z = rc::PackedZ::new(&set.packed, set.z.len() as u32).unwrap();
+        let mut c = ctx();
+        // what the Stylus engine's safeLtv view returns for this set
+        let safe = rc::safe_ltv_from_set(
+            &z,
+            c.params.alpha,
+            c.sigma,
+            U256::ZERO,
+            c.params.kappa,
+            c.max_ltv_eff,
+        )
+        .unwrap();
         let q = U256::from(500u64) * U256::from(WAD);
         let cv = collateral_value(q, c.valuation_price, 18, 6).unwrap();
         let mk = |d: u64, covered: bool| PositionSnap {
@@ -604,22 +528,18 @@ mod tests {
             auto_cover_opt_out: false,
             last_bell_closure_id: 0,
         };
-        let high = bell(&c, &mk(74_000_000_000, false), &z).unwrap();
-        assert_eq!(high.status, NEEDS_ACTION);
-        assert!(high.cure_repay > U256::ZERO && high.cure_collateral > U256::ZERO);
         assert!(
-            premium(&c, &mk(74_000_000_000, false), &z, U256::ZERO).unwrap()
-                >= c.params.min_premium
+            bell(&c, &mk(74_000_000_000, false)).is_err(),
+            "no safe LTV without an engine set"
         );
-        assert_eq!(
-            bell(&c, &mk(74_000_000_000, true), &z).unwrap().status,
-            COVERED
-        );
-        assert_eq!(
-            bell(&c, &mk(10_000_000_000, false), &z).unwrap().status,
-            SAFE
-        );
-        assert_eq!(bell(&c, &mk(0, false), &z).unwrap().status, SAFE);
+        c.safe_ltv = Some(safe);
+        let high = bell(&c, &mk(74_000_000_000, false)).unwrap();
+        assert_eq!(high.status, NEEDS_ACTION);
+        assert_eq!(high.safe_ltv, safe);
+        assert!(high.cure_repay > U256::ZERO && high.cure_collateral > U256::ZERO);
+        assert_eq!(bell(&c, &mk(74_000_000_000, true)).unwrap().status, COVERED);
+        assert_eq!(bell(&c, &mk(10_000_000_000, false)).unwrap().status, SAFE);
+        assert_eq!(bell(&c, &mk(0, false)).unwrap().status, SAFE);
         // coverable = min(0.75 + 0.005, 0.85 − 0.02) = 0.755
         assert_eq!(
             expected_outcome(&c, &mk(0, false), wad("0.755")),

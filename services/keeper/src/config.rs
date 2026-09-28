@@ -81,21 +81,8 @@ pub fn core_jobs(chain_id: u64) -> Result<Option<crate::core_jobs::CoreJobs>> {
     if markets.is_empty() {
         return Ok(None);
     }
-    let dirs: Vec<PathBuf> = env::or(
-        "SCENARIO_DIRS",
-        "calibration/out/scenarios,contracts/test/fixtures/risk",
-    )
-    .split(',')
-    .filter(|s| !s.trim().is_empty())
-    .map(|s| PathBuf::from(s.trim()))
-    .collect();
-    let sets = crate::core::SetStore::load(&dirs)?;
-    let mut c = crate::core_jobs::CoreJobs::new(
-        markets,
-        vaults,
-        sets,
-        env::or("INDEXER_SCHEMA", "indexer"),
-    );
+    let mut c =
+        crate::core_jobs::CoreJobs::new(markets, vaults, env::or("INDEXER_SCHEMA", "indexer"));
     c.j3_live = env::or("KEEPER_J3_LIVE", "0") == "1";
     c.j4_live = env::or("KEEPER_J4_LIVE", "0") == "1";
     // testnet self-service allowlist: never on Arbitrum One

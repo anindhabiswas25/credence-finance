@@ -1,7 +1,7 @@
 //! Lending-core jobs (§10.2), run by the leader after J1/J12 when a core stack is configured:
 //!
 //! * **J2 Bell heads-up**: at T−26 h and T−2 h before the next close, if that closure is *binding*
-//!   (safe LTV < effective max LTV), compute the Bell for every borrower natively and enqueue a
+//!   (safe LTV < effective max LTV), compute the Bell for every borrower natively (risk-core, at the engine's safe LTV) and enqueue a
 //!   `bell_headsup` notification with exact amounts (dedupe `J2:<market>:<closure>:<borrower>:<stage>`).
 //! * **J3 enforceBell** (dry-run unless `KEEPER_J3_LIVE=1`): from `bellAt` to the close, the NEEDS_ACTION
 //!   borrowers in batches of ≤ 50 with each one's expected `BellOutcome` (CoverLogic._cure's branches).
@@ -27,9 +27,8 @@ use sqlx::{postgres::PgConnection, Row};
 
 use crate::{
     core::{
-        abi, bell, expected_outcome, health, preclose_qty, premium, read_ctx, read_position,
-        util_after, RiskCtx, SetStore, EXTENDED, NEEDS_ACTION, PRECLOSE_SALE, PRECLOSE_THEN_COVER,
-        REGULAR,
+        abi, bell, expected_outcome, health, preclose_qty, preview_cover, read_ctx, read_position,
+        RiskCtx, EXTENDED, NEEDS_ACTION, PRECLOSE_SALE, PRECLOSE_THEN_COVER, REGULAR,
     },
     jobs::{self, Claim},
     tasks::{Keeper, TickReport},
@@ -56,7 +55,6 @@ pub struct CoreJobs {
     pub markets: Vec<CoreMarket>,
     /// (stack, vault)
     pub vaults: Vec<(String, Address)>,
-    pub sets: SetStore,
     /// Ponder's views schema (`indexer`).
     pub indexer_schema: String,
     pub j3_live: bool,
@@ -70,7 +68,6 @@ impl CoreJobs {
     pub fn new(
         markets: Vec<CoreMarket>,
         vaults: Vec<(String, Address)>,
-        sets: SetStore,
         indexer_schema: String,
     ) -> Self {
         assert!(
@@ -83,7 +80,6 @@ impl CoreJobs {
         Self {
             markets,
             vaults,
-            sets,
             indexer_schema,
             j3_live: false,
             j4_live: false,
@@ -197,25 +193,19 @@ impl Keeper {
         ) {
             return Ok(());
         }
-        let Some(set) = core.sets.get(&ctx.scenario_hash) else {
+        let Some(safe) = ctx.safe_ltv else {
             jobs::mark(
                 conn,
                 &key,
                 "failed",
-                Some(&format!("scenario set {} not loaded", ctx.scenario_hash)),
+                Some(&format!(
+                    "engine has no set for {} type {}",
+                    ctx.asset_id, ctx.closure_type
+                )),
             )
             .await?;
             return Ok(());
         };
-        let safe = credence_risk_core::safe_ltv_from_set(
-            &set,
-            ctx.params.alpha,
-            ctx.sigma,
-            U256::ZERO,
-            ctx.params.kappa,
-            ctx.max_ltv_eff,
-        )
-        .map_err(|e| anyhow::anyhow!("{e:?}"))?;
         if safe >= ctx.max_ltv_eff {
             jobs::set_payload(conn, &key, &json!({ "binding": false, "safeLtv": s(safe) })).await?;
             jobs::mark(conn, &key, "done", None).await?;
@@ -224,7 +214,7 @@ impl Keeper {
         let mut sent = 0usize;
         for owner in self.borrowers(conn, core, m.id).await? {
             let (p, debt) = read_position(self.rpc.primary(), ctx, owner).await?;
-            let b = bell(ctx, &p, &set)?;
+            let b = bell(ctx, &p)?;
             if b.status != NEEDS_ACTION {
                 continue;
             }
@@ -234,10 +224,11 @@ impl Keeper {
             let (prem, unavailable) = if ctx.cover_paused {
                 (None, Some("Gap Cover is paused for this market"))
             } else {
-                let u = util_after(self.rpc.primary(), ctx, &p)
-                    .await
-                    .unwrap_or(U256::ZERO);
-                (Some(premium(ctx, &p, &set, u)?), None)
+                // the pool's own quote: the amount the borrower would actually be charged
+                (
+                    Some(preview_cover(self.rpc.primary(), ctx, &p).await?.0),
+                    None,
+                )
             };
             let default = match outcome {
                 o if o == PRECLOSE_SALE || prem.is_none() => {
@@ -324,17 +315,23 @@ impl Keeper {
         ) {
             return Ok(());
         }
-        let Some(set) = core.sets.get(&ctx.scenario_hash) else {
-            jobs::mark(conn, &key, "failed", Some("scenario set not loaded")).await?;
+        if ctx.safe_ltv.is_none() {
+            jobs::mark(
+                conn,
+                &key,
+                "failed",
+                Some("engine has no set for this closure"),
+            )
+            .await?;
             return Ok(());
-        };
+        }
         let mut plan = Vec::new();
         for owner in self.borrowers(conn, core, m.id).await? {
             let (p, debt) = read_position(self.rpc.primary(), ctx, owner).await?;
             if p.auction_id != 0 || p.covered || p.last_bell_closure_id >= ctx.upcoming_closure_id {
                 continue;
             }
-            let b = bell(ctx, &p, &set)?;
+            let b = bell(ctx, &p)?;
             if b.status != NEEDS_ACTION {
                 continue;
             }

@@ -120,7 +120,6 @@ async fn main() -> Result<()> {
         tracing::info!(
             markets = c.markets.len(),
             vaults = c.vaults.len(),
-            sets = c.sets.len(),
             j3_live = c.j3_live,
             j4_live = c.j4_live,
             "core jobs enabled"
