@@ -38,3 +38,6 @@ cal-validate: cal-risk-cli ## QE: run risk-cli validate-set on every scenario se
 	@set -e; for f in $(CAL_OUT)/scenarios/*.json $(CAL_OUT)/joint/*.json; do \
 	  $(RISK_CLI) validate-set $$f >/dev/null || { echo "INVALID: $$f"; exit 1; }; done; \
 	echo "validate-set: every file in $(CAL_OUT) passes"
+
+cal-crosscheck: ## QE: cross-check the pinned Alpaca bars against Polygon official open/close (last 2 years, ~10 min)
+	$(CAL) python -m credence_cal.data crosscheck

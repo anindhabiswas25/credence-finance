@@ -1,6 +1,6 @@
-# Data-quality report (alpaca, data grade `dev-unlicensed`, through 2026-09-25)
+# Data-quality report (alpaca, data grade `free-2016`, through 2026-09-25)
 
-Machine-readable: `quality-7b74d19ba127803c.json`. Outliers are |r| > 20%; they are flagged, never dropped.
+Machine-readable: `quality-e90a0846d6aa349c.json`. Outliers are |r| > 20%; they are flagged, never dropped.
 
 | Symbol | First session | Overnight | Weekend | Holiday | Missing sessions | Zero-volume | Bad bars | Outliers | Suspect splits |
 | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |

@@ -1,7 +1,7 @@
 """The calibration pipeline driver (§10.6). `make cal-all` = `python -m credence_cal.pipeline all`.
 
     python -m credence_cal.pipeline all      [--vendor alpaca|tiingo|sample] [--out DIR]
-    python -m credence_cal.pipeline <stage>  (gaps | sigma | sets | joint | backtest | proposal)
+    python -m credence_cal.pipeline <stage>  (gaps | sigma | sets | validation)
 
 Stages read the pinned raw data (checked against the committed manifest first) and write
 content-addressed JSON under `--out` (default `calibration/out`). Intermediate tables go to
@@ -125,8 +125,7 @@ def stage_sets(c: Ctx) -> None:
     from . import sets as sets_mod
     from .setfile import set_document
 
-    z = pd.read_parquet(c.work / "z.parquet")
-    z = z[[d >= COMPARABLE_FROM.get(s, "") for s, d in zip(z["symbol"], z["date"])]]
+    z = _pooled_z(c)
     index = []
     for a in LISTED:
         for t in (1, 2, 3):
@@ -144,14 +143,18 @@ def stage_sets(c: Ctx) -> None:
 
 
 def sets_markdown(index: list[dict], jinfo: dict, jname: str, c: Ctx) -> str:
+    from . import sets as sets_mod
+
     L = [f"# Scenario sets ({c.vendor}, data grade `{c.grade}`, through {c.end})", "",
-         "Pooling rule and its effect on the tail: ADR-0203. z in thousandths of σ; i* = ceil(α N) − 1 at α = 0.1%.", "",
-         "| Asset | Closure | N | Pool | z at i* (pooled) | min (pooled) | own N | z at α (own only) | min (own) | padded with weekend | File |",
-         "| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- | --- |"]
+         "Pooling rule and its effect on the tail: ADR-0203. Tail floor (the more severe of history and the t₃ "
+         "stand-in below the 2.5% quantile): ADR-0204. z in thousandths of σ; i* = ceil(α N) − 1 at α = 0.1%.", "",
+         "| Asset | Closure | N | Pool | z at i* (set) | pooled history | t₃ | values moved by t₃ | min (set) | own N | z at α (own only) | min (own) | padded with weekend | File |",
+         "| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- | --- |"]
     for x in index:
         t = x["tail"]
         pad = ", ".join(x["paddedWithWeekend"]) or "—"
-        L.append(f"| {x['asset']} | {x['closureType']} | {x['n']} | {x['poolSize']} | {t['zAlphaPooled']} | {t['zMinPooled']} | "
+        L.append(f"| {x['asset']} | {x['closureType']} | {x['n']} | {x['poolSize']} | {t['zAlphaPooled']} | {t['zAlphaHistory']} | "
+                 f"{t['zAlphaT3']} | {t['t3FloorValuesMoved']} | {t['zMinPooled']} | "
                  f"{t['ownN']} | {t['zAlphaOwn']} | {t['zMinOwn']} | {pad} | `{x['file']}` |")
     L += ["", f"## Joint stress set (`{jname}`)", "",
           f"K = {jinfo['k']} worst of {jinfo['candidates']} non-overnight closures ({jinfo['firstClosure']} → {jinfo['lastClosure']}), "
@@ -159,13 +162,43 @@ def sets_markdown(index: list[dict], jinfo: dict, jname: str, c: Ctx) -> str:
           "| Asset | β to SPY (z) | back-filled closures |", "| --- | ---: | ---: |"]
     for a, b in jinfo["beta"].items():
         L.append(f"| {a} | {b:.3f} | {jinfo['backfilled'][a]} |")
+    syn = jinfo["synthetic"]
+    if syn.get("levels"):
+        L += ["", f"Synthetic stress closures (ADR-0204): {syn['method']}"
+              + (f"; GPD over the worst {sets_mod.SYNTH_TAIL:.0%} of basket z ({syn['exceedances']} exceedances, ξ = {syn['xi']}, "
+                 f"scale {syn['scale']}, {syn['closuresPerYear']} closures/year, worst observed −{syn['worstObserved']})" if "xi" in syn else "")
+              + f". Shapes: the worst historical closure ({syn['worstHistoricalShapeFrom']}) scaled, and all assets equal.", "",
+              "| Horizon | years | closures | basket z |", "| --- | ---: | ---: | ---: |"]
+        for h, v in syn["levels"].items():
+            L.append(f"| {h} | {v.get('years', '—')} | {v.get('closures', '—')} | {v['basketZ']} |")
     L += ["", "Worst ten:", "", "| # | Reopen session | Closure | basket mean z |", "| ---: | --- | --- | ---: |"]
     for i, x in enumerate(jinfo["closures"][:10]):
         L.append(f"| {i + 1} | {x['date']} | {x['type']} | {x['basketZ']:.3f} |")
     return "\n".join(L) + "\n"
 
 
-STAGES = {"gaps": stage_gaps, "sigma": stage_sigma, "sets": stage_sets}
+def _pooled_z(c: Ctx) -> pd.DataFrame:
+    z = pd.read_parquet(c.work / "z.parquet")
+    return z[[d >= COMPARABLE_FROM.get(s, "") for s, d in zip(z["symbol"], z["date"])]]
+
+
+def stage_validation(c: Ctx) -> None:
+    """Model validation note (ADR-0204): the sets against the t₃ stand-in, through risk-core."""
+    from . import sets as sets_mod
+    from . import validation
+    from .engine import default_engine
+
+    z = _pooled_z(c)
+    sigma_doc = json.loads(next((c.out / "sigma").glob("sigma-*.json")).read_text())
+    cols, jinfo = sets_mod.joint(z)
+    doc = {"kind": "credence.validation.v1", "dataGrade": c.grade, "vendor": c.vendor, "end": c.end,
+           **validation.run(default_engine(), z, sigma_doc, cols, jinfo)}
+    p, _ = write_addressed(c.out / "validation", "validation", doc)
+    (c.out / "validation" / "README.md").write_text(validation.markdown(doc, p.name, c.grade, c.end))
+    print(f"validation: {len(doc['sets'])} sets vs t3 -> {p.name}")
+
+
+STAGES = {"gaps": stage_gaps, "sigma": stage_sigma, "sets": stage_sets, "validation": stage_validation}
 
 
 def hashes(c: Ctx) -> None:

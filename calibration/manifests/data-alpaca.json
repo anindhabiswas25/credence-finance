@@ -1,7 +1,7 @@
 {
  "licence": {
-  "grade": "dev-unlicensed",
-  "terms": "Alpaca Basic market data: personal, non-professional use only. Not licensed for internal business model use. Development runs only (ADR-0201)."
+  "grade": "free-2016",
+  "terms": "Alpaca Basic (free) market data, SIP daily bars from 2016-01-04: personal, non-professional licence. Accepted by the user for the S2 testnet calibration; the PM re-opens licensing before mainnet (ADR-0204)."
  },
  "listed": [
   "NVDA",

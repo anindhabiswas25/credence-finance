@@ -48,5 +48,5 @@ def joint_document(cols: dict[str, np.ndarray], info: dict, c) -> dict:
                      "packedWords": pack_i16([int(v) for v in col])} for a, col in cols.items()],
         "closures": info["closures"],
         "provenance": {**_provenance(c), "beta": info["beta"], "backfilled": info["backfilled"],
-                       "ranking": info["ranking"], "betaMethod": info["betaMethod"]},
+                       "ranking": info["ranking"], "betaMethod": info["betaMethod"], "synthetic": info["synthetic"]},
     }

@@ -1,6 +1,6 @@
 # ADR-0201 · Historical market data for calibration: source, licence and pinning
 
-Status: accepted for development; **licensed source pending the user's decision (board BLOCKED 2026-09-28 02:40)** · Role: QE · Date: 2026-09-28 · Guide §1.2, §10.6 step 1, R-26
+Status: **superseded by ADR-0204** (2026-09-28: the user chose the free APIs; source Alpaca SIP 2016+, `dataGrade: "free-2016"`, explicit tail compensation). The measurements below stay valid · Role: QE · Date: 2026-09-28 · Guide §1.2, §10.6 step 1, R-26
 
 ## Context
 The calibration needs 20+ years of daily official open and close, splits and dividends for NVDA, AAPL, TSLA, MSFT, SPY and COIN (since its 2021 listing), plus comparable names for pooling, under a licence that allows **internal model use**. The outputs published on-chain are standardised gap sets (int16 thousandths of σ) and σ values, not prices.

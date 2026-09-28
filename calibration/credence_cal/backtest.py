@@ -4,7 +4,9 @@ cannot disagree. Only bookkeeping (sums, counts, confidence intervals) is done h
 
 Replay. Every XNYS closure (OVERNIGHT, WEEKEND, HOLIDAY_WEEKEND) from `START` to the data end is one pool
 epoch (R-10). **Walk-forward:** closures in calendar year Y use scenario sets, the joint set and σ floors
-built only from data before 1 January Y; σ is the ex-ante EWMA of sigma.md. The engine's 10%/day σ
+built only from data before 1 January Y (the synthetic stress levels of ADR-0204 are the full-sample
+ones, passed in: a look-ahead only in the conservative direction, because an early year has too few
+closures to fit a tail); σ is the ex-ante EWMA of sigma.md. The engine's 10%/day σ
 rate limit is not replayed; it can only raise σ, so the breach counts here are an upper bound.
 
 Synthetic book (per asset, rebuilt each closure with a seeded draw): `N_LOANS` loans sharing the
@@ -83,7 +85,7 @@ class YearSets:
     floors: dict  # (asset, type) -> σ floor (float)
 
 
-def build_year_sets(eng: Engine, z: pd.DataFrame, daily: dict[str, list[dict]], year: int) -> YearSets:
+def build_year_sets(eng: Engine, z: pd.DataFrame, daily: dict[str, list[dict]], year: int, synth: dict) -> YearSets:
     cut = f"{year}-01-01"
     zp = z[z["date"] < cut]
     out, n = {}, {}
@@ -92,7 +94,7 @@ def build_year_sets(eng: Engine, z: pd.DataFrame, daily: dict[str, list[dict]], 
             q, info = sets_mod.build_set(zp, a, t)
             out[(a, t)] = eng.load_set([int(v) for v in q])
             n[(a, t)] = info["n"]
-    cols, jinfo = sets_mod.joint(zp)
+    cols, jinfo = sets_mod.joint(zp, synthetic=synth)
     joint = {a: eng.load_set([int(v) for v in cols[a]]) for a in LISTED}
     floors = {}
     for a in LISTED:
@@ -103,9 +105,10 @@ def build_year_sets(eng: Engine, z: pd.DataFrame, daily: dict[str, list[dict]], 
     return YearSets(out, n, joint, jinfo["k"], floors)
 
 
-def run(eng: Engine, gaps: pd.DataFrame, z: pd.DataFrame, daily: dict[str, list[dict]], p: Params,
+def run(eng: Engine, gaps: pd.DataFrame, z: pd.DataFrame, daily: dict[str, list[dict]], p: Params, synth: dict,
         years_cache: dict | None = None) -> dict:
-    """One full replay. `gaps` holds the listed assets with the ex-ante `sigma` column (sigma.replay)."""
+    """One full replay. `gaps` holds the listed assets with the ex-ante `sigma` column (sigma.replay);
+    `synth` the synthetic stress levels {horizon: basket z} of the full-sample joint set."""
     g = gaps[gaps["symbol"].isin(list(LISTED)) & gaps["sigma"].notna()].copy()
     g = g[g["date"] >= f"{START_YEAR}-01-01"]
     closures = sorted(set(zip(g["date"], g["type"])))
@@ -118,7 +121,7 @@ def run(eng: Engine, gaps: pd.DataFrame, z: pd.DataFrame, daily: dict[str, list[
     for ci, (date, t) in enumerate(closures):
         year = int(date[:4])
         if year not in cache:
-            cache[year] = build_year_sets(eng, z, daily, year)
+            cache[year] = build_year_sets(eng, z, daily, year, synth)
         ys = cache[year]
         rows = {a: by.get((a, date)) for a in LISTED}
         days = (pd.Timestamp(date) - pd.Timestamp(next(r.prev for r in rows.values() if r is not None))).days
@@ -290,12 +293,12 @@ SENSITIVITY = {
 }
 
 
-def sensitivity(eng: Engine, gaps, z, daily, base: Params, cache: dict) -> list[dict]:
+def sensitivity(eng: Engine, gaps, z, daily, base: Params, synth: dict, cache: dict) -> list[dict]:
     out = []
     for name, vals in SENSITIVITY.items():
         for v in vals:
             p = replace(base, **{name: v})
-            s = summarize(run(eng, gaps, z, daily, p, cache))
+            s = summarize(run(eng, gaps, z, daily, p, synth, cache))
             out.append({"param": name, "value": v, "breachRate": s["breach"]["total"]["rate"],
                         "breaches": s["breach"]["total"]["breaches"], "trials": s["breach"]["total"]["trials"],
                         "annualReturnOnJ0": s["pool"]["annualReturnOnJ0"], "worstEpochUsd": s["pool"]["worstEpoch"]["pnlUsd"],
