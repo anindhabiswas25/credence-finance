@@ -365,10 +365,21 @@ contract MarketHandler is Test {
     function flag(uint256 m) external {
         address[] memory bs = _all();
         uint256 i = bound(m, 0, 2);
+        vm.recordLogs();
         vm.prank(keeper);
         try s.market.flagForAuction(s.ids[i], bs) {
             ++okFlags;
         } catch {}
+        // INV-LIQ-02: no EMERGENCY (EXTENDED) sale of a position covered for the current closure
+        Vm.Log[] memory logs = vm.getRecordedLogs();
+        for (uint256 j; j < logs.length; ++j) {
+            if (logs[j].topics[0] != ICredenceMarketEvents.Flagged.selector) continue;
+            (, AuctionKind fk) = abi.decode(logs[j].data, (uint64, AuctionKind));
+            address owner = address(uint160(uint256(logs[j].topics[2])));
+            if (fk == AuctionKind.EMERGENCY && s.market.position(s.ids[i], owner).coverClosureId == closureId) {
+                ++ghostLiqViolations;
+            }
+        }
         _after(false);
         ClockState st = s.clk.st(s.assets[i]);
         AuctionKind k = st == ClockState.REGULAR

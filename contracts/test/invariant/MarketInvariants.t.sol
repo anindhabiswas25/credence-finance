@@ -135,6 +135,7 @@ contract MarketInvariantsTest is CoreFixture {
         }
     }
 
+    /// INV-LIQ-01 (no collateral leaves while shut) and INV-LIQ-02 (no EMERGENCY sale of a covered position)
     function invariant_LIQ01_noLiquidationWhileShut() public view {
         assertEq(h.ghostLiqViolations(), 0);
     }

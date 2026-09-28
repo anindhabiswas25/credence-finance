@@ -333,6 +333,30 @@ contract CredenceMarketPathsTest is CoreFixture {
         assertGt(reserve.balance(), resBefore);
     }
 
+    /// INV-LIQ-02: in EXTENDED a covered position is never sold; an uncovered one below HF 0.92 is (EMERGENCY).
+    function test_noEmergencySaleOfCoveredPositions() public {
+        clk.setClosureId(NVDA, 4);
+        clk.setNextClose(NVDA, uint40(block.timestamp + 5 hours), ClosureType.WEEKEND, 3);
+        pool.setPremium(1e6, 0.1e18);
+        _collateral(bob, idNVDA, tNVDA, 100e18);
+        _borrow(bob, idNVDA, 13_000e6);
+        vm.prank(bob);
+        market.buyCover(idNVDA, 1e6, true); // covered for closure 5
+        _collateral(carl, idNVDA, tNVDA, 100e18);
+        _borrow(carl, idNVDA, 13_000e6);
+        // the close: closure 5 starts; overnight trading crashes the price (HF ≈ 0.74)
+        clk.setClosureId(NVDA, 5);
+        clk.setState(NVDA, ClockState.EXTENDED);
+        orc.setPrice(NVDA, 120e18);
+        address[] memory bs = new address[](2);
+        (bs[0], bs[1]) = (bob, carl);
+        market.flagForAuction(idNVDA, bs);
+        assertEq(market.position(idNVDA, bob).auctionId, 0, "covered: waits for the regular open");
+        uint64 id = market.position(idNVDA, carl).auctionId;
+        assertGt(id, 0, "uncovered: EMERGENCY sale");
+        assertEq(uint8(market.lotInfo(id).kind), uint8(AuctionKind.EMERGENCY));
+    }
+
     function test_settleBeforeClearReverts() public {
         uint64 id = _reopenWith(bob, 100e18, 13_500e6, 158.4e18);
         address[] memory bs = new address[](1);
