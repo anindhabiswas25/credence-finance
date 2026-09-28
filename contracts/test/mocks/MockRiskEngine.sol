@@ -230,11 +230,12 @@ contract MockRiskEngine {
     }
 
     /// @dev risk-core `loss_vector`: L_j = max(0, D − C × g_j) (C × g rounded down), packed 4 × uint64.
-    function coverLossVector(bytes32 assetId, uint8 closureType, uint256 collateralValue, uint256 debtProjected)
-        external
-        view
-        returns (uint256[] memory packed)
-    {
+    function coverLossVector(
+        bytes32 assetId,
+        uint8 closureType,
+        uint256 collateralValue,
+        uint256 debtProjected
+    ) external view returns (uint256[] memory packed) {
         _live();
         uint256 k = _params.kStress;
         if (_joint[assetId].length == 0) revert UnknownSet(assetId, closureType);
@@ -279,7 +280,8 @@ contract MockRiskEngine {
             if (lambda > worstLoss) worstLoss = lambda;
         }
         if (worstLoss != 0) {
-            utilAfter = equity == 0 ? type(uint256).max : Math.mulDiv(worstLoss, 1e18, equity, Math.Rounding.Ceil);
+            utilAfter =
+                equity == 0 ? type(uint256).max : Math.mulDiv(worstLoss, 1e18, equity, Math.Rounding.Ceil);
         }
         ok = utilAfter <= _params.uMax;
     }

@@ -110,6 +110,20 @@ library LiquidationLogic {
         emit ICredenceMarketEvents.LotsReleased(auctionId, totalQty, lot.releasedCount);
     }
 
+    /// @dev v2 (ADR-0110): an unreleased lot that can no longer be fixed (the clock left the state its kind needs)
+    ///      is cancelled: every queued borrower leaves it untouched, and it counts as released with 0.
+    function cancelLot(Layout storage $, uint64 auctionId) external {
+        LotBook storage lot = $.lots[auctionId];
+        if (lot.released) revert ICredenceErrors.LotAlreadyReleased(auctionId);
+        lot.released = true;
+        bytes32 id = lot.marketId;
+        for (uint256 i = lot.borrowers.length; i > 0; --i) {
+            address b = lot.borrowers[i - 1];
+            $.leave(auctionId, id, b, $.pos[id][b]);
+        }
+        emit ICredenceMarketEvents.LotsReleased(auctionId, 0, 0);
+    }
+
     function onAuctionCleared(Layout storage $, uint64 auctionId, uint256 proceeds, uint256 blendedPrice)
         external
     {

@@ -4,8 +4,18 @@ pragma solidity 0.8.30;
 import {Test} from "forge-std/Test.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {
-    MarketParams, MarketKind, RateParams, MarketWiring, RiskParams, ClockState, ClosureType
+    MarketParams,
+    MarketKind,
+    RateParams,
+    MarketWiring,
+    RiskParams,
+    ClockState,
+    ClosureType,
+    Session
 } from "../../src/libraries/Types.sol";
+import {UnderwriterPool} from "../../src/pool/UnderwriterPool.sol";
+import {AuctionHouse} from "../../src/auction/AuctionHouse.sol";
+import {CalendarStore} from "../../src/clock/CalendarStore.sol";
 import {CredenceMarket} from "../../src/core/CredenceMarket.sol";
 import {SeniorVault} from "../../src/core/SeniorVault.sol";
 import {KeeperTips} from "../../src/core/KeeperTips.sol";
@@ -20,7 +30,9 @@ import {MockMarketClock} from "../mocks/MockMarketClock.sol";
 import {MockMarketOracle} from "../mocks/MockMarketOracle.sol";
 
 /// @dev The lending core (market, vault, tips, treasury, reserve, guardian) around mocked clock, oracle, engine,
-///      pool and auction house. One NVDA / AAPL / TSLA market each, §12.2 equity parameters.
+///      pool and auction house. One NVDA / AAPL / TSLA market each, §12.2 equity parameters. A test that overrides
+///      `_realRisk()` gets the real UnderwriterPool and AuctionHouse instead (S3), on a CalendarStore of weekday
+///      sessions (EDT: open 09:30, close 16:00) starting the Monday before `block.timestamp`.
 abstract contract CoreFixture is Test {
     address internal timelock = makeAddr("timelock");
     address internal safe = makeAddr("guardianSafe");
@@ -46,6 +58,12 @@ abstract contract CoreFixture is Test {
     CredenceGuardian internal guardianC;
     CredenceMarket internal market;
     SeniorVault internal vault;
+    // S3: the real pool and auction house (when `_realRisk()`), on a weekday calendar
+    UnderwriterPool internal up;
+    AuctionHouse internal house;
+    CalendarStore internal cal;
+    bytes32 internal constant VENUE = bytes32("XNYS");
+    uint40 internal calMonday; // Monday 00:00 UTC of the calendar's first week
 
     bytes32 internal idNVDA;
     bytes32 internal idAAPL;
@@ -63,12 +81,15 @@ abstract contract CoreFixture is Test {
         engine.setParams(RiskParams(0.001e18, 0.03e18, 1e18, 0.15e18, 4e18, 0.975e18, 0.5e18, 0.5e6, 256));
         pool = new MockUnderwriterPool(IERC20(address(usdc)));
         ah = new MockAuctionHouse();
+        if (_realRisk()) _deployRisk();
         tips = new KeeperTips(timelock, address(usdc));
         treasury = new Treasury(timelock, address(usdc), address(tips));
         reserve = new ProtocolReserve(timelock, address(usdc), address(treasury));
         guardianC = new CredenceGuardian(timelock, safe);
         market = new CredenceMarket(timelock, address(guardianC));
-        vault = new SeniorVault(IERC20(address(usdc)), "Credence Senior USDC", "csUSDC", timelock, address(market), allocator);
+        vault = new SeniorVault(
+            IERC20(address(usdc)), "Credence Senior USDC", "csUSDC", timelock, address(market), allocator
+        );
 
         market.initializeWiring(
             MarketWiring({
@@ -76,8 +97,8 @@ abstract contract CoreFixture is Test {
                 oracle: address(orc),
                 engine: address(engine),
                 vault: address(vault),
-                pool: address(pool),
-                auctionHouse: address(ah),
+                pool: _realRisk() ? address(up) : address(pool),
+                auctionHouse: _realRisk() ? address(house) : address(ah),
                 settlement: address(0),
                 reserve: address(reserve),
                 treasury: address(treasury),
@@ -87,9 +108,17 @@ abstract contract CoreFixture is Test {
         pool.setMarket(address(market));
         ah.setMarket(address(market));
         reserve.initializeWiring(address(market));
-        address[] memory payers = new address[](1);
+        address[] memory payers = new address[](_realRisk() ? 3 : 1);
         payers[0] = address(market);
+        if (_realRisk()) (payers[1], payers[2]) = (address(up), address(house));
         tips.initializeWiring(payers);
+        if (_realRisk()) {
+            vm.startPrank(timelock);
+            up.initializeWiring(address(market), address(house), address(0), address(clk), address(tips));
+            house.initializeWiring(address(market), address(up), address(clk), address(tips), VENUE, 100e6);
+            vm.stopPrank();
+            clk.setAuctionHouse(address(house));
+        }
         address[] memory ms = new address[](1);
         ms[0] = address(market);
         guardianC.initializeWiring(ms, address(clk));
@@ -118,6 +147,54 @@ abstract contract CoreFixture is Test {
         orc.setPrice(AAPL, 200e18);
         orc.setPrice(TSLA, 250e18);
         usdc.mint(address(tips), 1_000e6);
+    }
+
+    function _realRisk() internal pure virtual returns (bool) {
+        return false;
+    }
+
+    function _calendarWeeks() internal pure virtual returns (uint256) {
+        return 8;
+    }
+
+    /// @dev Weekday sessions from the Monday before now: extOpen 04:00, open 09:30, close 16:00, extClose 20:00 ET
+    ///      (UTC − 4 h); OVERNIGHT after Mon–Thu, WEEKEND after Friday. Session index = week × 5 + weekday.
+    function _deployRisk() internal {
+        uint256 dayIdx = block.timestamp / 1 days;
+        calMonday = uint40((dayIdx - (dayIdx + 3) % 7) * 1 days);
+        uint256 n = _calendarWeeks() * 5;
+        Session[] memory ss = new Session[](n);
+        for (uint256 i; i < n; ++i) {
+            uint40 d0 = calMonday + uint40((i / 5) * 7 days + (i % 5) * 1 days);
+            ss[i] = Session({
+                extOpen: d0 + 8 hours,
+                open: d0 + 13 hours + 30 minutes,
+                close: d0 + 20 hours,
+                extClose: d0 + 24 hours - 1,
+                closureTypeAfter: i % 5 == 4 ? ClosureType.WEEKEND : ClosureType.OVERNIGHT
+            });
+        }
+        cal = new CalendarStore(timelock);
+        vm.prank(timelock);
+        cal.appendSessions(VENUE, ss);
+        clk.setCalendar(address(cal));
+        up = new UnderwriterPool(
+            timelock, IERC20(address(usdc)), VENUE, "Credence Underwriter USDC (equity)", "cfUP-EQ"
+        );
+        house = new AuctionHouse(timelock);
+    }
+
+    /// @dev Calendar session index of weekday `d` (0 = Monday) in week `w`, and its close / next open.
+    function _session(uint256 w, uint256 d) internal pure returns (uint64) {
+        return uint64(w * 5 + d);
+    }
+
+    function _closeAt(uint256 w, uint256 d) internal view returns (uint40) {
+        return calMonday + uint40(w * 7 days + d * 1 days) + 20 hours;
+    }
+
+    function _openAt(uint256 w, uint256 d) internal view returns (uint40) {
+        return calMonday + uint40(w * 7 days + d * 1 days) + 13 hours + 30 minutes;
     }
 
     function _rate() internal pure virtual returns (RateParams memory) {

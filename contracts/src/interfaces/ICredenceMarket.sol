@@ -49,6 +49,9 @@ interface ICredenceMarket is ICredenceMarketEvents, ICredenceErrors {
     // ── auction house / settlement adapter callbacks ──
     function releaseLots(uint64 auctionId) external returns (uint256 totalQty); // onlyAuctionHouse / onlySettlement
     function onAuctionCleared(uint64 auctionId, uint256 proceeds, uint256 blendedPrice) external; // onlyAuctionHouse / onlySettlement
+    /// @notice v2: onlyAuctionHouse / onlySettlement. An unreleased lot that can no longer be fixed: every queued
+    ///         borrower leaves it (`Dequeued`), untouched, and it counts as released with 0.
+    function cancelLot(uint64 auctionId) external;
 
     // ── views ──
     function marketParams(bytes32 id) external view returns (MarketParams memory);

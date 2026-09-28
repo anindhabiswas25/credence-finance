@@ -12,6 +12,41 @@ contract MockMarketClock {
     mapping(bytes32 => uint256) public days_;
     bool public reverting;
     uint256 public pokes;
+    // S3: what the real UnderwriterPool / AuctionHouse read
+    address public calendar;
+    address public auctionHouse;
+    uint256 public reopenCompletions;
+
+    function setCalendar(address c) external {
+        calendar = c;
+    }
+
+    function setAuctionHouse(address a) external {
+        auctionHouse = a;
+    }
+
+    /// @dev The calendar session the asset is in (the market sends it as CoverRequest.epochId).
+    function setCursor(bytes32 a, uint32 cursor) external {
+        d[a].sessionCursor = cursor;
+    }
+
+    /// @dev A closure opened at the close of session `venueEpoch`, REOPEN pending until markReopenComplete.
+    function setReopen(bytes32 a, uint64 closureId, uint64 venueEpoch, bool pending) external {
+        d[a].closureId = closureId;
+        d[a].venueEpoch = venueEpoch;
+        d[a].reopenPending = pending;
+    }
+
+    function markReopenComplete(bytes32 a, uint64 closureId) external {
+        require(msg.sender == auctionHouse, "only auction house");
+        require(closureId == d[a].closureId && d[a].reopenPending, "not pending");
+        d[a].reopenPending = false;
+        ++reopenCompletions;
+        if (st[a] == ClockState.REOPEN) {
+            st[a] = ClockState.REGULAR;
+            d[a].state = ClockState.REGULAR;
+        }
+    }
 
     function setState(bytes32 a, ClockState s) external {
         st[a] = s;
@@ -40,6 +75,10 @@ contract MockMarketClock {
     function setOpenPrint(bytes32 a, uint128 p, uint40 at) external {
         d[a].openPrint = p;
         d[a].openPrintAt = at;
+    }
+
+    function setPhaseExtension(bytes32 a, uint40 ext) external {
+        d[a].phaseExtension = ext;
     }
 
     mapping(bytes32 => ClockState) public restrictedState;

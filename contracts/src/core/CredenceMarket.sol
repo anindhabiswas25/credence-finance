@@ -345,6 +345,11 @@ contract CredenceMarket is ICredenceMarket, ReentrancyGuardTransient {
     }
 
     /// @inheritdoc ICredenceMarket
+    function cancelLot(uint64 auctionId) external nonReentrant onlyAuction {
+        LiquidationLogic.cancelLot($, auctionId);
+    }
+
+    /// @inheritdoc ICredenceMarket
     function onAuctionCleared(uint64 auctionId, uint256 proceeds, uint256 blendedPrice)
         external
         nonReentrant

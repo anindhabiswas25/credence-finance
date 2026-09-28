@@ -70,6 +70,8 @@ interface IUnderwriterPool is IERC20, IUnderwriterPoolEvents, ICredenceErrors {
     function epoch(uint64 epochId) external view returns (Epoch memory);
     function currentEpoch(bytes32 venue) external view returns (uint64);
     function venue() external view returns (bytes32);
+    /// @notice The loan token (USDC).
+    function asset() external view returns (address);
     function activeEpoch() external view returns (uint64 epochId, bool exists);
     function freeCash() external view returns (uint256);
     function unearnedPremiums() external view returns (uint256);
