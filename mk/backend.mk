@@ -22,7 +22,7 @@ PNPM := pnpm
 .PHONY: backend-install backend-build backend-test backend-lint backend-fmt \
         infra-up infra-down infra-reset infra-ps db-migrate db-rollback calendar-gen calendar-test \
         relayer-dev relayer-smoke keeper-dev indexer-dev api-dev relayer-e2e keeper-e2e indexer-e2e services-up \
-        notifier-dev notifier-e2e r26-probe keeper-sigma-test keeper-j12-e2e keeper-j7-e2e keeper-core-e2e obs-up obs-down obs-check api-db-test
+        notifier-dev notifier-e2e r26-probe keeper-sigma-test keeper-j12-e2e keeper-j7-e2e keeper-core-e2e obs-up obs-down obs-check api-db-test api-engine-e2e
 
 backend-install: ## Install backend deps: @credence/risk-wasm (wasm-pack, into target/be), pnpm workspace, uv calibration env, Rust crates fetched
 	CARGO_TARGET_DIR=$(BACKEND_TARGET_DIR) $(MAKE) --no-print-directory risk-wasm
@@ -144,6 +144,10 @@ keeper-sigma-test: ## J7 σ: reproduce QE's calibration/docs/sigma-vectors.json 
 	$(CARGO) test --locked -p credence-keeper --lib sigma_job
 
 PROMTOOL := docker run --rm -v $(CURDIR)/infra/prometheus:/etc/prometheus:ro -w /etc/prometheus --entrypoint promtool prom/prometheus:v3.6.0
+
+api-engine-e2e: ## Acceptance 4 (engine level): risk-wasm safeLtv/bellStatus/quoteCover == the devnode Stylus engine for 100 random positions over QE's 18 sets (N=, SEED=)
+	$(PNPM) --filter @credence/sdk build >/dev/null
+	cd services/api && node scripts/engine-bell-e2e.ts
 
 api-db-test: ## API Postgres repositories (me/notifications, allowlist queue) against the migrated app schema (needs infra-up db-migrate)
 	TEST_DATABASE_URL=$(TEST_DATABASE_URL) $(PNPM) --filter @credence/api exec vitest run test/pg.test.ts
