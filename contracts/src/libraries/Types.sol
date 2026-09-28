@@ -260,13 +260,13 @@ struct Report {
 }
 
 struct FeedHealth {
-    bool stale; // primary older than 60 s (REGULAR) / 300 s (EXTENDED); NAV: older than 26 h
+    bool stale; // primary older than 60 s (REGULAR) / 300 s (EXTENDED); NAV: one missed USBANK strike (R-23)
     bool disagreement; // |p1 − p2| / min(p1, p2) > 1.5%, or the secondary is missing / stale
     bool severeDisagreement; // > 5% (both fresh)
     bool statusClosed; // primary marketStatus says closed while the calendar says open
     bool statusHalted; // either feed reports a single-stock halt
     bool issuerFrozen; // collateral token frozen / redemptions gated (or the probe failed)
-    bool navInvalid; // NAV kind: age > 50 h, or a one-step drop > 0.5%
+    bool navInvalid; // NAV kind: two missed USBANK strikes (R-23), no NAV, or a one-step drop > 0.5%
 }
 
 /// @notice Per-asset price wiring of the OracleAdapter.

@@ -18,6 +18,7 @@ import {ITwapSource} from "../interfaces/ITwapSource.sol";
 import {IAssetClock} from "../interfaces/IAssetClock.sol";
 import {ICollateralToken} from "../interfaces/ICollateralToken.sol";
 import {INavFund} from "../interfaces/INavFund.sol";
+import {ICalendarStore} from "../interfaces/ICalendarStore.sol";
 
 /// @title OracleAdapter: one valuation price per asset, by clock state (Build Guide §8.3.2, F-3.2).
 /// @notice Core rule: when the home market is shut, an off-hours price can lower a collateral's value but never
@@ -33,9 +34,13 @@ contract OracleAdapter is IOracleAdapter {
     uint256 public constant STALE_EXTENDED = 300;
     uint256 public constant DISAGREE = 0.015e18;
     uint256 public constant SEVERE = 0.05e18;
+    /// @dev Unused since R-23 (NAV freshness counts USBANK strikes, not hours). Kept so the v1 ABI stays additive.
     uint256 public constant NAV_FRESH = 26 hours;
+    /// @dev Unused since R-23. Kept so the v1 ABI stays additive.
     uint256 public constant NAV_HALT = 50 hours;
     uint256 public constant NAV_MAX_DROP = 0.005e18;
+    /// @notice R-23: a USBANK strike (session `close`, 17:00 ET) counts as missed this long after it passed.
+    uint256 public constant NAV_GRACE = 6 hours;
     uint256 public constant OPEN_WAIT = 15 minutes;
     uint32 public constant OPEN_TWAP = 5 minutes;
     uint32 public constant EXT_TWAP = 30 minutes;
@@ -218,16 +223,16 @@ contract OracleAdapter is IOracleAdapter {
         return _scheduledOpen(assetId, c, reopenAt, ext);
     }
 
-    /// @dev REOPEN for a fund = the first fresh, valid NAV published after the closure started (Architecture §3.8).
+    /// @dev REOPEN for a fund = the first valid NAV published after the closure started, not missing a strike
+    ///      (Architecture §3.8, R-23).
     function _navOpen(bytes32 assetId, OracleConfig storage c, uint40 closeAt)
         internal
         view
         returns (bool, uint256, bool)
     {
         (uint256 nav, uint40 at, uint256 prev,) = INavSource(c.primary).latestNav(assetId);
-        if (nav == 0 || at <= closeAt || _navInvalid(nav, at, prev) || _older(at, NAV_FRESH)) {
-            return (false, 0, false);
-        }
+        (bool stale, bool invalid) = _navStatus(assetId, nav, at, prev);
+        if (at <= closeAt || stale || invalid) return (false, 0, false);
         return (true, _tok(nav, c), false);
     }
 
@@ -281,8 +286,7 @@ contract OracleAdapter is IOracleAdapter {
         OracleConfig storage c = _cfg(assetId);
         if (c.kind == MarketKind.NAV) {
             (uint256 nav, uint40 at, uint256 prev,) = INavSource(c.primary).latestNav(assetId);
-            h.navInvalid = nav == 0 || _navInvalid(nav, at, prev);
-            h.stale = nav == 0 || _older(at, NAV_FRESH);
+            (h.stale, h.navInvalid) = _navStatus(assetId, nav, at, prev);
             h.issuerFrozen = _fundGated(c.token);
             return h;
         }
@@ -310,9 +314,39 @@ contract OracleAdapter is IOracleAdapter {
         h.issuerFrozen = _tokenFrozen(c.token);
     }
 
-    function _navInvalid(uint256 nav, uint40 at, uint256 prev) internal view returns (bool) {
-        if (_older(at, NAV_HALT)) return true;
-        return prev != 0 && nav < prev && (prev - nav).divWadUp(prev) > NAV_MAX_DROP;
+    /// @dev R-23. Freshness is counted in strikes of the asset's venue calendar (USBANK), not in hours, so weekends
+    ///      and holidays never make a NAV stale. A strike is missed when its NAV_GRACE has passed and the latest NAV
+    ///      was published before it. One missed strike → `stale` (the clock goes CLOSED); two → `navInvalid`
+    ///      (HALTED), as is a one-step drop > NAV_MAX_DROP or no NAV at all.
+    function _navStatus(bytes32 assetId, uint256 nav, uint40 at, uint256 prev)
+        internal
+        view
+        returns (bool stale, bool invalid)
+    {
+        if (nav == 0) return (true, true);
+        invalid = prev != 0 && nav < prev && (prev - nav).divWadUp(prev) > NAV_MAX_DROP;
+        (uint40 lastStrike, uint40 strikeBefore) = _missableStrikes(assetId);
+        if (at < strikeBefore) return (true, true);
+        stale = at < lastStrike;
+    }
+
+    /// @dev The two most recent strikes (session closes) whose grace period has passed, newest first (0 = none).
+    function _missableStrikes(bytes32 assetId)
+        internal
+        view
+        returns (uint40 lastStrike, uint40 strikeBefore)
+    {
+        if (block.timestamp <= NAV_GRACE) return (0, 0);
+        uint40 t = uint40(block.timestamp - NAV_GRACE);
+        IAssetClock clk = IAssetClock(clock);
+        ICalendarStore cal = ICalendarStore(clk.calendar());
+        bytes32 venue = clk.assetConfig(assetId).venue;
+        // n = number of sessions whose close < t (grace strictly over). findSession returns the first session with
+        // extClose > t; its own close may already be < t (t inside its post-close window).
+        (uint256 i, bool found) = cal.findSession(venue, t);
+        uint256 n = !found ? cal.sessionCount(venue) : (cal.session(venue, i).close < t ? i + 1 : i);
+        if (n >= 1) lastStrike = cal.session(venue, n - 1).close;
+        if (n >= 2) strikeBefore = cal.session(venue, n - 2).close;
     }
 
     /// @dev A token whose probe reverts is treated as frozen (fail closed).

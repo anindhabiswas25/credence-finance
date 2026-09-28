@@ -18,6 +18,8 @@ import {OracleAdapter} from "../../src/oracle/OracleAdapter.sol";
 import {MockAssetClock} from "../mocks/MockAssetClock.sol";
 import {MockProbeToken} from "../mocks/MockProbeToken.sol";
 import {MockTwapSource} from "../mocks/MockTwapSource.sol";
+import {CalendarStore} from "../../src/clock/CalendarStore.sol";
+import {Session} from "../../src/libraries/Types.sol";
 
 contract OracleAdapterTest is ClockFixture {
     OracleAdapter ad;
@@ -346,20 +348,24 @@ contract OracleAdapterTest is ClockFixture {
     }
 
     function test_openPrintNav() public {
-        _setClock(ClockState.CLOSED, ClockState.REGULAR, 1e18, 0, ClosureType.WEEKEND, T0);
+        _usbank();
+        Session memory fri = sessions[1]; // Fri 2026-10-02
+        Session memory mon = sessions[2]; // Mon 2026-10-05
+        vm.warp(fri.close + 1 hours);
+        _setClock(ClockState.CLOSED, ClockState.CLOSED, 1e18, 0, ClosureType.WEEKEND, fri.close);
         (bool ok,,) = ad.openPrint(TBILL, 0, 0);
         assertFalse(ok, "no NAV");
-        _nav(1e18, T0 - 1);
+        _nav(1e18, fri.close - 1);
         (ok,,) = ad.openPrint(TBILL, 0, 0);
         assertFalse(ok, "NAV from before the closure");
-        vm.warp(T0 + 3 days);
-        _nav(1.001e18, T0 + 3 days);
+        _nav(1.001e18, fri.close + 30 minutes);
+        vm.warp(mon.open + 1 hours); // Monday morning, ~64 h after the NAV: still fresh (R-23)
         (bool ok2, uint256 p,) = ad.openPrint(TBILL, 0, 0);
         assertTrue(ok2);
         assertEq(p, 1.001e18);
-        vm.warp(T0 + 3 days + 27 hours);
+        vm.warp(mon.close + 6 hours + 1); // Monday's strike missed
         (ok,,) = ad.openPrint(TBILL, 0, 0);
-        assertFalse(ok, "older than 26 h");
+        assertFalse(ok, "stale: a strike was missed");
         _nav(0.99e18, uint40(vm.getBlockTimestamp())); // −1.1% in one step
         (ok,,) = ad.openPrint(TBILL, 0, 0);
         assertFalse(ok, "invalid drop");
@@ -405,18 +411,101 @@ contract OracleAdapterTest is ClockFixture {
         assertTrue(ad.feedHealth(NVDA).issuerFrozen, "a failing probe fails closed");
     }
 
+    // ───────────── R-23: NAV freshness in USBANK strikes (fixture: 2026-10-01 → 11-25) ─────────────
+
+    function _usbank() internal {
+        _loadCalendarFixture("test/fixtures/USBANK-20261001-fixture.json");
+        CalendarStore cal = new CalendarStore(timelock);
+        vm.prank(timelock);
+        cal.appendSessions(USBANK, sessions);
+        mc.setCalendar(address(cal), USBANK);
+    }
+
+    function _navHealth() internal view returns (bool stale, bool invalid) {
+        FeedHealth memory h = ad.feedHealth(TBILL);
+        return (h.stale, h.navInvalid);
+    }
+
+    function test_navNormalWeekend() public {
+        _usbank();
+        Session memory fri = sessions[1]; // Fri 2026-10-02, strike 17:00 ET
+        Session memory mon = sessions[2]; // Mon 2026-10-05
+        vm.warp(fri.close + 20 minutes);
+        _nav(1e18, fri.close + 15 minutes);
+        (bool stale, bool invalid) = _navHealth();
+        assertFalse(stale || invalid, "Friday NAV");
+        vm.warp(mon.open + 4 hours); // Monday 13:00 ET: ~68 h old, older than the old 50 h rule
+        (stale, invalid) = _navHealth();
+        assertFalse(stale || invalid, "a weekend never makes a NAV stale");
+        vm.warp(mon.close + 6 hours); // Monday's strike is in its grace period
+        (stale, invalid) = _navHealth();
+        assertFalse(stale || invalid, "grace");
+        vm.warp(mon.close + 6 hours + 1);
+        (stale, invalid) = _navHealth();
+        assertTrue(stale, "Monday's strike missed");
+        assertFalse(invalid);
+        _nav(1.0001e18, uint40(vm.getBlockTimestamp()));
+        (stale, invalid) = _navHealth();
+        assertFalse(stale || invalid, "late Monday NAV");
+    }
+
+    function test_navHolidayWeekend() public {
+        _usbank();
+        Session memory fri = sessions[6]; // Fri 2026-10-09
+        Session memory tue = sessions[7]; // Tue 2026-10-13 (Mon 10-12 is a bank holiday)
+        assertEq(tue.open - fri.close, 3 days + 16 hours, "3-day weekend in the fixture");
+        vm.warp(fri.close + 1 hours);
+        _nav(1e18, fri.close + 30 minutes);
+        vm.warp(fri.close + 3 days + 2 hours); // Monday 19:00 ET (holiday): the old rule would have halted
+        (bool stale, bool invalid) = _navHealth();
+        assertFalse(stale || invalid, "holiday Monday");
+        vm.warp(tue.open + 1 hours); // ~89 h old
+        (stale, invalid) = _navHealth();
+        assertFalse(stale || invalid, "Tuesday morning");
+        vm.warp(tue.close + 6 hours + 1);
+        (stale, invalid) = _navHealth();
+        assertTrue(stale && !invalid, "Tuesday's strike missed");
+    }
+
+    function test_navMissedSingleStrike() public {
+        _usbank();
+        Session memory thu = sessions[0]; // Thu 2026-10-01
+        Session memory fri = sessions[1];
+        Session memory mon = sessions[2];
+        vm.warp(thu.close + 1 hours);
+        _nav(1e18, thu.close + 30 minutes);
+        vm.warp(fri.close + 6 hours + 1);
+        (bool stale, bool invalid) = _navHealth();
+        assertTrue(stale, "Friday's strike missed -> stale (clock: CLOSED)");
+        assertFalse(invalid);
+        vm.warp(mon.close + 6 hours); // through the weekend, Monday in grace: still one miss
+        (stale, invalid) = _navHealth();
+        assertTrue(stale && !invalid, "one miss");
+    }
+
+    function test_navMissedDoubleStrike() public {
+        _usbank();
+        Session memory thu = sessions[0];
+        Session memory mon = sessions[2];
+        vm.warp(thu.close + 1 hours);
+        _nav(1e18, thu.close + 30 minutes);
+        vm.warp(mon.close + 6 hours + 1); // Friday and Monday strikes missed
+        (bool stale, bool invalid) = _navHealth();
+        assertTrue(stale && invalid, "two misses -> invalid (clock: HALTED)");
+        _nav(1.0001e18, uint40(vm.getBlockTimestamp()));
+        (stale, invalid) = _navHealth();
+        assertFalse(stale || invalid, "a new NAV clears it");
+    }
+
     function test_feedHealthNav() public {
+        _usbank();
+        vm.warp(sessions[3].close + 1 hours);
         FeedHealth memory h = ad.feedHealth(TBILL);
         assertTrue(h.navInvalid && h.stale, "no NAV");
-        _nav(1e18, T0);
+        _nav(1e18, uint40(vm.getBlockTimestamp()));
         h = ad.feedHealth(TBILL);
         assertFalse(h.navInvalid || h.stale || h.issuerFrozen);
-        vm.warp(T0 + 27 hours);
-        h = ad.feedHealth(TBILL);
-        assertTrue(h.stale);
-        assertFalse(h.navInvalid);
-        vm.warp(T0 + 51 hours);
-        assertTrue(ad.feedHealth(TBILL).navInvalid, "older than 50 h");
+        vm.warp(vm.getBlockTimestamp() + 1);
         _nav(0.996e18, uint40(vm.getBlockTimestamp())); // −0.4%: fine
         assertFalse(ad.feedHealth(TBILL).navInvalid);
         vm.warp(vm.getBlockTimestamp() + 1);
