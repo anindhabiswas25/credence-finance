@@ -86,6 +86,12 @@ pub fn core_jobs(chain_id: u64) -> Result<Option<crate::core_jobs::CoreJobs>> {
     c.j3_live = env::or("KEEPER_J3_LIVE", "0") == "1";
     c.j4_live = env::or("KEEPER_J4_LIVE", "0") == "1";
     c.j3_batch = env::parse_or("KEEPER_J3_BATCH", crate::core_jobs::BELL_BATCH)?;
+    c.flag_batch = env::parse_or("KEEPER_FLAG_BATCH", crate::core_jobs::BELL_BATCH)?;
+    c.settle_batch = env::parse_or("KEEPER_SETTLE_BATCH", crate::auction_jobs::SETTLE_BATCH)?;
+    if env::or("KEEPER_AUCTIONS", "1") == "1" {
+        c.auction_stacks = crate::core_jobs::auction_stacks(&book);
+    }
+    c.from_block = book.get("startBlock").and_then(|v| v.as_u64()).unwrap_or(0);
     // testnet self-service allowlist: never on Arbitrum One
     if chain_id != 42_161 {
         c.registry = book

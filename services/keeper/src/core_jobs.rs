@@ -67,6 +67,14 @@ pub struct CoreJobs {
     pub j4_every_s: u64,
     /// J3 batch size: BE-chain's largest `enforceBell` batch within 24M gas (all auto-covered).
     pub j3_batch: usize,
+    /// J5 flag / settlement batch sizes.
+    pub flag_batch: usize,
+    pub settle_batch: usize,
+    /// Auction houses to drive (J5 / J6), and what the keeper has seen of them.
+    pub auction_stacks: Vec<crate::auction_jobs::AuctionStack>,
+    pub auctions: Mutex<crate::auction_jobs::AuctionBook>,
+    /// First block to scan for auctions (the address book's startBlock).
+    pub from_block: u64,
     last_j4: Mutex<HashMap<B256, u64>>,
 }
 
@@ -92,6 +100,11 @@ impl CoreJobs {
             registry: None,
             j4_every_s: 10,
             j3_batch: BELL_BATCH,
+            flag_batch: BELL_BATCH,
+            settle_batch: crate::auction_jobs::SETTLE_BATCH,
+            auction_stacks: Vec::new(),
+            auctions: Mutex::new(Default::default()),
+            from_block: 0,
             last_j4: Mutex::new(HashMap::new()),
         }
     }
@@ -142,12 +155,16 @@ impl Keeper {
                 ("J2", self.j2(conn, &core, m, &ctx, now).await),
                 ("J3", self.j3(conn, &core, m, &ctx, now, rep).await),
                 ("J4", self.j4(conn, &core, m, &ctx, now, rep).await),
+                ("J5", self.j5_flag(conn, &core, m, &ctx, rep).await),
             ] {
                 if let Err(e) = r {
                     tracing::warn!(job = name, market = %m.id, error = %e, "core job failed");
                     self.metrics.jobs.with_label_values(&[name, "error"]).inc();
                 }
             }
+        }
+        if let Err(e) = self.auctions_tick(conn, &core, rep).await {
+            tracing::warn!(error = %e, "auction driver failed");
         }
         if let Err(e) = self.j8(conn, &core, now).await {
             tracing::warn!(error = %e, "J8 failed");
@@ -159,7 +176,7 @@ impl Keeper {
     }
 
     /// Borrowers with debt in a market, from the indexer.
-    async fn borrowers(
+    pub(crate) async fn borrowers(
         &self,
         conn: &mut PgConnection,
         core: &CoreJobs,
@@ -696,6 +713,26 @@ impl Keeper {
 
 /// Markets of the unified address book (`equity.markets` / `nav.markets`: ticker → marketId) with the
 /// stack's market address, and the stacks' vaults.
+pub fn auction_stacks(book: &serde_json::Value) -> Vec<crate::auction_jobs::AuctionStack> {
+    let addr = |s: &serde_json::Value, k: &str| {
+        s.get(k)
+            .and_then(|v| v.as_str())
+            .and_then(|v| v.parse::<Address>().ok())
+    };
+    ["equity", "nav"]
+        .iter()
+        .filter_map(|stack| {
+            let s = book.get(*stack).filter(|v| v.is_object())?;
+            Some(crate::auction_jobs::AuctionStack {
+                stack: stack.to_string(),
+                market: addr(s, "market")?,
+                house: addr(s, "auctionHouse")?,
+                pool: addr(s, "pool").unwrap_or(Address::ZERO),
+            })
+        })
+        .collect()
+}
+
 pub fn from_book(book: &serde_json::Value) -> (Vec<CoreMarket>, Vec<(String, Address)>) {
     let mut markets = Vec::new();
     let mut vaults = Vec::new();

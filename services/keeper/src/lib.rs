@@ -7,6 +7,7 @@
 //!
 //! Sprint 1 jobs: **J1** clock tick and **J12** housekeeping. J2–J11 arrive in later sprints.
 
+pub mod auction_jobs;
 pub mod bindings;
 pub mod clock;
 pub mod config;

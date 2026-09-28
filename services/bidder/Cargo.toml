@@ -1,0 +1,22 @@
+[package]
+name = "credence-bidder"
+description = "Test bidder bot (dev tool, S3): commits, reveals and places auction bids from a config, so local e2e auctions clear without a human."
+edition.workspace = true
+license.workspace = true
+version.workspace = true
+publish = false
+
+[[bin]]
+name = "credence-bidder"
+path = "src/main.rs"
+
+[dependencies]
+credence-common = { path = "../../crates/credence-common" }
+credence-bindings = { path = "../../crates/credence-bindings" }
+alloy = { workspace = true, features = ["signer-local"] }
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+anyhow = { workspace = true }
+tracing = { workspace = true }
+clap = { version = "4.6", features = ["derive", "env"] }

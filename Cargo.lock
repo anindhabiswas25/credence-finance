@@ -2401,6 +2401,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "credence-bidder"
+version = "0.1.0"
+dependencies = [
+ "alloy",
+ "anyhow",
+ "clap",
+ "credence-bindings",
+ "credence-common",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "credence-bindings"
 version = "0.1.0"
 dependencies = [
@@ -2462,6 +2477,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "axum",
+ "base64 0.22.1",
  "chrono",
  "chrono-tz",
  "clap",

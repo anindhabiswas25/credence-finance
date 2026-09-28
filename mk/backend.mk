@@ -1,7 +1,7 @@
 # Backend fragment (owner: BE-backend). Included by the root Makefile.
 # Every target has a `## help` comment; `make help` lists them.
 
-BACKEND_RUST_PKGS := -p credence-common -p credence-relayer -p credence-keeper
+BACKEND_RUST_PKGS := -p credence-common -p credence-relayer -p credence-keeper -p credence-bidder
 # Backend crates follow rust-toolchain.toml (1.95.0; alloy 2.5 needs >= 1.94.1, ADR-0005 / ADR-0102).
 # Set BACKEND_RUST_TOOLCHAIN=<name> only to override locally.
 BACKEND_RUST_TOOLCHAIN ?=
