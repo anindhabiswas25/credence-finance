@@ -9,6 +9,7 @@ members = [
   "crates/credence-bindings",
   "stylus/risk-engine",
   "stylus/risk-engine-diff",
+  "stylus/auction-math",
   "crates/credence-common",
   "services/relayer",
   "services/keeper",

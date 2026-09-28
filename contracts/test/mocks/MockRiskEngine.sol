@@ -24,6 +24,7 @@ contract MockRiskEngine {
     mapping(bytes32 => uint32) public setLength;
     mapping(bytes32 => bytes32) public jointHash;
     mapping(bytes32 => uint256) internal _sigma;
+    mapping(bytes32 => uint64) internal _sigmaAt;
     mapping(bytes32 => uint256) internal _floor;
     mapping(bytes32 => uint256) internal _safe; // injected safe LTV per key (0 = maxLtv)
     uint256[3] internal _quote;
@@ -70,6 +71,11 @@ contract MockRiskEngine {
     function updateSigma(bytes32 assetId, uint8 closureType, uint256 s) external {
         if (msg.sender != sigmaOracle) revert Unauthorized();
         _sigma[_key(assetId, closureType)] = s;
+        _sigmaAt[_key(assetId, closureType)] = uint64(block.timestamp);
+    }
+
+    function sigmaAt(bytes32 assetId, uint8 closureType) external view returns (uint64) {
+        return _sigmaAt[_key(assetId, closureType)];
     }
 
     function sigma(bytes32 assetId, uint8 closureType) external view returns (uint256) {
@@ -106,7 +112,11 @@ contract MockRiskEngine {
         if (reverting) revert MathError(99);
     }
 
-    function safeLtv(bytes32 assetId, uint8 closureType, uint256 maxLtv, uint256) public view returns (uint256) {
+    function safeLtv(bytes32 assetId, uint8 closureType, uint256 maxLtv, uint256)
+        public
+        view
+        returns (uint256)
+    {
         _live();
         uint256 v = _safe[_key(assetId, closureType)];
         return v == 0 || v > maxLtv ? maxLtv : v;
@@ -133,7 +143,9 @@ contract MockRiskEngine {
     ) external view returns (uint8, uint256, uint256) {
         uint256 s = safeLtv(assetId, closureType, maxLtv, dividend);
         if (covered) return (2, 0, 0);
-        uint256 ltv = debtProjected == 0 ? 0 : (collateralValue == 0 ? type(uint256).max : _divUp(debtProjected * 1e18, collateralValue));
+        uint256 ltv = debtProjected == 0
+            ? 0
+            : (collateralValue == 0 ? type(uint256).max : _divUp(debtProjected * 1e18, collateralValue));
         if (ltv <= s) return (0, 0, 0);
         uint256 allowed = s * collateralValue / 1e18;
         uint256 repay = debtProjected > allowed ? debtProjected - allowed : 0;

@@ -1,0 +1,26 @@
+[package]
+name = "credence-auction-math"
+description = "Credence AuctionMath: the Stylus half of the Risk Engine split (R-24) - lot sizing and uniform-price clearing"
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+
+[lib]
+crate-type = ["lib", "cdylib"]
+
+[features]
+export-abi = ["stylus-sdk/export-abi"]
+contract-client-gen = []
+
+[dependencies]
+stylus-sdk       = { workspace = true }
+alloy-primitives = { workspace = true }
+alloy-sol-types  = { workspace = true }
+credence-risk-core = { path = "../../crates/risk-core" }
+
+[dev-dependencies]
+stylus-sdk = { workspace = true, features = ["stylus-test"] }
+
+[[bin]]
+name = "credence-auction-math"
+path = "src/main.rs"

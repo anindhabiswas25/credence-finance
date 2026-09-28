@@ -5,8 +5,8 @@ import {RiskParams} from "../libraries/Types.sol";
 import {IRiskEngineEvents} from "../libraries/Events.sol";
 
 /// @title Risk Engine (Rust / Stylus) Solidity-facing ABI (Build Guide §8.9.1).
-/// @dev Must match `cargo stylus export-abi` of stylus/risk-engine. The S1 spike implements
-///      `safeLtv`, `liquidationLot`, `clear`, the σ writers and the scenario-set writer; the rest land in S2.
+/// @dev Implemented by `RiskEngineRouter` in front of the two Stylus programs (R-24, ADR-0108). `liquidationLot`,
+///      `precloseLot` and `clear` are `view` since v1 (they were `pure`): the router forwards them. Selectors unchanged.
 interface IRiskEngine is IRiskEngineEvents {
     error Unauthorized();
     error NotSorted();
@@ -64,7 +64,7 @@ interface IRiskEngine is IRiskEngineEvents {
         uint256 lambda,
         uint8 collDec,
         uint8 loanDec
-    ) external pure returns (uint256 x);
+    ) external view returns (uint256 x);
     function precloseLot(
         uint256 debt,
         uint256 qty,
@@ -74,14 +74,14 @@ interface IRiskEngine is IRiskEngineEvents {
         uint256 lambdaPre,
         uint8 collDec,
         uint8 loanDec
-    ) external pure returns (uint256 x);
+    ) external view returns (uint256 x);
     function clear(
         uint256[] calldata qtys,
         uint256[] calldata prices,
         bytes32[] calldata tieKeys,
         uint256 lot,
         uint256 reserve
-    ) external pure returns (uint256 pStar, uint256[] memory fills, uint256 qPool);
+    ) external view returns (uint256 pStar, uint256[] memory fills, uint256 qPool);
     // writers
     function setScenarioSet(bytes32 assetId, uint8 closureType, uint256[] calldata packedSortedZ, uint32 n)
         external; // onlyTimelock
@@ -95,6 +95,8 @@ interface IRiskEngine is IRiskEngineEvents {
     function scenarioHash(bytes32 assetId, uint8 closureType) external view returns (bytes32);
     /// @dev Added in v1 (additive, ADR-0106): keccak256 of the packed joint column last set by `setJointColumn`.
     function jointHash(bytes32 assetId) external view returns (bytes32);
+    /// @dev Added in v1 (additive): when σ of (asset, type) was last written (unix seconds; 0 = never), for keeper J7.
+    function sigmaAt(bytes32 assetId, uint8 closureType) external view returns (uint64);
     /// @dev Added after v0 (additive): the two writers the engine trusts.
     function timelock() external view returns (address);
     function sigmaOracle() external view returns (address);

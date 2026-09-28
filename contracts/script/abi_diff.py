@@ -13,6 +13,11 @@ from pathlib import Path
 # Deliberate breaking changes between v0 and v1, with the rule that requires them.
 ALLOWED_BREAKS = {
     "event ReportAccepted(bytes32,uint8,uint256,uint40,uint64)": "R-25: replaced by the 6-argument event with marketStatus",
+    # R-24 / ADR-0108: the engine is a router in front of two Stylus programs, so its auction math forwards (pure → view).
+    # Same selectors and outputs; both are called with STATICCALL, so no caller changes.
+    "function liquidationLot(uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint8,uint8)": "R-24: pure → view",
+    "function precloseLot(uint256,uint256,uint256,uint256,uint256,uint256,uint8,uint8)": "R-24: pure → view",
+    "function clear(uint256[],uint256[],bytes32[],uint256,uint256)": "R-24: pure → view",
 }
 
 

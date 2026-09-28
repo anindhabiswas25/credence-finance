@@ -1,5 +1,34 @@
 [
   {
+    "type": "constructor",
+    "inputs": [
+      {
+        "name": "timelock_",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "sigmaOracle_",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "auction",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "contract IAuctionMath"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
     "type": "function",
     "name": "bellStatus",
     "inputs": [
@@ -41,17 +70,17 @@
     ],
     "outputs": [
       {
-        "name": "status",
+        "name": "",
         "type": "uint8",
         "internalType": "uint8"
       },
       {
-        "name": "cureRepay",
+        "name": "",
         "type": "uint256",
         "internalType": "uint256"
       },
       {
-        "name": "cureCollateralValue",
+        "name": "",
         "type": "uint256",
         "internalType": "uint256"
       }
@@ -90,17 +119,17 @@
     ],
     "outputs": [
       {
-        "name": "pStar",
+        "name": "",
         "type": "uint256",
         "internalType": "uint256"
       },
       {
-        "name": "fills",
+        "name": "",
         "type": "uint256[]",
         "internalType": "uint256[]"
       },
       {
-        "name": "qPool",
+        "name": "",
         "type": "uint256",
         "internalType": "uint256"
       }
@@ -134,12 +163,30 @@
     ],
     "outputs": [
       {
-        "name": "packed",
+        "name": "",
         "type": "uint256[]",
         "internalType": "uint256[]"
       }
     ],
     "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "initializeWiring",
+    "inputs": [
+      {
+        "name": "pricing_",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "auction_",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
   },
   {
     "type": "function",
@@ -212,7 +259,7 @@
     ],
     "outputs": [
       {
-        "name": "x",
+        "name": "",
         "type": "uint256",
         "internalType": "uint256"
       }
@@ -321,17 +368,17 @@
     ],
     "outputs": [
       {
-        "name": "ok",
+        "name": "",
         "type": "bool",
         "internalType": "bool"
       },
       {
-        "name": "utilAfter",
+        "name": "",
         "type": "uint256",
         "internalType": "uint256"
       },
       {
-        "name": "worstLoss",
+        "name": "",
         "type": "uint256",
         "internalType": "uint256"
       }
@@ -385,9 +432,22 @@
     ],
     "outputs": [
       {
-        "name": "x",
+        "name": "",
         "type": "uint256",
         "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "pricing",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "contract IPricingEngine"
       }
     ],
     "stateMutability": "view"
@@ -429,17 +489,17 @@
     ],
     "outputs": [
       {
-        "name": "premium",
+        "name": "",
         "type": "uint256",
         "internalType": "uint256"
       },
       {
-        "name": "expectedLoss",
+        "name": "",
         "type": "uint256",
         "internalType": "uint256"
       },
       {
-        "name": "expectedShortfall",
+        "name": "",
         "type": "uint256",
         "internalType": "uint256"
       }
@@ -635,6 +695,19 @@
   },
   {
     "type": "function",
+    "name": "setSigmaOracle",
+    "inputs": [
+      {
+        "name": "sigmaOracle_",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "sigma",
     "inputs": [
       {
@@ -722,7 +795,7 @@
         "internalType": "uint8"
       },
       {
-        "name": "sigma",
+        "name": "s",
         "type": "uint256",
         "internalType": "uint256"
       }
@@ -867,6 +940,19 @@
   },
   {
     "type": "event",
+    "name": "SigmaOracleSet",
+    "inputs": [
+      {
+        "name": "sigmaOracle",
+        "type": "address",
+        "indexed": false,
+        "internalType": "address"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
     "name": "SigmaUpdated",
     "inputs": [
       {
@@ -886,6 +972,25 @@
         "type": "uint256",
         "indexed": false,
         "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "Wired",
+    "inputs": [
+      {
+        "name": "pricing",
+        "type": "address",
+        "indexed": false,
+        "internalType": "address"
+      },
+      {
+        "name": "auction",
+        "type": "address",
+        "indexed": false,
+        "internalType": "address"
       }
     ],
     "anonymous": false

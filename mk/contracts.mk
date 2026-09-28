@@ -24,11 +24,11 @@ ABI_CONTRACTS := ICredenceErrors ICalendarStore IAssetClock IPriceSource INavSou
 # Implementations built this sprint (their ABIs add admin functions and constructor args to the interfaces).
 ABI_IMPLS ?= CalendarStore AssetClock CredencePriceFeed OracleAdapter SequencerHealth UniV3TwapSource \
   CredenceStockToken CredenceTreasuryFund ComplianceRegistry Faucet CredenceMarket SeniorVault SigmaOracle \
-  KeeperTips Treasury ProtocolReserve CredenceGuardian CredenceTimelock
+  KeeperTips Treasury ProtocolReserve CredenceGuardian CredenceTimelock RiskEngineRouter
 
 .PHONY: abis-check local-deploy-clock contracts-deps contracts-build contracts-test contracts-invariant contracts-coverage contracts-fmt \
   contracts-fmt-check contracts-snapshot contracts-clean abis-export risk-build risk-test risk-lint risk-fmt stylus-test stylus-abi-check \
-  stylus-check stylus-export-abi devnode-up devnode-down devnode-deploy-engine stylus-diff risk-validate-set risk-load-set risk-py-develop risk-py-test risk-wasm risk-wasm-test local-deploy-core
+  stylus-check stylus-export-abi devnode-up devnode-down devnode-deploy-engine stylus-diff risk-validate-set risk-load-set risk-py-develop risk-py-test risk-wasm risk-wasm-test local-deploy-core stylus-repro
 
 contracts-deps: ## Install pinned Solidity deps into contracts/lib (OZ, forge-std, solady) if missing
 	@cd $(CONTRACTS_DIR) && \
@@ -79,7 +79,7 @@ risk-build: ## Build risk-core and risk-cli (native, release)
 risk-test: ## Run risk-core golden vectors G-01..G-22, proptests, and risk-cli tests
 	cargo test -p credence-risk-core -p credence-risk-cli -p credence-bindings
 
-RISK_CRATES := -p credence-risk-core -p credence-risk-cli -p credence-bindings -p credence-risk-py -p credence-risk-wasm -p credence-risk-engine -p credence-risk-engine-diff
+RISK_CRATES := -p credence-risk-core -p credence-risk-cli -p credence-bindings -p credence-risk-py -p credence-risk-wasm -p credence-risk-engine -p credence-auction-math -p credence-risk-engine-diff
 
 risk-lint: ## rustfmt check + clippy -D warnings on the blockchain crates
 	cargo fmt $(RISK_CRATES) -- --check
@@ -89,16 +89,19 @@ risk-fmt: ## Format the blockchain Rust crates
 	cargo fmt $(RISK_CRATES)
 
 stylus-test: ## Native unit tests of the Stylus Risk Engine (TestVM)
-	cargo test -p credence-risk-engine
+	cargo test -p credence-risk-engine -p credence-auction-math
 
 stylus-check: ## cargo stylus check of the Risk Engine against the devnode (size ≤ 1 fragment + activation)
 	WS=$$(bash $(STYLUS_DIR)/scripts/stylus-ws.sh) && cd $$WS && \
 	  cargo stylus check --endpoint $(DEVNODE_RPC) --contract credence-risk-engine
 
+stylus-repro: ## Build both Stylus programs from two fresh clones of HEAD and require identical WASM sha256 (R-24)
+	bash $(STYLUS_DIR)/scripts/repro.sh
+
 stylus-export-abi: ## Print the Stylus Risk Engine Solidity ABI
 	cargo run -q -p credence-risk-engine --features export-abi --bin credence-risk-engine
 
-stylus-abi-check: ## Every engine function / error exists with the same selector in deployments/abis/v0/IRiskEngine.json
+stylus-abi-check: ## Engine ABI == deployments/abis/v1/IRiskEngine.json in both directions
 	bash $(STYLUS_DIR)/scripts/abi-check.sh
 
 XNYS_CALENDAR   ?= $(firstword $(wildcard calibration/out/calendars/XNYS-*.json))

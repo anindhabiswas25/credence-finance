@@ -1,9 +1,13 @@
 //! Credence Risk Engine: Stylus contract, a thin wrapper over `credence-risk-core` plus storage
 //! (Build Guide §8.9).
 //!
-//! Sprint 1 spike scope: `safeLtv`, `liquidationLot`, `clear`; storage for scenario sets and σ; the timelock
-//! and sigma-oracle gates, including the σ rate limit (R-15: up any amount, down at most 10%/day, never below
-//! the floor). The remaining `IRiskEngine` functions land in Sprint 2 behind the same ABI.
+//! The PricingEngine half of the Risk Engine split (R-24, ADR-0108): scenario sets, σ and params, `safeLtv`,
+//! `bellStatus`, `quoteCover`, and their writers / views. The second program (stylus/auction-math) holds the joint
+//! stress columns, the capacity math (`coverLossVector`, `poolCapacity`) and the auction math (`liquidationLot`,
+//! `precloseLot`, `clear`). Both sit behind the one Solidity `IRiskEngine` (contracts/src/risk/RiskEngineRouter.sol). Storage for scenario sets, joint stress columns and σ; the timelock and
+//! sigma-oracle gates, including the σ rate limit (R-15: up any amount, down at most 10%/day, never below the
+//! floor). Scenario sets are read from storage lazily (one SLOAD per 16 values), so `quoteCover` only touches the
+//! loss tail (R-14).
 //!
 //! Holds no funds, has no discretionary admin, and is a pure function of its storage and inputs. All math is
 //! `credence-risk-core`, so native and on-chain results are bit-identical (proved by `stylus/risk-engine-diff`).
@@ -13,6 +17,7 @@ extern crate alloc;
 use alloc::vec::Vec;
 use alloy_primitives::{Address, FixedBytes, U256, U32, U64};
 use alloy_sol_types::sol;
+use core::cell::Cell;
 use credence_risk_core as rc;
 use stylus_sdk::{crypto::keccak, prelude::*, storage::*};
 
@@ -95,6 +100,31 @@ pub struct RiskEngine {
     params: StorageParams,
 }
 
+/// A stored scenario set read lazily: one SLOAD per word of 16 values, the last word cached.
+struct StoredZ<'a> {
+    words: StorageGuard<'a, StorageVec<StorageU256>>,
+    n: u32,
+    cache: Cell<(u32, U256)>,
+}
+
+impl rc::ZSource for StoredZ<'_> {
+    fn len(&self) -> u32 {
+        self.n
+    }
+    fn z(&self, i: u32) -> i16 {
+        let w = i / 16;
+        let (cw, cv) = self.cache.get();
+        let word = if cw == w {
+            cv
+        } else {
+            let v = self.words.get(w as usize).unwrap_or_default();
+            self.cache.set((w, v));
+            v
+        };
+        rc::fixed::unpack_i16(word, (i % 16) as usize)
+    }
+}
+
 /// Storage key of an (asset, closure type) pair.
 pub fn set_key(asset_id: FixedBytes<32>, closure_type: u8) -> FixedBytes<32> {
     let mut b = [0u8; 33];
@@ -141,44 +171,54 @@ impl RiskEngine {
         Ok(rc::safe_ltv(z, sigma, dividend, kappa, max_ltv)?)
     }
 
-    // ───────────────────────────── liquidation ─────────────────────────────
-
-    /// F-4.5a lot, sized at the reserve price, health measured at `hf_price`.
+    /// Bell status for the closure (F-4.2 at the stored set): (status, cureRepay, cureCollateralValue).
     #[allow(clippy::too_many_arguments)]
-    pub fn liquidation_lot(
-        debt: U256,
-        qty: U256,
-        sizing_price: U256,
-        hf_price: U256,
-        lt: U256,
-        h_star: U256,
-        lambda: U256,
-        coll_dec: u8,
-        loan_dec: u8,
-    ) -> Result<U256, EngineError> {
-        Ok(rc::liquidation_lot(
-            debt,
-            qty,
-            sizing_price,
-            hf_price,
-            lt,
-            h_star,
-            lambda,
-            coll_dec,
-            loan_dec,
-        )?)
+    pub fn bell_status(
+        &self,
+        asset_id: FixedBytes<32>,
+        closure_type: u8,
+        collateral_value: U256,
+        debt_projected: U256,
+        max_ltv: U256,
+        dividend: U256,
+        covered: bool,
+    ) -> Result<(u8, U256, U256), EngineError> {
+        let safe = self.safe_ltv(asset_id, closure_type, max_ltv, dividend)?;
+        let b = rc::bell_status(collateral_value, debt_projected, safe, covered)?;
+        Ok((b.status, b.cure_repay, b.cure_collateral_value))
     }
 
-    /// F-4.5c uniform-price clearing with pro-rata ties (R-05).
-    pub fn clear(
-        qtys: Vec<U256>,
-        prices: Vec<U256>,
-        tie_keys: Vec<FixedBytes<32>>,
-        lot: U256,
-        reserve: U256,
-    ) -> Result<(U256, Vec<U256>, U256), EngineError> {
-        let r = rc::clear(&qtys, &prices, &tie_keys, lot, reserve)?;
-        Ok((r.p_star, r.fills, r.q_pool))
+    /// Gap Cover quote (F-4.3, R-22 zero price floor): (premium, expectedLoss, expectedShortfall), loan units.
+    pub fn quote_cover(
+        &self,
+        asset_id: FixedBytes<32>,
+        closure_type: u8,
+        closure_days: u16,
+        collateral_value: U256,
+        debt_projected: U256,
+        util_after: U256,
+    ) -> Result<(U256, U256, U256), EngineError> {
+        let key = set_key(asset_id, closure_type);
+        let set = self.stored_set(key, asset_id, closure_type)?;
+        let p = &self.params;
+        let q = rc::quote_cover(
+            &set,
+            &rc::PremiumParams {
+                sigma: self.sigma.get(key),
+                dividend: U256::ZERO,
+                kappa: u64_of(p.kappa.get()),
+                collateral_value,
+                debt_projected,
+                closure_days,
+                util_after,
+                theta: u64_of(p.theta.get()),
+                cost_of_cap: u64_of(p.cost_of_cap.get()),
+                eta: u64_of(p.eta.get()),
+                beta: u64_of(p.beta.get()),
+                min_premium: u64_of(p.min_premium.get()),
+            },
+        )?;
+        Ok((q.premium, q.expected_loss, q.expected_shortfall))
     }
 
     // ───────────────────────────── writers ─────────────────────────────
@@ -320,6 +360,13 @@ impl RiskEngine {
         self.set_hash.get(set_key(asset_id, closure_type))
     }
 
+    /// When σ of (asset, type) was last written (unix seconds; 0 = never). Keeper J7 uses it for the rate limit.
+    pub fn sigma_at(&self, asset_id: FixedBytes<32>, closure_type: u8) -> u64 {
+        self.sigma_at
+            .get(set_key(asset_id, closure_type))
+            .to::<u64>()
+    }
+
     pub fn timelock(&self) -> Address {
         self.timelock.get()
     }
@@ -335,6 +382,26 @@ impl RiskEngine {
             return Err(EngineError::Unauthorized(Unauthorized {}));
         }
         Ok(())
+    }
+
+    fn stored_set(
+        &self,
+        key: FixedBytes<32>,
+        asset_id: FixedBytes<32>,
+        closure_type: u8,
+    ) -> Result<StoredZ<'_>, EngineError> {
+        let n = self.set_len.get(key).to::<u32>();
+        if n == 0 {
+            return Err(EngineError::UnknownSet(UnknownSet {
+                assetId: asset_id,
+                closureType: closure_type,
+            }));
+        }
+        Ok(StoredZ {
+            words: self.set_words.getter(key),
+            n,
+            cache: Cell::new((u32::MAX, U256::ZERO)),
+        })
     }
 
     /// One SLOAD: the word holding z_idx.
@@ -459,41 +526,76 @@ mod tests {
         assert_eq!(e.sigma(asset, 1), U256::from(WAD * 18 / 100));
     }
 
+    /// Loads a set (N = 1000) and σ for `asset`, WEEKEND.
+    fn loaded() -> (TestVM, RiskEngine, FixedBytes<32>, Vec<i16>, U256) {
+        let (vm, mut e, timelock, oracle) = setup();
+        let asset = FixedBytes::repeat_byte(3);
+        vm.set_sender(timelock);
+        e.set_params(params()).unwrap();
+        let mut set: Vec<i16> = (0..1000)
+            .map(|i| ((i * 7919) % 12001) as i16 - 9000)
+            .collect();
+        set.sort();
+        e.set_scenario_set(asset, 2, rc::fixed::pack_i16(&set), 1000)
+            .unwrap();
+        vm.set_sender(oracle);
+        let sigma = U256::from(45 * (WAD / 1000));
+        vm.set_block_timestamp(7_000);
+        e.update_sigma(asset, 2, sigma).unwrap();
+        (vm, e, asset, set, sigma)
+    }
+
     #[test]
-    fn pure_functions_match_core() {
-        let x = RiskEngine::liquidation_lot(
-            U256::from(13_500_000_000u64),
-            U256::from(100u64) * U256::from(WAD),
-            U256::from(153_648u64) * U256::from(WAD) / U256::from(1000u64),
-            U256::from(158_400u64) * U256::from(WAD) / U256::from(1000u64),
-            U256::from(8 * WAD / 10),
-            U256::from(11 * WAD / 10),
-            U256::from(3 * WAD / 100),
-            18,
-            6,
+    fn closure_functions_match_core() {
+        let (_vm, e, asset, set, sigma) = loaded();
+        let p = params();
+        let w = |x: u64| U256::from(x);
+        assert_eq!(e.sigma_at(asset, 2), 7_000);
+        let (c, d) = (w(90_000_000_000), w(67_028_990_000));
+        let safe = rc::safe_ltv_from_set(
+            &rc::SliceZ(&set),
+            w(p.alpha),
+            sigma,
+            U256::ZERO,
+            w(p.kappa),
+            w(3 * WAD / 4),
         )
         .unwrap();
-        assert!(x.to_string().starts_with("585131"));
-        let (p, fills, q_pool) = RiskEngine::clear(
-            vec![U256::from(300u64), U256::from(300u64)],
-            vec![U256::from(12440u64), U256::from(12411u64)],
-            vec![FixedBytes::repeat_byte(1), FixedBytes::repeat_byte(2)],
-            U256::from(500u64),
-            U256::from(12222u64),
+        let b = rc::bell_status(c, d, safe, false).unwrap();
+        assert_eq!(
+            e.bell_status(asset, 2, c, d, w(3 * WAD / 4), U256::ZERO, false)
+                .unwrap(),
+            (b.status, b.cure_repay, b.cure_collateral_value)
+        );
+
+        let q = rc::quote_cover(
+            &rc::SliceZ(&set),
+            &rc::PremiumParams {
+                sigma,
+                dividend: U256::ZERO,
+                kappa: w(p.kappa),
+                collateral_value: c,
+                debt_projected: d,
+                closure_days: 3,
+                util_after: w(WAD / 5),
+                theta: w(p.theta),
+                cost_of_cap: w(p.costOfCap),
+                eta: w(p.eta),
+                beta: w(p.beta),
+                min_premium: w(p.minPremium),
+            },
         )
         .unwrap();
-        assert_eq!(p, U256::from(12411u64));
-        assert_eq!(fills, vec![U256::from(300u64), U256::from(200u64)]);
-        assert_eq!(q_pool, U256::ZERO);
+        assert_eq!(
+            e.quote_cover(asset, 2, 3, c, d, w(WAD / 5)).unwrap(),
+            (q.premium, q.expected_loss, q.expected_shortfall)
+        );
+
+        // unknown set
+        let other = FixedBytes::repeat_byte(4);
         assert!(matches!(
-            RiskEngine::clear(
-                vec![U256::from(1u8)],
-                vec![],
-                vec![],
-                U256::from(1u8),
-                U256::ZERO
-            ),
-            Err(EngineError::MathError(MathError { code: 3 }))
+            e.quote_cover(other, 2, 3, c, d, U256::ZERO),
+            Err(EngineError::UnknownSet(_))
         ));
     }
 }
