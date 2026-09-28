@@ -12,6 +12,7 @@ import {Treasury} from "../src/core/Treasury.sol";
 import {ProtocolReserve} from "../src/core/ProtocolReserve.sol";
 import {SigmaOracle} from "../src/oracle/SigmaOracle.sol";
 import {CredenceGuardian} from "../src/governance/CredenceGuardian.sol";
+import {RiskEngineRouter} from "../src/risk/RiskEngineRouter.sol";
 import {MockRiskEngine} from "../test/mocks/MockRiskEngine.sol";
 import {MockUnderwriterPool} from "../test/mocks/MockUnderwriterPool.sol";
 import {MockAuctionHouse} from "../test/mocks/MockAuctionHouse.sol";
@@ -113,8 +114,12 @@ contract DeployCoreLocal is DeployClockLocal {
         catch {
             console2.log("engine params not set (the deployer is not the engine's timelock)");
         }
+        // the Stylus engine's router takes its σ writer from the timelock (the deployer on local chains)
         if (!local && IRiskEngine(e).sigmaOracle() != address(so)) {
-            console2.log("note: the engine's sigmaOracle is not this SigmaOracle; redeploy the engine with it");
+            try RiskEngineRouter(e).setSigmaOracle(address(so)) {}
+            catch {
+                console2.log("note: could not point the engine's sigmaOracle at this SigmaOracle");
+            }
         }
     }
 

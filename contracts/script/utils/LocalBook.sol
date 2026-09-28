@@ -44,6 +44,7 @@ library LocalBook {
     }
 
     struct EngineMeta {
+        address program; // the Stylus program (the router is `shared.riskEngine`)
         string deploymentTx;
         uint256 compressedSizeBytes;
         string toolchain;
@@ -60,8 +61,10 @@ library LocalBook {
         address[] tokenAddrs;
         string[] assetNames; // "NVDA", "TBILL", …
         bytes32[] assetIds;
-        EngineMeta engine;
+        EngineMeta engine; // PricingEngine (R-24 split, ADR-0108)
         bool hasEngineMeta;
+        EngineMeta auctionMath;
+        bool hasAuctionMeta;
     }
 
     function defaultPath() internal view returns (string memory) {
@@ -78,12 +81,23 @@ library LocalBook {
         b.shared.riskEngine = e;
         if (vm.keyExistsJson(j, ".stylus.riskEngine.deploymentTx")) {
             b.hasEngineMeta = true;
-            b.engine.deploymentTx = vm.parseJsonString(j, ".stylus.riskEngine.deploymentTx");
-            b.engine.compressedSizeBytes = vm.parseJsonUint(j, ".stylus.riskEngine.compressedSizeBytes");
-            b.engine.toolchain = vm.parseJsonString(j, ".stylus.riskEngine.toolchain");
-            if (vm.keyExistsJson(j, ".stylus.riskEngine.wasmSha256")) {
-                b.engine.wasmSha256 = vm.parseJsonString(j, ".stylus.riskEngine.wasmSha256");
-            }
+            b.engine = _meta(j, ".stylus.riskEngine", e);
+        }
+        if (vm.keyExistsJson(j, ".stylus.auctionMath.deploymentTx")) {
+            b.hasAuctionMeta = true;
+            b.auctionMath = _meta(j, ".stylus.auctionMath", address(0));
+        }
+    }
+
+    function _meta(string memory j, string memory k, address fallback_) private view returns (EngineMeta memory m) {
+        m.program = vm.keyExistsJson(j, string.concat(k, ".address"))
+            ? vm.parseJsonAddress(j, string.concat(k, ".address"))
+            : fallback_;
+        m.deploymentTx = vm.parseJsonString(j, string.concat(k, ".deploymentTx"));
+        m.compressedSizeBytes = vm.parseJsonUint(j, string.concat(k, ".compressedSizeBytes"));
+        m.toolchain = vm.parseJsonString(j, string.concat(k, ".toolchain"));
+        if (vm.keyExistsJson(j, string.concat(k, ".wasmSha256"))) {
+            m.wasmSha256 = vm.parseJsonString(j, string.concat(k, ".wasmSha256"));
         }
     }
 
@@ -104,7 +118,9 @@ library LocalBook {
         s = string.concat(s, '  "tokens": ', _addrMap(b.tokenNames, b.tokenAddrs), ",\n");
         s = string.concat(s, '  "assetIds": ', _b32Map(b.assetNames, b.assetIds), ",\n");
         if (b.shared.riskEngine != address(0) && b.hasEngineMeta) {
-            s = string.concat(s, '  "stylus": ', _engine(b.shared.riskEngine, b.engine), ",\n");
+            s = string.concat(s, '  "stylus": { "riskEngine": ', _engine(b.engine, b.shared.riskEngine));
+            if (b.hasAuctionMeta) s = string.concat(s, ', "auctionMath": ', _engine(b.auctionMath, address(0)));
+            s = string.concat(s, " },\n");
         }
         s = string.concat(s, _legacy(b), "\n}\n");
         vm.writeFile(path, s);
@@ -185,10 +201,11 @@ library LocalBook {
         s = string.concat(s, " }");
     }
 
-    function _engine(address e, EngineMeta memory m) private pure returns (string memory) {
+    function _engine(EngineMeta memory m, address router) private pure returns (string memory) {
         return string.concat(
-            '{ "riskEngine": { ',
-            _a("address", e),
+            "{ ",
+            _a("address", m.program),
+            router == address(0) ? "" : string.concat(", ", _a("router", router)),
             ', "deploymentTx": ',
             _q(m.deploymentTx),
             ', "compressedSizeBytes": ',
@@ -197,7 +214,7 @@ library LocalBook {
             _q(m.toolchain),
             ', "wasmSha256": ',
             _q(m.wasmSha256),
-            " } }"
+            " }"
         );
     }
 
