@@ -203,5 +203,87 @@ check "auction settled" "$(field 22)" true
 send "$HOUSE" 'claim(uint64)' "$AID"
 echo "gas: buyCover (writeCover) $GAS_COVER, fixLots (1 position) $GAS_FIX, clear (1 bid, backstop) $GAS_CLEAR, settlePositions (1) $GAS_SETTLE"
 
-[ $fail = 0 ] && echo "devnode integration: market ↔ Stylus engine == risk-cli; real writeCover and clear through the pool and auction house"
+# ═══ 6. S4: NAV settlement through the Stylus router (ADR-0111): a solver fill, then a pool advance and its claim ═══
+NMARKET="$(jq -r .nav.market "$BOOK")"; NID="$(jq -r .nav.markets.TBILL "$BOOK")"; ADAPTER="$(jq -r .nav.settlement "$BOOK")"
+VENUE="$(jq -r .nav.solverAuction "$BOOK")"; NPOOL="$(jq -r .nav.pool "$BOOK")"; FUND="$(jq -r .tokens.tTBILL "$BOOK")"
+TB="$(jq -r .assetIds.TBILL "$BOOK")"; FEEDNAV="$(jq -r .shared.feedNav "$BOOK")"; REG="$(jq -r .shared.registry "$BOOK")"
+[ "$(cast call --rpc-url "$RPC" "$NMARKET" 'wiring()((address,address,address,address,address,address,address,address,address,address))' \
+  | tr -d '()' | cut -d, -f3 | tr -d ' ')" = "$ENGINE" ] || { echo "NAV market is not wired to the Stylus engine" >&2; exit 1; }
+send "$ADAPTER" 'setWindow(uint40)' 300   # the 5-min minimum, so the run stays short (launch: 15 min)
+NAVP=1000000000000000000
+nav_report() { # publish the NAV on the signed feed (what the oracle reads) and on the fund (what redemptions pay)
+  NAVP="$1"; ASSET="$TB" report_submit "$FEEDNAV" 3 "$NAVP" "$(cast block latest --field timestamp --rpc-url "$RPC")" 0 0
+  send "$FUND" 'publishNav(uint256)' "$NAVP"
+}
+nav_report "$NAVP"
+send "$CLOCK" 'poke(bytes32)' "$TB"
+NST="$(cast call --rpc-url "$RPC" "$CLOCK" 'state(bytes32)(uint8)' "$TB")"
+if [ "$NST" = 3 ]; then sleep 125; send "$ADAPTER" 'completeReopen(bytes32)' "$TB"; fi
+check "TBILL clock REGULAR" "$(cast call --rpc-url "$RPC" "$CLOCK" 'state(bytes32)(uint8)' "$TB")" 0
+nav_borrower() { # → private key of an allowlisted borrower with 100,000 tTBILL and 89,900 USDC borrowed (89.9 %)
+  local k b; k="$(cast wallet new --json | jq -r '(.data // .)[0].private_key')"; b="$(cast wallet address --private-key "$k")"
+  cast send --rpc-url "$RPC" --private-key "$KEY" "$b" --value 1ether >/dev/null
+  send "$REG" 'setAllowed(address,bool)' "$b" true
+  send "$FUND" 'mint(address,uint256)' "$b" 100000000000000000000000
+  cast send --rpc-url "$RPC" --private-key "$k" "$FUND" 'approve(address,uint256)' "$NMARKET" 100000000000000000000000 >/dev/null
+  cast send --rpc-url "$RPC" --private-key "$k" "$NMARKET" 'addCollateral(bytes32,address,uint256)' "$NID" "$b" 100000000000000000000000 >/dev/null
+  cast send --rpc-url "$RPC" --private-key "$k" "$NMARKET" 'borrow(bytes32,uint256,address)' "$NID" 89900000000 "$b" >/dev/null
+  echo "$k"
+}
+K3="$(nav_borrower)"; B3="$(cast wallet address --private-key "$K3")"
+K4="$(nav_borrower)"; B4="$(cast wallet address --private-key "$K4")"
+# eight NAV steps of −0.45 % (each under the 0.5 % one-step HALT): HF 1.034 → < 1
+for _ in 1 2 3 4 5 6 7 8; do nav_report "$(python3 -c "print($NAVP * 9955 // 10000)")"; done
+send "$CLOCK" 'poke(bytes32)' "$TB"
+HF3="$(cast call --rpc-url "$RPC" "$NMARKET" 'healthFactor(bytes32,address)(uint256)' "$NID" "$B3" | cut -d' ' -f1)"
+[ "$(python3 -c "print(int($HF3 < 10**18))")" = 1 ] || { echo "TBILL position not under water: HF $HF3" >&2; exit 1; }
+echo "ok   NAV $NAVP: both TBILL positions at HF < 1 ($HF3)"
+ST='(bytes32,bytes32,address,address,uint8,uint8,uint64,uint40,uint40,uint32,uint128,uint128,uint128,uint128,address,uint256,bool)'
+sfield() { cast call --json --rpc-url "$RPC" "$ADAPTER" "settlement(uint64)($ST)" "$1" | jq -r "flatten | .[$(($2 - 1))]"; }
+open_settlement() { # borrower → settlement id; the market sizes the lot on-chain with the Stylus liquidationLot
+  local rc; rc="$(cast send --rpc-url "$RPC" --private-key "$KEY" "$ADAPTER" 'openSettlement(bytes32,address[])' "$NID" "[$1]" --json)"
+  [ "$(echo "$rc" | jq -r .status)" = 0x1 ] || { echo "openSettlement reverted: $rc" >&2; exit 1; }
+  echo "$rc" | jq -r --arg t "$(cast keccak 'SettlementOpened(uint64,bytes32,address,uint256,uint256,uint40)')" \
+    '[.logs[] | select(.topics[0]==$t)][0].topics[1]' | cast to-dec
+}
+# 6a. B3: the solver (the deployer, allowlisted) bids 0.1 % over the floor → filled at T+0
+S1="$(open_settlement "$B3")"; BN="$(cast block latest --field number --rpc-url "$RPC")"
+Q1="$(sfield "$S1" 11)"; FLOOR1="$(sfield "$S1" 12)"; END1="$(sfield "$S1" 9)"
+D3="$(cast call --rpc-url "$RPC" --block "$BN" "$NMARKET" 'debtOf(bytes32,address)(uint256)' "$NID" "$B3" | cut -d' ' -f1)"
+V3="$(cast call --rpc-url "$RPC" --block "$BN" "$(jq -r .shared.oracle "$BOOK")" 'valuationPrice(bytes32)(uint256)' "$TB" | cut -d' ' -f1)"
+CLI_X="$("$CLI" liquidation-lot "{\"debt\":\"$D3\",\"qty\":\"100000000000000000000000\",\"sizingPrice\":\"$FLOOR1\",\"hfPrice\":\"$V3\",\"lt\":\"930000000000000000\",\"hStar\":\"1100000000000000000\",\"lambda\":\"10000000000000000\"}" | jq -r .x)"
+check "NAV lot (Stylus liquidationLot at κ_nav, floor = NAV × 99.5 %)" "$Q1" "$CLI_X"
+check "floor = NAV × 0.995" "$FLOOR1" "$(python3 -c "print($V3 * 995 // 1000)")"
+BID="$(python3 -c "print($FLOOR1 * 1001 // 1000)")"
+send "$USDC" 'approve(address,uint256)' "$VENUE" 1000000000000
+FUND_BEFORE="$(cast call --rpc-url "$RPC" "$FUND" 'balanceOf(address)(uint256)' "$ME" | cut -d' ' -f1)"
+send "$VENUE" 'bid(uint64,uint256)' "$S1" "$BID"
+echo "     waiting for the solver window to end at $END1 ($(( END1 - $(date +%s) )) s)"
+while [ "$(cast block latest --field timestamp --rpc-url "$RPC")" -lt "$END1" ]; do sleep 10; send "$CLOCK" 'poke(bytes32)' "$TB"; done
+RF1="$(cast send --rpc-url "$RPC" --private-key "$KEY" "$ADAPTER" 'finalize(uint64)' "$S1" --json)"
+[ "$(echo "$RF1" | jq -r .status)" = 0x1 ] || { echo "finalize reverted: $RF1" >&2; exit 1; }
+GAS_FIN1="$(echo "$RF1" | jq -r .gasUsed | cast to-dec)"
+check "settlement $S1 FILLED" "$(sfield "$S1" 6)" 2
+check "solver received the lot" "$(( $(cast call --rpc-url "$RPC" "$FUND" 'balanceOf(address)(uint256)' "$ME" | cut -d' ' -f1) - FUND_BEFORE ))" "$Q1"
+check "cash in (solver escrow) = cash out (market proceeds)" "$(sfield "$S1" 14)" "$(python3 -c "q=$Q1;p=$BID;print(-(-q*p*10**6//10**36))")"
+check "positions settled" "$(sfield "$S1" 17)" true
+
+# 6b. B4: nobody bids → the pool advances qty × floor and requests the redemption; the issuer fulfils; the pool claims
+S2="$(open_settlement "$B4")"; END2="$(sfield "$S2" 9)"; Q2="$(sfield "$S2" 11)"; FLOOR2="$(sfield "$S2" 12)"
+while [ "$(cast block latest --field timestamp --rpc-url "$RPC")" -lt "$END2" ]; do sleep 10; send "$CLOCK" 'poke(bytes32)' "$TB"; done
+RF2="$(cast send --rpc-url "$RPC" --private-key "$KEY" "$ADAPTER" 'finalize(uint64)' "$S2" --json)"
+[ "$(echo "$RF2" | jq -r .status)" = 0x1 ] || { echo "finalize (advance) reverted: $RF2" >&2; exit 1; }
+GAS_FIN2="$(echo "$RF2" | jq -r .gasUsed | cast to-dec)"
+check "settlement $S2 ADVANCED" "$(sfield "$S2" 6)" 3
+COST="$(python3 -c "print($Q2 * $FLOOR2 // 10**30)")"
+check "pool advanced qty × floor" "$(sfield "$S2" 14)" "$COST"
+check "claim in pool NAV at cost" "$(cast call --rpc-url "$RPC" "$NPOOL" 'redemptionClaimsOutstanding()(uint256)' | cut -d' ' -f1)" "$COST"
+RQ="$(sfield "$S2" 16)"
+send "$FUND" 'fulfillRedeem(uint256)' "$RQ"   # the issuer operator (the deployer on local chains), next USBANK session on testnet
+RC2="$(cast send --rpc-url "$RPC" --private-key "$KEY" "$NPOOL" 'claimRedemption(uint256)' "$RQ" --json)"
+[ "$(echo "$RC2" | jq -r .status)" = 0x1 ] || { echo "claimRedemption reverted: $RC2" >&2; exit 1; }
+check "claim cleared" "$(cast call --rpc-url "$RPC" "$NPOOL" 'redemptionClaimsOutstanding()(uint256)' | cut -d' ' -f1)" 0
+echo "gas: NAV finalize with a fill $GAS_FIN1, with a pool advance $GAS_FIN2"
+
+[ $fail = 0 ] && echo "devnode integration: market ↔ Stylus engine == risk-cli; real writeCover and clear through the pool and auction house; NAV settlement (solver fill, pool advance + claim)"
 exit $fail

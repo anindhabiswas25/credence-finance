@@ -96,6 +96,9 @@ contract UnderwriterPool is ERC20, ReentrancyGuardTransient, IUnderwriterPool {
     uint256 internal _claimsCost; // Σ cost of unclaimed redemption claims, in NAV (§8.6.1)
     /// @inheritdoc IUnderwriterPool
     uint64 public maxAssetShare = 0.35e18;
+    /// @dev J3 prototype (ADR-0114): the market's current Bell batch (0 = none) and a per-transaction counter.
+    uint256 internal transient _batch;
+    uint256 internal transient _batches;
 
     event WiringInitialized(
         address market, address auctionHouse, address settlement, address clock, address tips
@@ -274,7 +277,9 @@ contract UnderwriterPool is ERC20, ReentrancyGuardTransient, IUnderwriterPool {
         uint256 worst;
         uint256[] memory add;
         uint256 j = _equity(e);
-        (premium, uAfter, worst, add) = _quote(r, current, j);
+        (premium, uAfter, worst, add) = _batch != 0
+            ? PoolLib.quoteBatch(market, _engine(), current, j, r, _batch)
+            : _quote(r, current, j);
         if (premium > maxPremium) revert PremiumAboveMax(premium, maxPremium);
         if (current.length == 0) current = new uint256[](add.length); // first policy of the epoch
         uint256 k = add.length * PackedInt.U64_PER_WORD;
@@ -292,6 +297,16 @@ contract UnderwriterPool is ERC20, ReentrancyGuardTransient, IUnderwriterPool {
         ++ep.policies;
         policyId = nextPolicyId++;
         emit CoverWritten(policyId, r.marketId, r.borrower, e, r.assetId, premium, uAfter, worst);
+    }
+
+    /// @inheritdoc IUnderwriterPool
+    function beginBellBatch() external onlyMarket {
+        _batch = ++_batches;
+    }
+
+    /// @inheritdoc IUnderwriterPool
+    function endBellBatch() external onlyMarket {
+        _batch = 0;
     }
 
     // ═════════════════════════════ income ═════════════════════════════
@@ -459,15 +474,9 @@ contract UnderwriterPool is ERC20, ReentrancyGuardTransient, IUnderwriterPool {
             revert EpochNotReady(epochId, 2);
         }
         // R-11: an asset whose REOPEN has not completed keeps its worst covered loss in reserve
-        bytes32[] storage assets = _epochAssets[epochId];
-        uint256 reserve;
-        for (uint256 i; i < assets.length; ++i) {
-            if (!_reopenDone(assets[i], epochId)) {
-                uint256 x = _worstCovered[epochId][assets[i]];
-                _lossReserve[epochId][assets[i]] = x;
-                reserve += x;
-            }
-        }
+        uint256 reserve = PoolLib.holdLossReserves(
+            _epochAssets[epochId], _worstCovered[epochId], _lossReserve[epochId], clock, auctionHouse, epochId
+        );
         _totalLossReserve += reserve;
         ep.pendingLossReserve = uint128(reserve);
         if (_hasActive && _active == epochId) _hasActive = false; // releases the premiums into NAV
@@ -729,9 +738,7 @@ contract UnderwriterPool is ERC20, ReentrancyGuardTransient, IUnderwriterPool {
     /// @dev An asset's REOPEN for epoch `e` is over: no closure of it at or after `e` is still pending, and its
     ///      REOPEN lots have settled.
     function _reopenDone(bytes32 assetId, uint64 e) internal view returns (bool) {
-        ClockData memory d = clock.closureInfo(assetId);
-        if (d.reopenPending && d.venueEpoch >= e) return false;
-        return auctionHouse == address(0) || IAuctionHouse(auctionHouse).reopenSettled(assetId, d.closureId);
+        return PoolLib.reopenDone(clock, auctionHouse, assetId, e);
     }
 
     // ═════════════════════════════ internals: capacity ═════════════════════════════
@@ -739,17 +746,9 @@ contract UnderwriterPool is ERC20, ReentrancyGuardTransient, IUnderwriterPool {
     function _quote(CoverRequest calldata r, uint256[] memory current, uint256 j)
         internal
         view
-        returns (uint256 premium, uint256 uAfter, uint256 worst, uint256[] memory add)
+        returns (uint256, uint256, uint256, uint256[] memory)
     {
-        IRiskEngine eng = _engine();
-        add = eng.coverLossVector(r.assetId, r.closureType, r.collateralValue, r.debtProjected);
-        if (current.length == 0) current = new uint256[](add.length);
-        bool ok;
-        (ok, uAfter, worst) = PoolLib.capacity(market, eng, current, add, j, r.marketId, r.collateralValue);
-        if (!ok) revert CapacityExceeded(uAfter, eng.params().uMax);
-        (premium,,) = eng.quoteCover(
-            r.assetId, r.closureType, r.closureDays, r.collateralValue, r.debtProjected, uAfter
-        );
+        return PoolLib.quote(market, _engine(), current, j, r);
     }
 
     function _capacity(

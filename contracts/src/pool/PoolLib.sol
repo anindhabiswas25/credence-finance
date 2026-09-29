@@ -5,7 +5,18 @@ import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IER
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import {Inventory, Session, MarketKind, MarketParams, RedemptionClaim, ClockState, Epoch} from "../libraries/Types.sol";
+import {
+    Inventory,
+    Session,
+    MarketKind,
+    MarketParams,
+    RedemptionClaim,
+    ClockState,
+    Epoch,
+    CoverRequest,
+    ClockData
+} from "../libraries/Types.sol";
+import {PackedInt} from "../libraries/PackedInt.sol";
 import {IAssetClock} from "../interfaces/IAssetClock.sol";
 import {IUnderwriterPoolEvents} from "../libraries/Events.sol";
 import {INavFund} from "../interfaces/INavFund.sol";
@@ -94,6 +105,19 @@ library PoolLib {
         bytes32 skipId,
         uint256 skipValue
     ) external view returns (bool, uint256, uint256) {
+        return _capacityView(market, eng, current, add, j, skipId, skipValue);
+    }
+
+    /// @dev Body of `capacity`.
+    function _capacityView(
+        address market,
+        IRiskEngine eng,
+        uint256[] memory current,
+        uint256[] memory add,
+        uint256 j,
+        bytes32 skipId,
+        uint256 skipValue
+    ) internal view returns (bool, uint256, uint256) {
         if (add.length == 0) add = new uint256[]((uint256(eng.params().kStress) + 3) / 4);
         if (current.length == 0) current = new uint256[](add.length);
         bytes32[] memory ids = ICredenceMarket(market).marketIds();
@@ -220,6 +244,39 @@ library PoolLib {
         cost = c.cost;
     }
 
+    // ───────────── R-11 pending loss reserve ─────────────
+
+    /// @notice An asset's REOPEN for epoch `e` is over: no closure of it at or after `e` is still pending, and its
+    ///         REOPEN lots have settled.
+    function reopenDone(IAssetClock clock, address auctionHouse, bytes32 assetId, uint64 e)
+        public
+        view
+        returns (bool)
+    {
+        ClockData memory d = clock.closureInfo(assetId);
+        if (d.reopenPending && d.venueEpoch >= e) return false;
+        return auctionHouse == address(0) || IAuctionHouse(auctionHouse).reopenSettled(assetId, d.closureId);
+    }
+
+    /// @notice At settlement: every covered asset whose REOPEN has not completed keeps its worst covered loss in
+    ///         reserve (R-11). Returns the epoch's total.
+    function holdLossReserves(
+        bytes32[] storage assets,
+        mapping(bytes32 => uint256) storage worstCovered,
+        mapping(bytes32 => uint256) storage lossReserve,
+        IAssetClock clock,
+        address auctionHouse,
+        uint64 e
+    ) external returns (uint256 reserve) {
+        for (uint256 i; i < assets.length; ++i) {
+            if (!reopenDone(clock, auctionHouse, assets[i], e)) {
+                uint256 x = worstCovered[assets[i]];
+                lossReserve[assets[i]] = x;
+                reserve += x;
+            }
+        }
+    }
+
     // ───────────── withdrawal FIFO (§8.6.3) ─────────────
 
     /// @notice Unpaid reserved withdrawals of settled epochs older than `e`, scanning up to 64 epochs from `head`.
@@ -255,6 +312,121 @@ library PoolLib {
         for (uint256 end = h + MAX_WITHDRAW_EPOCHS; h < n && h < end; ++h) {
             uint64 x = withdrawEpochs[h];
             if (epochs[x].withdrawAssetsReserved - paid[x] > withdrawers[x]) break;
+        }
+    }
+
+    /// @notice `writeCover` / `previewCover` quote: the policy's K-loss vector, capacity over the stored vector plus the
+    ///         uncovered bounds of every market (the policy's own collateral counted as covered), then the premium
+    ///         at u_after. Reverts `CapacityExceeded` above u_max (INV-POOL-02).
+    function quote(address market, IRiskEngine eng, uint256[] memory current, uint256 j, CoverRequest calldata r)
+        external
+        view
+        returns (uint256 premium, uint256 uAfter, uint256 worst, uint256[] memory add)
+    {
+        add = eng.coverLossVector(r.assetId, r.closureType, r.collateralValue, r.debtProjected);
+        bool ok;
+        (ok, uAfter, worst) = _capacityView(market, eng, current, add, j, r.marketId, r.collateralValue);
+        if (!ok) revert ICredenceErrors.CapacityExceeded(uAfter, eng.params().uMax);
+        (premium,,) =
+            eng.quoteCover(r.assetId, r.closureType, r.closureDays, r.collateralValue, r.debtProjected, uAfter);
+    }
+
+    // ───────────── Bell batch: cached uncovered bound (S4 J3 prototype, ADR-0114) ─────────────
+
+    /// @dev Transient slots: BATCH_SLOT holds the batch id the cache was built for, then the cached Σ_m B_m words
+    ///      (BATCH_SLOT + 1 …), and, per market, its safe LTV + 1 at keccak256(BATCH_SLOT, marketId).
+    uint256 internal constant BATCH_SLOT = uint256(keccak256("credence.pool.bellBatch.uncoveredBound"));
+
+    /// @notice `writeCover`'s quote inside a market-bracketed Bell batch (no foreign code runs between its writes, so
+    ///         collateral, prices and σ cannot move). The uncovered bound Σ_m B_{m,j} of §9.5 is built once per batch,
+    ///         each market's B_m via `coverLossVector(asset, type, C_unc, ⌈C_unc × LTV_safe⌉)` (the same formula,
+    ///         rounded up), and each write takes its own collateral's B out of it (rounded down), as the market moves
+    ///         that collateral from uncovered to covered. The cache therefore never understates the bound
+    ///         (INV-POOL-02), and every write in the batch saves the per-market reads and B terms of `poolCapacity`.
+    function quoteBatch(
+        address market,
+        IRiskEngine eng,
+        uint256[] memory current,
+        uint256 j,
+        CoverRequest calldata r,
+        uint256 batchId
+    ) external returns (uint256 premium, uint256 uAfter, uint256 worst, uint256[] memory add) {
+        add = eng.coverLossVector(r.assetId, r.closureType, r.collateralValue, r.debtProjected);
+        uint256 n = add.length;
+        uint256 k = n * PackedInt.U64_PER_WORD;
+        if (current.length == 0) current = new uint256[](n);
+        uint256[] memory bound = _loadOrBuild(market, eng, n, k, batchId);
+        uint256 own;
+        uint256 slot = uint256(keccak256(abi.encode(BATCH_SLOT, r.marketId)));
+        assembly {
+            own := tload(slot)
+        }
+        if (own > 1) {
+            uint256[] memory mine = eng.coverLossVector(
+                r.assetId, r.closureType, r.collateralValue, r.collateralValue.mulDiv(own - 1, WAD)
+            );
+            bound = PackedInt.subU64Floor(bound, mine, k);
+        }
+        _store(bound);
+        bool ok;
+        (ok, uAfter, worst) = eng.poolCapacity(
+            PackedInt.addU64(current, bound, k),
+            add,
+            new bytes32[](0),
+            new uint8[](0),
+            new uint256[](0),
+            new uint256[](0),
+            j
+        );
+        if (!ok) revert ICredenceErrors.CapacityExceeded(uAfter, eng.params().uMax);
+        (premium,,) =
+            eng.quoteCover(r.assetId, r.closureType, r.closureDays, r.collateralValue, r.debtProjected, uAfter);
+    }
+
+    function _loadOrBuild(address market, IRiskEngine eng, uint256 n, uint256 k, uint256 batchId)
+        private
+        returns (uint256[] memory bound)
+    {
+        uint256 base = BATCH_SLOT;
+        uint256 built;
+        assembly {
+            built := tload(base)
+        }
+        bound = new uint256[](n);
+        if (built == batchId) {
+            for (uint256 i; i < n; ++i) {
+                uint256 w;
+                assembly {
+                    w := tload(add(add(base, 1), i))
+                }
+                bound[i] = w;
+            }
+            return bound;
+        }
+        bytes32[] memory ids = ICredenceMarket(market).marketIds();
+        for (uint256 m; m < ids.length; ++m) {
+            (bytes32 asset, uint8 t, uint256 value, uint256 safe) = ICredenceMarket(market).uncoveredExposure(ids[m]);
+            uint256 slot = uint256(keccak256(abi.encode(base, ids[m])));
+            assembly {
+                tstore(slot, add(safe, 1))
+            }
+            if (value == 0 || safe == 0) continue;
+            bound = PackedInt.addU64(
+                bound, eng.coverLossVector(asset, t, value, value.mulDiv(safe, WAD, Math.Rounding.Ceil)), k
+            );
+        }
+        assembly {
+            tstore(base, batchId)
+        }
+    }
+
+    function _store(uint256[] memory bound) private {
+        uint256 base = BATCH_SLOT;
+        for (uint256 i; i < bound.length; ++i) {
+            uint256 w = bound[i];
+            assembly {
+                tstore(add(add(base, 1), i), w)
+            }
         }
     }
 }

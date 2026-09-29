@@ -94,6 +94,8 @@ library CoverLogic {
         }
         $.accrue(id);
         uint64 upcoming = $.upcoming(p.assetId);
+        // J3 (ADR-0114): no foreign code runs inside this loop, so the pool may cache the uncovered bound for it
+        IUnderwriterPool($.w.pool).beginBellBatch();
         for (uint256 i; i < borrowers.length; ++i) {
             address b = borrowers[i];
             Position storage pos = $.pos[id][b];
@@ -106,6 +108,7 @@ library CoverLogic {
             emit ICredenceMarketEvents.BellEnforced(id, b, upcoming, outcome);
             $.tip(KeeperJob.ENFORCE_BELL);
         }
+        IUnderwriterPool($.w.pool).endBellBatch();
     }
 
     /// @dev The market's `bellStatus` view.

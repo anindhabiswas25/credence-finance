@@ -73,6 +73,22 @@ library PackedInt {
     }
 
     /// @notice Largest of the first `n` uint64 lanes.
+    /// @dev Lane-wise max(0, a − b) over the first n lanes (a saturating subtraction).
+    function subU64Floor(uint256[] memory a, uint256[] memory b, uint256 n)
+        internal
+        pure
+        returns (uint256[] memory out)
+    {
+        uint256 words = wordsForU64(n);
+        if (words > a.length || words > b.length) revert PackedIndexOutOfRange(n, a.length * 4);
+        out = new uint256[](words);
+        for (uint256 i; i < n; ++i) {
+            uint256 x = (a[i / 4] >> (64 * (i % 4))) & U64_MASK;
+            uint256 y = (b[i / 4] >> (64 * (i % 4))) & U64_MASK;
+            if (x > y) out[i / 4] |= (x - y) << (64 * (i % 4));
+        }
+    }
+
     function maxU64(uint256[] memory words, uint256 n) internal pure returns (uint64 m) {
         if (wordsForU64(n) > words.length) revert PackedIndexOutOfRange(n, words.length * 4);
         for (uint256 i; i < n; ++i) {

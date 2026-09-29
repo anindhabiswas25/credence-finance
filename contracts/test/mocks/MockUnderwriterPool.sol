@@ -50,6 +50,15 @@ contract MockUnderwriterPool {
     }
 
     /// @dev v2 protocol (ADR-0110): the pool quotes once and the market pays in the same transaction.
+    /// @dev S4 (ADR-0114): the market brackets `enforceBell` with these.
+    uint256 public batchesBegun;
+
+    function beginBellBatch() external {
+        ++batchesBegun;
+    }
+
+    function endBellBatch() external {}
+
     function writeCover(CoverRequest calldata r, uint256 maxPremium) external returns (uint64, uint256) {
         require(msg.sender == market, "only market");
         require(!capacityFull, "capacity");
