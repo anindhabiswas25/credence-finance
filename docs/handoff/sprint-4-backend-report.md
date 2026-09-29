@@ -76,7 +76,7 @@ Date: 2026-09-29 · Session model: Claude Opus 5.5 · Commits: `62235eb..HEAD` (
 
 ## 6. Spec issues found
 1. **The NAV e2e takes many real-time days.** The oracle refuses a NAV strike that drops more than 0.5% (`NAV_MAX_DROP`), and there is one strike per USBANK session. So a NAV position at max LTV (0.90, LT 0.93) needs about 8 strikes before HF < 1; BE-chain's forge scenario also uses 8. A devnode e2e at real time needs 8 USBANK cycles, unless the seeding places positions nearer LT (§8).
-2. **Pool and auction ids can collide.** The market's NAV lot ids and the equity auction house ids share the indexer's `lot_position` key, and both start at 1. The notifier now joins on the market; the table key needs `market_id` in S5.
+2. **Lot ids from two id spaces.** The NAV market's lot ids (= settlement ids) and the equity auction house's ids both start at 1. **Fixed** (`da70569`): `lot_position` is keyed by (market contract, id, owner); the auction routes read only the auction house's lots; the notifier joins on the market (`07fbebe`).
 
 ## 7. Interfaces changed or published
 - **API:**
@@ -106,8 +106,13 @@ Date: 2026-09-29 · Session model: Claude Opus 5.5 · Commits: `62235eb..HEAD` (
   - checks: indexer / API / notifier == chain.
 
   That is roughly 8 cycles × 35 min ≈ 5 h of real time, unless the PM accepts seeding positions closer to LT.
-- **The Low / Info off-chain findings:** OFF-04…OFF-11 (WS origin and limits, push endpoint SSRF, Telegram chat id, indexer `/sql`, `/metrics` exposure, keeper fee ceiling, `esc` quotes, SIWE nonce burn) → S5.
-- **`lot_position` key** needs `market_id` (§6.2).
+- **Off-chain findings still open (S5):**
+  - OFF-04c: a socket keeps its `bell:<owner>` after logout, until it reconnects.
+  - OFF-06: the Telegram chat id needs a `/start <token>` link.
+  - OFF-07: the indexer's `/sql` and `/graphql` must stay on the private network, or run with a `statement_timeout` role.
+  - OFF-08: metrics need a private listener.
+  - OFF-11: the SIWE nonce should be burned only after the signature verifies.
+- **Fixed:** OFF-01…03 (`de6d1bd`), and OFF-04 a/b, OFF-05, OFF-09 and OFF-10 (`3d23f80`).
 - **The keeper's §16.1 gauges have not fired against a real Prometheus yet.** `make obs-up` against a live keeper is the next check; the promtool tests and the name regression test pass.
 
 ## 9. Needs from the user or the PM
