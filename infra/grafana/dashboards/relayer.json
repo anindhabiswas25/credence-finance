@@ -35,7 +35,7 @@
             "type": "prometheus",
             "uid": "credence-prom"
           },
-          "expr": "time() - relayer_last_live_timestamp_seconds",
+          "expr": "time() - credence_relayer_last_live_timestamp_seconds",
           "legendFormat": "{{feed}} {{asset}}"
         }
       ],
@@ -59,7 +59,7 @@
         "overrides": []
       },
       "options": {},
-      "description": "FeedStale fires above 60 s while relayer_market_status == 2 (REGULAR)."
+      "description": "FeedStale fires above 60 s while credence_relayer_market_status == 2 (REGULAR)."
     },
     {
       "id": 2,
@@ -82,7 +82,7 @@
             "type": "prometheus",
             "uid": "credence-prom"
           },
-          "expr": "relayer_market_status",
+          "expr": "credence_relayer_market_status",
           "legendFormat": "{{feed}} {{asset}}"
         }
       ],
@@ -113,7 +113,7 @@
             "type": "prometheus",
             "uid": "credence-prom"
           },
-          "expr": "relayer_vendor_disagreement_ppm",
+          "expr": "credence_relayer_vendor_disagreement_ppm",
           "legendFormat": "{{feed}} {{asset}}"
         }
       ],
@@ -162,7 +162,7 @@
             "type": "prometheus",
             "uid": "credence-prom"
           },
-          "expr": "relayer_node_spread_ppm",
+          "expr": "credence_relayer_node_spread_ppm",
           "legendFormat": "{{feed}} {{asset}}"
         }
       ],
@@ -193,7 +193,7 @@
             "type": "prometheus",
             "uid": "credence-prom"
           },
-          "expr": "histogram_quantile(0.5, sum by (le, kind) (rate(relayer_report_latency_seconds_bucket[5m])))",
+          "expr": "histogram_quantile(0.5, sum by (le, kind) (rate(credence_relayer_report_latency_seconds_bucket[5m])))",
           "legendFormat": "p50 {{kind}}"
         },
         {
@@ -202,7 +202,7 @@
             "type": "prometheus",
             "uid": "credence-prom"
           },
-          "expr": "histogram_quantile(0.95, sum by (le, kind) (rate(relayer_report_latency_seconds_bucket[5m])))",
+          "expr": "histogram_quantile(0.95, sum by (le, kind) (rate(credence_relayer_report_latency_seconds_bucket[5m])))",
           "legendFormat": "p95 {{kind}}"
         }
       ],
@@ -235,7 +235,7 @@
             "type": "prometheus",
             "uid": "credence-prom"
           },
-          "expr": "sum by (feed, result) (rate(relayer_submits_total[5m]))",
+          "expr": "sum by (feed, result) (rate(credence_relayer_submits_total[5m]))",
           "legendFormat": "{{feed}} {{result}}"
         }
       ],
@@ -268,7 +268,7 @@
             "type": "prometheus",
             "uid": "credence-prom"
           },
-          "expr": "sum by (feed, kind) (increase(relayer_reports_accepted_total[5m]))",
+          "expr": "sum by (feed, kind) (increase(credence_relayer_reports_accepted_total[5m]))",
           "legendFormat": "{{feed}} {{kind}}"
         }
       ],
@@ -299,7 +299,7 @@
             "type": "prometheus",
             "uid": "credence-prom"
           },
-          "expr": "relayer_stream_connected",
+          "expr": "credence_relayer_stream_connected",
           "legendFormat": "up {{vendor}}"
         },
         {
@@ -308,7 +308,7 @@
             "type": "prometheus",
             "uid": "credence-prom"
           },
-          "expr": "increase(relayer_stream_reconnects_total[1h])",
+          "expr": "increase(credence_relayer_stream_reconnects_total[1h])",
           "legendFormat": "reconnects/h {{vendor}}"
         }
       ],
@@ -339,7 +339,7 @@
             "type": "prometheus",
             "uid": "credence-prom"
           },
-          "expr": "sum by (reason) (rate(relayer_observation_rejections_total[5m]))",
+          "expr": "sum by (reason) (rate(credence_relayer_observation_rejections_total[5m]))",
           "legendFormat": "reject {{reason}}"
         },
         {
@@ -348,7 +348,7 @@
             "type": "prometheus",
             "uid": "credence-prom"
           },
-          "expr": "sum by (reason) (rate(relayer_sign_refusals_total[5m]))",
+          "expr": "sum by (reason) (rate(credence_relayer_sign_refusals_total[5m]))",
           "legendFormat": "refuse {{reason}}"
         }
       ],

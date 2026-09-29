@@ -42,7 +42,7 @@
             "type": "prometheus",
             "uid": "credence-prom"
           },
-          "expr": "keeper_bell_unenforced_positions",
+          "expr": "credence_keeper_bell_unenforced_positions",
           "legendFormat": "{{asset}}"
         }
       ],
@@ -87,7 +87,7 @@
             "type": "prometheus",
             "uid": "credence-prom"
           },
-          "expr": "keeper_reopen_pending_seconds",
+          "expr": "credence_keeper_reopen_pending_seconds",
           "legendFormat": "{{asset}}"
         }
       ],
@@ -137,7 +137,7 @@
             "type": "prometheus",
             "uid": "credence-prom"
           },
-          "expr": "keeper_bell_lead_seconds",
+          "expr": "credence_keeper_bell_lead_seconds",
           "legendFormat": "{{kind}}"
         }
       ],
@@ -170,7 +170,7 @@
             "type": "prometheus",
             "uid": "credence-prom"
           },
-          "expr": "sum by (job, result) (increase(keeper_jobs_total{job=~\"J3|J4|J5|J6|J10\"}[15m]))",
+          "expr": "sum by (job, result) (increase(credence_keeper_jobs_total{job=~\"J3|J4|J5|J6|J10\"}[15m]))",
           "legendFormat": "{{job}} {{result}}"
         }
       ],
@@ -201,7 +201,7 @@
             "type": "prometheus",
             "uid": "credence-prom"
           },
-          "expr": "sum by (outcome) (increase(keeper_txs_total[15m]))",
+          "expr": "sum by (outcome) (increase(credence_keeper_txs_total[15m]))",
           "legendFormat": "{{outcome}}"
         }
       ],
@@ -232,7 +232,7 @@
             "type": "prometheus",
             "uid": "credence-prom"
           },
-          "expr": "sum by (job) (increase(keeper_tx_replacements_total[1h]))",
+          "expr": "sum by (job) (increase(credence_keeper_tx_replacements_total[1h]))",
           "legendFormat": "{{job}}"
         }
       ],
@@ -263,7 +263,7 @@
             "type": "prometheus",
             "uid": "credence-prom"
           },
-          "expr": "sum by (job) (increase(keeper_failed_txs_total{reason=\"reverted\"}[1h]))",
+          "expr": "sum by (job) (increase(credence_keeper_failed_txs_total{reason=\"reverted\"}[1h]))",
           "legendFormat": "{{job}}"
         }
       ],

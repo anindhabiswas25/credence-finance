@@ -88,8 +88,10 @@ pub struct CoreJobs {
     pub nav: Option<crate::nav_jobs::NavStack>,
 }
 
-/// `NoReferencePrice(bytes32)`: the oracle has never priced the asset (S4 A: "not live").
+/// `NoReferencePrice(bytes32)` / `NoPrice(bytes32)`: the oracle has never priced the asset (S4 A: "not live";
+/// the S4 run showed TBILL reverting `NoPrice` before its NAV feed publishes).
 pub const NO_REFERENCE_PRICE_SELECTOR: &str = "2da33f4c";
+pub const NO_PRICE_SELECTOR: &str = "caf0b5a1";
 
 /// Outcome of a core market read.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -104,7 +106,15 @@ pub enum ReadState {
 impl ReadState {
     pub fn of_error(e: &anyhow::Error) -> Self {
         let msg = format!("{e:#}");
-        if msg.contains(NO_REFERENCE_PRICE_SELECTOR) || msg.contains("NoReferencePrice") {
+        if [
+            NO_REFERENCE_PRICE_SELECTOR,
+            NO_PRICE_SELECTOR,
+            "NoReferencePrice",
+            "NoPrice(",
+        ]
+        .iter()
+        .any(|x| msg.contains(x))
+        {
             Self::Unpriced
         } else {
             Self::Failed(msg)
@@ -989,6 +999,8 @@ mod tests {
             Some(Some(ReadState::Unpriced))
         );
         assert_eq!(core.unpriced(), 0);
+        let no_price = anyhow::anyhow!("execution reverted, data: \"0xcaf0b5a15264b60e27ff3d5f95d3aaa26e44d735125be863529f81767f41a4148c9f2586\"");
+        assert_eq!(ReadState::of_error(&no_price), ReadState::Unpriced);
         let other = ReadState::of_error(&anyhow::anyhow!("connection refused"));
         assert!(matches!(other, ReadState::Failed(_)));
         assert_eq!(

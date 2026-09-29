@@ -42,7 +42,7 @@
             "type": "prometheus",
             "uid": "credence-prom"
           },
-          "expr": "keeper_pool_utilisation_ratio",
+          "expr": "credence_keeper_pool_utilisation_ratio",
           "legendFormat": "{{pool}}"
         }
       ],
@@ -92,7 +92,7 @@
             "type": "prometheus",
             "uid": "credence-prom"
           },
-          "expr": "keeper_epoch_unsettled_seconds",
+          "expr": "credence_keeper_epoch_unsettled_seconds",
           "legendFormat": "{{pool}}"
         }
       ],
@@ -138,7 +138,7 @@
             "type": "prometheus",
             "uid": "credence-prom"
           },
-          "expr": "keeper_shortfall_escalations",
+          "expr": "credence_keeper_shortfall_escalations",
           "legendFormat": "{{layer}}"
         }
       ],
@@ -183,7 +183,7 @@
             "type": "prometheus",
             "uid": "credence-prom"
           },
-          "expr": "keeper_pool_utilisation_ratio",
+          "expr": "credence_keeper_pool_utilisation_ratio",
           "legendFormat": "{{pool}}"
         }
       ],
@@ -216,7 +216,7 @@
             "type": "prometheus",
             "uid": "credence-prom"
           },
-          "expr": "sum by (job, result) (increase(keeper_jobs_total{job=~\"J9|J11|J8\"}[15m]))",
+          "expr": "sum by (job, result) (increase(credence_keeper_jobs_total{job=~\"J9|J11|J8\"}[15m]))",
           "legendFormat": "{{job}} {{result}}"
         }
       ],
@@ -247,7 +247,7 @@
             "type": "prometheus",
             "uid": "credence-prom"
           },
-          "expr": "sum by (job) (increase(keeper_failed_txs_total{reason=\"reverted\"}[1h]))",
+          "expr": "sum by (job) (increase(credence_keeper_failed_txs_total{reason=\"reverted\"}[1h]))",
           "legendFormat": "{{job}}"
         }
       ],
@@ -278,7 +278,7 @@
             "type": "prometheus",
             "uid": "credence-prom"
           },
-          "expr": "keeper_markets_unpriced",
+          "expr": "credence_keeper_markets_unpriced",
           "legendFormat": "unpriced"
         }
       ],

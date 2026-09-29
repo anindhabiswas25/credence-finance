@@ -5,30 +5,30 @@ groups:
   - name: credence-feeds
     rules:
       - alert: FeedStale
-        # REGULAR only (relayer_market_status 2); the relayer publishes LIVE every 10 s, OracleAdapter's
+        # REGULAR only (credence_relayer_market_status 2); the relayer publishes LIVE every 10 s, OracleAdapter's
         # REGULAR limit is 60 s
-        expr: (time() - relayer_last_live_timestamp_seconds) > 60 and on (feed, asset) relayer_market_status == 2
+        expr: (time() - credence_relayer_last_live_timestamp_seconds) > 60 and on (feed, asset) credence_relayer_market_status == 2
         for: 30s
         labels: { severity: P1 }
         annotations:
           summary: "Feed {{ $labels.feed }} {{ $labels.asset }}: last LIVE {{ $value | humanizeDuration }} ago in REGULAR"
           runbook: RB-04
       - alert: FeedDisagreement
-        expr: relayer_vendor_disagreement_ppm > 15000
+        expr: credence_relayer_vendor_disagreement_ppm > 15000
         for: 2m
         labels: { severity: P2 }
         annotations:
           summary: "Feed {{ $labels.feed }} vs the other feed on {{ $labels.asset }}: {{ $value }} ppm (> 1.5%)"
           runbook: RB-04
       - alert: FeedDisagreementSevere
-        expr: relayer_vendor_disagreement_ppm > 50000
+        expr: credence_relayer_vendor_disagreement_ppm > 50000
         for: 2m
         labels: { severity: P1 }
         annotations:
           summary: "Feed {{ $labels.feed }} vs the other feed on {{ $labels.asset }}: {{ $value }} ppm (> 5%)"
           runbook: RB-04
       - alert: RelayerStreamDown
-        expr: relayer_stream_connected == 0
+        expr: credence_relayer_stream_connected == 0
         for: 5m
         labels: { severity: P3 }
         annotations:
@@ -38,38 +38,38 @@ groups:
     rules:
       - alert: KeeperLeaderMissing
         # no instance holds the lock, or no keeper is scraped at all
-        expr: (max(keeper_is_leader) < 1) or absent(keeper_is_leader == 1)
+        expr: (max(credence_keeper_is_leader) < 1) or absent(credence_keeper_is_leader == 1)
         for: 30s
         labels: { severity: P1 }
         annotations:
           summary: "No keeper leader heartbeat for 30 s"
       - alert: WalletLow
         # < 3 days of spend at the last 6 h's burn rate
-        expr: predict_linear(keeper_wallet_balance_gwei[6h], 3 * 86400) < 0
+        expr: predict_linear(credence_keeper_wallet_balance_gwei[6h], 3 * 86400) < 0
         for: 15m
         labels: { severity: P2 }
         annotations:
           summary: "Wallet {{ $labels.wallet }} runs dry within 3 days at the current spend"
       - alert: WalletBelowFloor
         # the keeper's own configured floor (KEEPER_MIN_BALANCE_WEI), raised by J12
-        expr: increase(keeper_alerts_total{check="wallet-balance"}[1d]) > 0
+        expr: increase(credence_keeper_alerts_total{check="wallet-balance"}[1d]) > 0
         labels: { severity: P2 }
         annotations:
           summary: "A watched wallet is below the keeper's configured floor"
       - alert: CalendarCoverage
-        expr: keeper_calendar_coverage_days < 30
+        expr: credence_keeper_calendar_coverage_days < 30
         labels: { severity: P2 }
         annotations:
           summary: "{{ $labels.venue }} calendar covers only {{ $value }} more days"
           runbook: RB-08
       - alert: KeeperFailedTx
         # every keeper job pre-checks with risk-core natively (§10.2), so any reverted tx is a bug
-        expr: sum by (job) (increase(keeper_failed_txs_total{reason="reverted"}[1h])) > 0
+        expr: sum by (job) (increase(credence_keeper_failed_txs_total{reason="reverted"}[1h])) > 0
         labels: { severity: P2 }
         annotations:
           summary: "Keeper {{ $labels.job }}: a tx reverted on chain in the last hour"
       - alert: StylusActivation
-        expr: keeper_stylus_program_time_left_seconds < 30 * 86400
+        expr: credence_keeper_stylus_program_time_left_seconds < 30 * 86400
         labels: { severity: P2 }
         annotations:
           summary: "Stylus {{ $labels.program }}: programTimeLeft {{ $value | humanizeDuration }}"
@@ -80,29 +80,29 @@ groups:
     rules:
       - alert: BellNotEnforced
         # J3 publishes the NEEDS_ACTION positions still open from bellAt + 10 min (0 before)
-        expr: keeper_bell_unenforced_positions > 0
+        expr: credence_keeper_bell_unenforced_positions > 0
         labels: { severity: P1 }
         annotations:
           summary: "{{ $labels.asset }}: {{ $value }} NEEDS_ACTION position(s) left at bellAt + 10 min"
       - alert: ReopenStuck
         # seconds since the open print (net of the R-20 extension) while the asset is still in REOPEN
-        expr: keeper_reopen_pending_seconds > 900
+        expr: credence_keeper_reopen_pending_seconds > 900
         labels: { severity: P1 }
         annotations:
           summary: "{{ $labels.asset }}: REOPEN not complete {{ $value | humanizeDuration }} after the open print (> 15 min)"
       - alert: EpochNotSettled
-        expr: keeper_epoch_unsettled_seconds > 7200
+        expr: credence_keeper_epoch_unsettled_seconds > 7200
         labels: { severity: P2 }
         annotations:
           summary: "{{ $labels.pool }} pool: epoch not settled {{ $value | humanizeDuration }} after reopenAt (> 2 h)"
       - alert: PoolUtilisation
-        expr: keeper_pool_utilisation_ratio > 0.45
+        expr: credence_keeper_pool_utilisation_ratio > 0.45
         labels: { severity: P2 }
         annotations:
           summary: "{{ $labels.pool }} pool utilisation {{ $value | humanizePercentage }} (> 45%)"
       - alert: ShortfallEscalated
         # a Shortfall paid from the protocol reserve (paidReserve > 0) or hit the senior vault (seniorLoss > 0)
-        expr: delta(keeper_shortfall_escalations[1h]) > 0
+        expr: delta(credence_keeper_shortfall_escalations[1h]) > 0
         labels: { severity: P1 }
         annotations:
           summary: "A shortfall reached the {{ $labels.layer }} in the last hour"

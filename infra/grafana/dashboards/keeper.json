@@ -35,7 +35,7 @@
             "type": "prometheus",
             "uid": "credence-prom"
           },
-          "expr": "keeper_is_leader",
+          "expr": "credence_keeper_is_leader",
           "legendFormat": "{{instance}}"
         }
       ],
@@ -80,7 +80,7 @@
             "type": "prometheus",
             "uid": "credence-prom"
           },
-          "expr": "keeper_stylus_program_time_left_seconds",
+          "expr": "credence_keeper_stylus_program_time_left_seconds",
           "legendFormat": "{{program}}"
         }
       ],
@@ -126,7 +126,7 @@
             "type": "prometheus",
             "uid": "credence-prom"
           },
-          "expr": "keeper_calendar_coverage_days",
+          "expr": "credence_keeper_calendar_coverage_days",
           "legendFormat": "{{venue}}"
         }
       ],
@@ -171,7 +171,7 @@
             "type": "prometheus",
             "uid": "credence-prom"
           },
-          "expr": "sum by (check, severity) (increase(keeper_alerts_total[24h]))",
+          "expr": "sum by (check, severity) (increase(credence_keeper_alerts_total[24h]))",
           "legendFormat": "{{check}} {{severity}}"
         }
       ],
@@ -202,7 +202,7 @@
             "type": "prometheus",
             "uid": "credence-prom"
           },
-          "expr": "sum by (job, result) (rate(keeper_jobs_total[5m]))",
+          "expr": "sum by (job, result) (rate(credence_keeper_jobs_total[5m]))",
           "legendFormat": "{{job}} {{result}}"
         }
       ],
@@ -235,7 +235,7 @@
             "type": "prometheus",
             "uid": "credence-prom"
           },
-          "expr": "sum by (asset, trigger) (increase(keeper_pokes_total[5m]))",
+          "expr": "sum by (asset, trigger) (increase(credence_keeper_pokes_total[5m]))",
           "legendFormat": "{{asset}} {{trigger}}"
         }
       ],
@@ -266,7 +266,7 @@
             "type": "prometheus",
             "uid": "credence-prom"
           },
-          "expr": "sum by (outcome) (rate(keeper_txs_total[5m]))",
+          "expr": "sum by (outcome) (rate(credence_keeper_txs_total[5m]))",
           "legendFormat": "{{outcome}}"
         },
         {
@@ -275,7 +275,7 @@
             "type": "prometheus",
             "uid": "credence-prom"
           },
-          "expr": "sum by (job) (rate(keeper_tx_replacements_total[5m]))",
+          "expr": "sum by (job) (rate(credence_keeper_tx_replacements_total[5m]))",
           "legendFormat": "replaced {{job}}"
         }
       ],
@@ -308,7 +308,7 @@
             "type": "prometheus",
             "uid": "credence-prom"
           },
-          "expr": "keeper_wallet_balance_gwei / 1e9",
+          "expr": "credence_keeper_wallet_balance_gwei / 1e9",
           "legendFormat": "{{wallet}}"
         }
       ],
@@ -340,7 +340,7 @@
             "type": "prometheus",
             "uid": "credence-prom"
           },
-          "expr": "sum by (rpc) (rate(keeper_rpc_failovers_total[5m]))",
+          "expr": "sum by (rpc) (rate(credence_keeper_rpc_failovers_total[5m]))",
           "legendFormat": "{{rpc}}"
         }
       ],

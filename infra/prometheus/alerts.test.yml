@@ -7,13 +7,13 @@ tests:
     interval: 10s
     input_series:
       # NVDA last LIVE at t=0 and the market is REGULAR; AAPL is just as old but CLOSED
-      - series: 'relayer_last_live_timestamp_seconds{feed="A",asset="NVDA"}'
+      - series: 'credence_relayer_last_live_timestamp_seconds{feed="A",asset="NVDA"}'
         values: "0x30"
-      - series: 'relayer_market_status{feed="A",asset="NVDA"}'
+      - series: 'credence_relayer_market_status{feed="A",asset="NVDA"}'
         values: "2x30"
-      - series: 'relayer_last_live_timestamp_seconds{feed="A",asset="AAPL"}'
+      - series: 'credence_relayer_last_live_timestamp_seconds{feed="A",asset="AAPL"}'
         values: "0x30"
-      - series: 'relayer_market_status{feed="A",asset="AAPL"}'
+      - series: 'credence_relayer_market_status{feed="A",asset="AAPL"}'
         values: "0x30"
     alert_rule_test:
       - eval_time: 60s # 60 s old: not yet (> 60)
@@ -30,7 +30,7 @@ tests:
   - name: disagreement P2 then P1
     interval: 30s
     input_series:
-      - series: 'relayer_vendor_disagreement_ppm{feed="A",asset="TSLA"}'
+      - series: 'credence_relayer_vendor_disagreement_ppm{feed="A",asset="TSLA"}'
         values: "10000 20000 20000 20000 20000 20000 60000 60000 60000 60000 60000 60000"
     alert_rule_test:
       - eval_time: 2m
@@ -50,9 +50,9 @@ tests:
   - name: keeper leader missing
     interval: 10s
     input_series:
-      - series: 'keeper_is_leader{instance="k1"}'
+      - series: 'credence_keeper_is_leader{instance="k1"}'
         values: "1 1 1 0 0 0 0 0 0"
-      - series: 'keeper_is_leader{instance="k2"}'
+      - series: 'credence_keeper_is_leader{instance="k2"}'
         values: "0 0 0 0 0 0 0 0 0"
     alert_rule_test:
       - eval_time: 20s
@@ -79,11 +79,11 @@ tests:
   - name: housekeeping thresholds
     interval: 1m
     input_series:
-      - series: 'keeper_calendar_coverage_days{venue="XNYS"}'
+      - series: 'credence_keeper_calendar_coverage_days{venue="XNYS"}'
         values: "29x5"
-      - series: 'keeper_calendar_coverage_days{venue="USBANK"}'
+      - series: 'credence_keeper_calendar_coverage_days{venue="USBANK"}'
         values: "400x5"
-      - series: 'keeper_stylus_program_time_left_seconds{program="riskEngine"}'
+      - series: 'credence_keeper_stylus_program_time_left_seconds{program="riskEngine"}'
         values: "2505600x5" # 29 days
     alert_rule_test:
       - eval_time: 1m
@@ -101,10 +101,10 @@ tests:
     interval: 1h
     input_series:
       # 10 ETH (1e10 gwei) burning 0.2 ETH/h → dry in 50 h (< 72 h)
-      - series: 'keeper_wallet_balance_gwei{wallet="relayerA"}'
+      - series: 'credence_keeper_wallet_balance_gwei{wallet="relayerA"}'
         values: "10000000000-200000000x10"
       # 10 ETH burning 0.05 ETH/h → 200 h: fine
-      - series: 'keeper_wallet_balance_gwei{wallet="keeper"}'
+      - series: 'credence_keeper_wallet_balance_gwei{wallet="keeper"}'
         values: "10000000000-50000000x10"
     alert_rule_test:
       - eval_time: 7h
@@ -116,9 +116,9 @@ tests:
   - name: keeper failed tx
     interval: 1m
     input_series:
-      - series: 'keeper_failed_txs_total{job="J5",reason="reverted"}'
+      - series: 'credence_keeper_failed_txs_total{job="J5",reason="reverted"}'
         values: "0 0 1 1 1"
-      - series: 'keeper_failed_txs_total{job="J3",reason="estimate"}'
+      - series: 'credence_keeper_failed_txs_total{job="J3",reason="estimate"}'
         values: "0 1 2 3 4"
     alert_rule_test:
       - eval_time: 1m
@@ -134,9 +134,9 @@ tests:
   - name: bell not enforced at bellAt + 10 min
     interval: 10s
     input_series:
-      - series: 'keeper_bell_unenforced_positions{asset="NVDA"}'
+      - series: 'credence_keeper_bell_unenforced_positions{asset="NVDA"}'
         values: "0 0 3 3"
-      - series: 'keeper_bell_unenforced_positions{asset="AAPL"}'
+      - series: 'credence_keeper_bell_unenforced_positions{asset="AAPL"}'
         values: "0 0 0 0"
     alert_rule_test:
       - eval_time: 10s
@@ -151,7 +151,7 @@ tests:
   - name: reopen stuck after 15 min
     interval: 1m
     input_series:
-      - series: 'keeper_reopen_pending_seconds{asset="TSLA"}'
+      - series: 'credence_keeper_reopen_pending_seconds{asset="TSLA"}'
         values: "0+60x20"
     alert_rule_test:
       - eval_time: 15m # 900 s: not yet (> 900)
@@ -166,7 +166,7 @@ tests:
   - name: epoch not settled 2 h after reopen
     interval: 10m
     input_series:
-      - series: 'keeper_epoch_unsettled_seconds{pool="equity"}'
+      - series: 'credence_keeper_epoch_unsettled_seconds{pool="equity"}'
         values: "0+600x14"
     alert_rule_test:
       - eval_time: 120m
@@ -181,7 +181,7 @@ tests:
   - name: pool utilisation above 45%
     interval: 10s
     input_series:
-      - series: 'keeper_pool_utilisation_ratio{pool="equity"}'
+      - series: 'credence_keeper_pool_utilisation_ratio{pool="equity"}'
         values: "0.40 0.45 0.46"
     alert_rule_test:
       - eval_time: 10s # exactly 45%: not above
@@ -197,9 +197,9 @@ tests:
     interval: 5m
     input_series:
       # reserve: 1 → 2 at 15 min (a new escalation); senior: stays 1 across a restart gap (no new one)
-      - series: 'keeper_shortfall_escalations{layer="reserve"}'
+      - series: 'credence_keeper_shortfall_escalations{layer="reserve"}'
         values: "1 1 1 2 2 2"
-      - series: 'keeper_shortfall_escalations{layer="senior"}'
+      - series: 'credence_keeper_shortfall_escalations{layer="senior"}'
         values: "1 1 _ _ 1 1"
     alert_rule_test:
       - eval_time: 10m
