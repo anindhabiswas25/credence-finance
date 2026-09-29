@@ -293,8 +293,12 @@ contract UnderwriterPoolTest is RiskFixture, IUnderwriterPoolEvents {
         up.snapshotEpoch(0);
     }
 
-    function test_fallbackAdvanceIsS4() public {
-        vm.expectRevert(ICredenceErrors.NotImplemented.selector);
+    /// @dev S4: onlySettlement; the equity pool has no settlement adapter, so nobody may call it.
+    function test_fallbackAdvance_equityPool_nobodyMayCall() public {
+        vm.expectRevert(ICredenceErrors.Unauthorized.selector);
+        up.fallbackAdvance(idNVDA, 1, 1);
+        vm.prank(address(0));
+        vm.expectRevert(ICredenceErrors.Unauthorized.selector);
         up.fallbackAdvance(idNVDA, 1, 1);
     }
 
