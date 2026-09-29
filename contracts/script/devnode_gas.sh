@@ -44,7 +44,10 @@ USDC="$(jq -r .tokens.usdc "$BOOK")"; CLOCK="$(jq -r .shared.clock "$BOOK")"; SO
 FEEDS=("$(jq -r .shared.feedA "$BOOK")" "$(jq -r .shared.feedB "$BOOK")")
 
 price() { # asset price: a LIVE regular print on both feeds (2-of-3 signed)
+  # stamp with the wall clock (the next block's time), not the latest block's: on a quiet devnode that block can be
+  # tens of seconds old, and the report is then stale (60 s) when the borrow lands (BorrowPaused / HALTED)
   local now; now="$(cast block latest --field timestamp --rpc-url "$RPC")"
+  [ "$(( $(date +%s) - 1 ))" -gt "$now" ] && now="$(( $(date +%s) - 1 ))"
   for F in "${FEEDS[@]}"; do
     local seq; seq=$(( $(cast call --rpc-url "$RPC" "$F" 'latestSeq(bytes32)(uint64)' "$1") + 1 ))
     local r="[($1,0,$2,$now,0,2,$seq)]" t='(bytes32,uint8,uint128,uint40,uint40,uint8,uint64)[]'
@@ -70,8 +73,12 @@ for i in $(seq 0 $((N - 1))); do
   BK[$i]="$(cast wallet new --json | jq -r '(.data // .)[0].private_key')"; BA[$i]="$(cast wallet address --private-key "${BK[$i]}")"
   cast send --rpc-url "$RPC" --private-key "$KEY" "${BA[$i]}" --value 0.2ether >/dev/null
   send "$MARKET" 'addCollateral(bytes32,address,uint256)' "$ID" "${BA[$i]}" 100000000000000000000
-  price "$A" 200000000000000000000   # the borrow cross-checks both feeds (60 s in REGULAR)
-  st="$(cast send --rpc-url "$RPC" --private-key "${BK[$i]}" "$MARKET" 'borrow(bytes32,uint256,address)' "$ID" 14400000000 "${BA[$i]}" --json | jq -r .status)"
+  st=0x0
+  for _ in 1 2 3; do # the borrow cross-checks both feeds (60 s in REGULAR): re-price and retry a BorrowPaused
+    price "$A" 200000000000000000000
+    st="$(cast send --rpc-url "$RPC" --private-key "${BK[$i]}" "$MARKET" 'borrow(bytes32,uint256,address)' "$ID" 14400000000 "${BA[$i]}" --json | jq -r .status)" || st=0x0
+    [ "$st" = 0x1 ] && break
+  done
   [ "$st" = 0x1 ] || { echo "borrow $i failed" >&2; exit 1; }
 done
 say "$N AAPL positions at 72%"

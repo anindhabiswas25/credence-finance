@@ -134,6 +134,8 @@ local-deploy-clock: contracts-build ## Deploy the clock + price stack and test a
 # The default (CALENDAR=real) uses the calibration calendars and is unchanged.
 CALENDAR        ?= real
 QE_BUNDLE       ?= calibration/out/risk-bundle-889d50e4.json
+# QE's bundle has no NAV asset: TBILL's sets and σ are a local-only fixture until QE calibrates TBILL (ADR-0116)
+NAV_LOCAL_BUNDLE ?= $(CONTRACTS_DIR)/test/fixtures/risk/tbill-local/bundle.json
 SYNTH_CAL_DIR   := $(CONTRACTS_DIR)/test/fixtures/devnode
 
 local-deploy-core: contracts-build ## Deploy the whole protocol (clock, 6 equity markets + TBILL, vaults seeded) to LOCAL_RPC; writes deployments/<chainId>.local.json. CALENDAR=synthetic: calendar centred on chain time + QE bundle
@@ -146,7 +148,8 @@ ifeq ($(CALENDAR),synthetic)
 	  forge script script/DeployCoreLocal.s.sol:DeployCoreLocal --rpc-url $(LOCAL_RPC) --broadcast --slow
 	@if [ -n "$$(cast code --rpc-url $(LOCAL_RPC) $$(jq -r .shared.riskEngine deployments/$$(cast chain-id --rpc-url $(LOCAL_RPC)).local.json) | sed 's/^0x$$//')" ] \
 	  && cast call --rpc-url $(LOCAL_RPC) $$(jq -r .shared.riskEngine deployments/$$(cast chain-id --rpc-url $(LOCAL_RPC)).local.json) 'pricing()(address)' >/dev/null 2>&1; then \
-	  $(MAKE) --no-print-directory risk-load-set RISK_BUNDLE=$(QE_BUNDLE); \
+	  $(MAKE) --no-print-directory risk-load-set RISK_BUNDLE=$(QE_BUNDLE) && \
+	  $(MAKE) --no-print-directory risk-load-set RISK_BUNDLE=$(NAV_LOCAL_BUNDLE); \
 	else echo "note: no Stylus router in the book (Solidity stand-in engine); QE bundle not loaded"; fi
 else
 	cd $(CONTRACTS_DIR) && PRIVATE_KEY=$(DEVNODE_KEY) RELAYER_A_SIGNERS=$(RELAYER_A_SIGNERS) \

@@ -38,6 +38,10 @@ ENGINE_BOOK="$BOOK" DEVNODE_RPC="$RPC" DEVNODE_KEY="$KEY" bash "$ROOT/stylus/ris
 ENGINE="$(jq -r .shared.riskEngine "$BOOK")"
 (cd "$ROOT" && RISK_ENGINE="$ENGINE" PRIVATE_KEY="$KEY" LOCAL_RPC="$RPC" RISK_BUNDLE="$BUNDLE" \
   RISK_BUNDLE_DIR="$(dirname "$BUNDLE")" bash contracts/script/load_risk_bundle.sh | tail -1)
+# QE's bundle has no NAV asset: the TBILL sets and σ are a local-only fixture (ADR-0116) until QE calibrates TBILL
+NAV_BUNDLE="${NAV_RISK_BUNDLE:-$ROOT/contracts/test/fixtures/risk/tbill-local/bundle.json}"
+(cd "$ROOT" && RISK_ENGINE="$ENGINE" PRIVATE_KEY="$KEY" LOCAL_RPC="$RPC" RISK_BUNDLE="$NAV_BUNDLE" \
+  RISK_BUNDLE_DIR="$(dirname "$NAV_BUNDLE")" bash contracts/script/load_risk_bundle.sh | tail -1)
 
 # 2. a synthetic calendar centred on the devnode's clock (it cannot be warped): today's session runs from now − 2 h
 #    to now + 2 h 24 min and is followed by a WEEKEND closure, so the market is in REGULAR with live prices. The pool
@@ -58,6 +62,10 @@ echo "ok   market $MARKET → engine $ENGINE (Stylus router)"
 
 # 3. prices: a LIVE regular-session print on both feeds (2-of-3 signed); REGULAR needs no reference close
 PRICE=180000000000000000000
+stamp() { # report time: the wall clock (≈ the next block's time); the latest block can be tens of seconds old on a
+  local b; b="$(cast block latest --field timestamp --rpc-url "$RPC")"   # quiet devnode, and its print then goes stale
+  local w=$(( $(date +%s) - 1 )); [ "$w" -gt "$b" ] && echo "$w" || echo "$b"
+}
 report_submit() { # feed kind price observedAt sessionDate status
   local feed="$1" seq; seq=$(( $(cast call --rpc-url "$RPC" "$feed" 'latestSeq(bytes32)(uint64)' "$ASSET") + 1 ))
   local r="[($ASSET,$2,$3,$4,$5,$6,$seq)]" t='(bytes32,uint8,uint128,uint40,uint40,uint8,uint64)[]'
@@ -68,7 +76,7 @@ report_submit() { # feed kind price observedAt sessionDate status
 }
 live() {
   for FEED in "$(jq -r .shared.feedA "$BOOK")" "$(jq -r .shared.feedB "$BOOK")"; do
-    report_submit "$FEED" 0 "$PRICE" "$(cast block latest --field timestamp --rpc-url "$RPC")" 0 2
+    report_submit "$FEED" 0 "$PRICE" "$(stamp)" 0 2
   done
 }
 live
@@ -212,7 +220,9 @@ TB="$(jq -r .assetIds.TBILL "$BOOK")"; FEEDNAV="$(jq -r .shared.feedNav "$BOOK")
 send "$ADAPTER" 'setWindow(uint40)' 300   # the 5-min minimum, so the run stays short (launch: 15 min)
 NAVP=1000000000000000000
 nav_report() { # publish the NAV on the signed feed (what the oracle reads) and on the fund (what redemptions pay)
-  NAVP="$1"; ASSET="$TB" report_submit "$FEEDNAV" 3 "$NAVP" "$(cast block latest --field timestamp --rpc-url "$RPC")" 0 0
+  # NAV prints must be strictly time-ordered (the feed ignores one at or before the last): never reuse a second
+  local at; at="$(stamp)"; [ "$at" -le "${NAV_AT:-0}" ] && at=$(( NAV_AT + 1 )); NAV_AT="$at"
+  NAVP="$1"; ASSET="$TB" report_submit "$FEEDNAV" 3 "$NAVP" "$at" 0 0
   send "$FUND" 'publishNav(uint256)' "$NAVP"
 }
 nav_report "$NAVP"
@@ -264,7 +274,8 @@ RF1="$(cast send --rpc-url "$RPC" --private-key "$KEY" "$ADAPTER" 'finalize(uint
 [ "$(echo "$RF1" | jq -r .status)" = 0x1 ] || { echo "finalize reverted: $RF1" >&2; exit 1; }
 GAS_FIN1="$(echo "$RF1" | jq -r .gasUsed | cast to-dec)"
 check "settlement $S1 FILLED" "$(sfield "$S1" 6)" 2
-check "solver received the lot" "$(( $(cast call --rpc-url "$RPC" "$FUND" 'balanceOf(address)(uint256)' "$ME" | cut -d' ' -f1) - FUND_BEFORE ))" "$Q1"
+FUND_AFTER="$(cast call --rpc-url "$RPC" "$FUND" 'balanceOf(address)(uint256)' "$ME" | cut -d' ' -f1)"
+check "solver received the lot" "$(python3 -c "print($FUND_AFTER - $FUND_BEFORE)")" "$Q1"   # 18-dec: beyond bash's 64 bits
 check "cash in (solver escrow) = cash out (market proceeds)" "$(sfield "$S1" 14)" "$(python3 -c "q=$Q1;p=$BID;print(-(-q*p*10**6//10**36))")"
 check "positions settled" "$(sfield "$S1" 17)" true
 
@@ -279,6 +290,7 @@ COST="$(python3 -c "print($Q2 * $FLOOR2 // 10**30)")"
 check "pool advanced qty × floor" "$(sfield "$S2" 14)" "$COST"
 check "claim in pool NAV at cost" "$(cast call --rpc-url "$RPC" "$NPOOL" 'redemptionClaimsOutstanding()(uint256)' | cut -d' ' -f1)" "$COST"
 RQ="$(sfield "$S2" 16)"
+send "$USDC" 'approve(address,uint256)' "$FUND" 1000000000000   # the fund pays at NAV from its reserve wallet (the deployer)
 send "$FUND" 'fulfillRedeem(uint256)' "$RQ"   # the issuer operator (the deployer on local chains), next USBANK session on testnet
 RC2="$(cast send --rpc-url "$RPC" --private-key "$KEY" "$NPOOL" 'claimRedemption(uint256)' "$RQ" --json)"
 [ "$(echo "$RC2" | jq -r .status)" = 0x1 ] || { echo "claimRedemption reverted: $RC2" >&2; exit 1; }
