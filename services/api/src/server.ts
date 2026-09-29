@@ -59,20 +59,25 @@ const hub = new StreamHub(repos.stream, toAssetId, {
   maxAssets: 100,
 });
 // bell:<owner> needs the SIWE session of that owner: the upgrade request's session cookie
-const injectWebSocket = await attachStream(app, hub, async (cookie) => {
-  const raw = cookie
-    ?.split(";")
-    .map((x) => x.trim())
-    .find((x) => x.startsWith(`${SESSION_COOKIE}=`))
-    ?.slice(SESSION_COOKIE.length + 1);
-  const sid = verifySession(
-    config.sessionSecret,
-    raw ? decodeURIComponent(raw) : undefined,
-  );
-  return sid
-    ? (await repos.auth.getSession(sid, new Date()))?.address
-    : undefined;
-});
+const injectWebSocket = await attachStream(
+  app,
+  hub,
+  async (cookie) => {
+    const raw = cookie
+      ?.split(";")
+      .map((x) => x.trim())
+      .find((x) => x.startsWith(`${SESSION_COOKIE}=`))
+      ?.slice(SESSION_COOKIE.length + 1);
+    const sid = verifySession(
+      config.sessionSecret,
+      raw ? decodeURIComponent(raw) : undefined,
+    );
+    return sid
+      ? (await repos.auth.getSession(sid, new Date()))?.address
+      : undefined;
+  },
+  config.corsOrigins.map((o) => o.replace(/\/$/, "").toLowerCase()),
+);
 hub.start((err) => log.warn({ err: String(err) }, "stream poll failed"));
 
 const server = serve({ fetch: app.fetch, port: config.port }, (info) => {

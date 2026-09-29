@@ -102,6 +102,10 @@ async fn main() -> Result<()> {
     );
     let mut tx = tx;
     tx.gas_x10 = credence_common::env::parse_or("KEEPER_GAS_MULTIPLIER_X10", 13)?;
+    // OFF-09: a ceiling on replacement fees (§15.1 hot-wallet caps); unset = uncapped
+    tx.max_fee_cap_wei = credence_common::env::optional("KEEPER_MAX_FEE_GWEI")
+        .map(|g| g.parse::<u128>().map(|g| g * 1_000_000_000))
+        .transpose()?;
     let mut keeper = Keeper::new(
         cfg.instance.clone(),
         rpc.clone(),

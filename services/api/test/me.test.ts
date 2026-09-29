@@ -106,7 +106,7 @@ describe("/v1/me/notifications", () => {
     const r = await put(app, cookie, {
       telegramChatId: "123456789",
       pushSubscribe: {
-        endpoint: "https://push.example/sub/1",
+        endpoint: "https://fcm.googleapis.com/fcm/send/sub-1",
         p256dh: "BPk",
         auth: "a1",
       },
@@ -115,7 +115,9 @@ describe("/v1/me/notifications", () => {
     expect(r.status).toBe(200);
     const s1 = (await r.json()) as Settings;
     expect(s1.telegramChatId).toBe("123456789");
-    expect(s1.push).toEqual([{ endpoint: "https://push.example/sub/1" }]);
+    expect(s1.push).toEqual([
+      { endpoint: "https://fcm.googleapis.com/fcm/send/sub-1" },
+    ]);
     expect(
       s1.prefs.find(
         (p) => p.event === "bell_outcome" && p.channel === "telegram",
@@ -124,7 +126,7 @@ describe("/v1/me/notifications", () => {
     expect(s1.prefs.filter((p) => !p.enabled)).toHaveLength(1);
     const s2 = (await (
       await put(app, cookie, {
-        pushUnsubscribe: "https://push.example/sub/1",
+        pushUnsubscribe: "https://fcm.googleapis.com/fcm/send/sub-1",
         telegramChatId: null,
       })
     ).json()) as Settings;
@@ -203,6 +205,19 @@ describe("/v1/me/notifications", () => {
         })
       ).status,
     ).toBe(400);
+    // OFF-05: an https endpoint on any other host (a blind SSRF from the notifier) is refused
+    for (const endpoint of [
+      "https://internal.corp.example/admin",
+      "https://fcm.googleapis.com.evil.example/x",
+      "https://fcm.googleapis.com:8443/x",
+    ])
+      expect(
+        (
+          await put(app, cookie, {
+            pushSubscribe: { endpoint, p256dh: "a", auth: "b" },
+          })
+        ).status,
+      ).toBe(400);
   });
 });
 

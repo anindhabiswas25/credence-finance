@@ -335,3 +335,10 @@ describe("S3 events (§10.5) carry exact amounts", () => {
     );
   });
 });
+
+describe("esc (OFF-10)", () => {
+  it("escapes quotes as well as markup", async () => {
+    const { esc } = await import("../src/templates.ts");
+    expect(esc(`a"b'c<d>&`)).toBe("a&quot;b&#39;c&lt;d&gt;&amp;");
+  });
+});

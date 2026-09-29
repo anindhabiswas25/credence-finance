@@ -10,6 +10,29 @@ import { SESSION_COOKIE, verifySession } from "./session.ts";
 import { FixedWindow } from "./ratelimit.ts";
 
 /** Events and channels the notifier knows (services/notifier/src/templates.ts EVENTS / DEFAULT_CHANNELS). */
+
+/**
+ * OFF-05 (QA-sec): the notifier POSTs to a subscription's endpoint, so only the browsers' Web Push services are
+ * accepted (Chrome / Edge FCM, Firefox autopush, Safari, Windows WNS), never an arbitrary host.
+ */
+const PUSH_HOSTS = [
+  /^fcm\.googleapis\.com$/,
+  /^updates\.push\.services\.mozilla\.com$/,
+  /^web\.push\.apple\.com$/,
+  /(^|\.)notify\.windows\.com$/,
+];
+export function isPushServiceUrl(u: string): boolean {
+  try {
+    const url = new URL(u);
+    return (
+      url.protocol === "https:" &&
+      url.port === "" &&
+      PUSH_HOSTS.some((h) => h.test(url.hostname))
+    );
+  } catch {
+    return false;
+  }
+}
 export const EVENTS = ["bell_headsup", "bell_outcome"] as const;
 export const CHANNELS = ["email", "push", "telegram"] as const;
 export type Pref = {
@@ -196,7 +219,11 @@ export function registerMeRoutes(app: OpenAPIHono, deps: MeDeps) {
                         .string()
                         .url()
                         .max(2048)
-                        .startsWith("https://"),
+                        .startsWith("https://")
+                        .refine(isPushServiceUrl, {
+                          message:
+                            "not a known Web Push service (FCM, Mozilla, Apple, Windows)",
+                        }),
                       p256dh: z.string().max(200),
                       auth: z.string().max(100),
                     })

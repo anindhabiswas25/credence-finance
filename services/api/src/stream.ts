@@ -345,6 +345,18 @@ export class StreamHub {
  * Mount `GET /v1/stream` (WebSocket upgrade) on a Node server. Returns `injectWebSocket(server)`, to
  * call once `serve()` has returned. The hub keys sockets by the underlying `ws` object.
  */
+/** OFF-04: the largest client message accepted on /v1/stream (subscribe / unsubscribe are ~100 bytes). */
+export const MAX_MESSAGE_BYTES = 16 * 1024;
+
+/** OFF-04: no Origin (a non-browser client) or an origin on the allowlist; everything when no list is set. */
+export function originAllowed(
+  origin: string | undefined,
+  allowed: readonly string[],
+): boolean {
+  if (!origin || allowed.length === 0) return true;
+  return allowed.includes(origin.replace(/\/$/, "").toLowerCase());
+}
+
 export async function attachStream(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   app: Hono<any, any, any>,
@@ -353,6 +365,8 @@ export async function attachStream(
   sessionOwner: (
     cookieHeader: string | undefined,
   ) => Promise<string | undefined> = async () => undefined,
+  /** OFF-04: browser origins allowed to open a socket (the CORS allowlist); empty = no Origin check. */
+  allowedOrigins: readonly string[] = [],
 ) {
   const { createNodeWebSocket } = await import("@hono/node-ws");
   const { injectWebSocket, upgradeWebSocket } = createNodeWebSocket({ app });
@@ -372,17 +386,30 @@ export async function attachStream(
   };
   app.get(
     "/v1/stream",
+    // OFF-04: a cross-site page must not open a socket with the user's cookie (non-browser clients send no Origin)
+    async (c, next) => {
+      if (!originAllowed(c.req.header("origin"), allowedOrigins))
+        return c.json(
+          { error: "forbidden", message: "origin not allowed" },
+          403,
+        );
+      await next();
+    },
     upgradeWebSocket(async (c) => {
       const owner = await sessionOwner(c.req.header("cookie")).catch(
         () => undefined,
       );
       return {
         onOpen: (_e, ws) => hub.add(of(ws), owner),
-        onMessage: (e, ws) =>
-          hub.message(
-            of(ws),
-            typeof e.data === "string" ? e.data : String(e.data),
-          ),
+        onMessage: (e, ws) => {
+          const text = typeof e.data === "string" ? e.data : String(e.data);
+          // OFF-04: subscribe messages are tiny; refuse anything big before parsing it
+          if (text.length > MAX_MESSAGE_BYTES) {
+            ws.close(1009, "message too big");
+            return;
+          }
+          hub.message(of(ws), text);
+        },
         onClose: (_e, ws) => hub.remove(of(ws)),
         onError: (_e, ws) => hub.remove(of(ws)),
       };

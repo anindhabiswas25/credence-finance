@@ -51,6 +51,25 @@ pub struct TxManager {
     pub timeout: Duration,
     /// Gas limit = estimate × this / 10 (§10.2: 13 = ×1.3; `KEEPER_GAS_MULTIPLIER_X10`).
     pub gas_x10: u64,
+    /// OFF-09 (§15.1 hot-wallet caps): the highest max fee per gas a replacement may reach (`KEEPER_MAX_FEE_GWEI`);
+    /// `None` = uncapped.
+    pub max_fee_cap_wei: Option<u128>,
+}
+
+/// The +20 % replacement fees of a stuck tx, capped at `cap` (OFF-09). Equal to the input once at the cap: the
+/// caller then keeps waiting instead of re-broadcasting an underpriced replacement.
+pub fn bump_fees(max_fee: u128, tip: u128, cap: Option<u128>) -> (u128, u128) {
+    let mut f = max_fee.saturating_mul(12) / 10 + 1;
+    let mut t = tip.saturating_mul(12) / 10 + 1;
+    if let Some(c) = cap {
+        f = f.min(c.max(max_fee));
+        if f == max_fee {
+            // a replacement must raise both fees (≥ 10 %, node rule): at the cap there is none to send
+            return (max_fee, tip);
+        }
+        t = t.min(f);
+    }
+    (f, t)
 }
 
 impl TxManager {
@@ -71,6 +90,7 @@ impl TxManager {
             replace_after_blocks: 3,
             timeout: Duration::from_secs(120),
             gas_x10: 13,
+            max_fee_cap_wei: None,
         }
     }
 
@@ -131,6 +151,10 @@ impl TxManager {
         let nonce = self.next_nonce().await?;
         let mut max_fee = fees.max_fee_per_gas;
         let mut tip = fees.max_priority_fee_per_gas;
+        if let Some(c) = self.max_fee_cap_wei {
+            max_fee = max_fee.min(c);
+            tip = tip.min(max_fee);
+        }
         let start_block = self
             .rpc
             .with_failover("block number", |p| async move {
@@ -232,8 +256,12 @@ impl TxManager {
                     .await?;
                 if bn >= last_broadcast_block + self.replace_after_blocks {
                     last_broadcast_block = bn;
-                    max_fee = max_fee.saturating_mul(12) / 10 + 1;
-                    tip = tip.saturating_mul(12) / 10 + 1;
+                    let (f, t) = bump_fees(max_fee, tip, self.max_fee_cap_wei);
+                    if (f, t) == (max_fee, tip) {
+                        tracing::warn!(%hash, nonce, max_fee, "tx stuck at the fee cap (KEEPER_MAX_FEE_GWEI): waiting, not replacing");
+                        continue;
+                    }
+                    (max_fee, tip) = (f, t);
                     self.metrics
                         .tx_replacements
                         .with_label_values(&[job_key.split(':').next().unwrap_or("?")])
@@ -329,5 +357,24 @@ impl TxManager {
                 .await?;
         }
         Ok(r)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn off09_replacement_fees_stop_at_the_cap() {
+        assert_eq!(super::bump_fees(100, 10, None), (121, 13));
+        assert_eq!(super::bump_fees(100, 10, Some(110)), (110, 13));
+        assert_eq!(
+            super::bump_fees(110, 13, Some(110)),
+            (110, 13),
+            "at the cap: unchanged"
+        );
+        assert_eq!(
+            super::bump_fees(100, 100, Some(105)),
+            (105, 105),
+            "tip never above the max fee"
+        );
     }
 }

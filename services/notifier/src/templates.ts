@@ -201,8 +201,14 @@ export interface Rendered {
 const closureWord = (t: number) =>
   t === 1 ? "tonight's" : t === 2 ? "this weekend's" : "this holiday weekend's";
 
-const esc = (s: string) =>
-  s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+/** HTML-escape text and attribute values (OFF-10: quotes too, since `href="…"` uses it). */
+export const esc = (s: string) =>
+  s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
 const html = (paragraphs: string[]) =>
   paragraphs.map((p) => `<p>${esc(p)}</p>`).join("\n");
 
