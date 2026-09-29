@@ -105,6 +105,8 @@ library BellOutcome {
     uint8 internal constant AUTO_COVERED = 2; // auto-cover bought, premium added to debt
     uint8 internal constant PRECLOSE_THEN_COVER = 3; // above maxLtv + δ: pre-close sale to maxLtv, then cover (R-03)
     uint8 internal constant PRECLOSE_SALE = 4; // pre-close sale down to the safe LTV
+    uint8 internal constant SALE_TOO_LATE = 5; // needs a pre-close sale, but the PRECLOSE lot is past fixing: skipped
+    //                                              (not marked, no tip; QA-10, ADR-0115)
 }
 
 // ─────────────────────────────── markets ───────────────────────────────

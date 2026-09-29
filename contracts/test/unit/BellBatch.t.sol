@@ -3,8 +3,8 @@ pragma solidity 0.8.30;
 
 import {Vm} from "forge-std/Vm.sol";
 import {RiskFixture} from "../utils/RiskFixture.sol";
-import {CoverRequest, ClosureType, BellStatus} from "../../src/libraries/Types.sol";
-import {IUnderwriterPoolEvents} from "../../src/libraries/Events.sol";
+import {CoverRequest, ClosureType, BellStatus, BellOutcome} from "../../src/libraries/Types.sol";
+import {IUnderwriterPoolEvents, ICredenceMarketEvents} from "../../src/libraries/Events.sol";
 import {ICredenceErrors} from "../../src/libraries/Errors.sol";
 
 /// @notice J3 prototype (ADR-0114): inside `enforceBell` the pool caches the uncovered bound for the batch. Each
@@ -115,5 +115,44 @@ contract BellBatchTest is RiskFixture {
         up.beginBellBatch();
         vm.expectRevert(ICredenceErrors.Unauthorized.selector);
         up.endBellBatch();
+    }
+
+    /// @dev QA-10 (ADR-0115): after the PRECLOSE fixing (close − 5 min) a borrower who needs a pre-close sale is
+    ///      skipped with SALE_TOO_LATE (not marked, so the next closure still sees it); the rest of the batch goes on.
+    function test_lateBatchSkipsTheSaleAndKeepsTheCovers() public {
+        vm.prank(nv[1]);
+        market.setAutoCover(idNVDA, false);
+        vm.warp(_closeAt(0, 0) - 5 minutes);
+        address[] memory batch = new address[](3);
+        (batch[0], batch[1], batch[2]) = (nv[0], nv[1], nv[2]);
+        vm.recordLogs();
+        vm.prank(keeper);
+        market.enforceBell(idNVDA, batch);
+        assertEq(_uAfters().length, 2, "both auto-covers written");
+        uint64 upcoming = _clockData(NVDA).closureId + 1;
+        assertEq(market.position(idNVDA, nv[0]).coverClosureId, upcoming);
+        assertEq(market.position(idNVDA, nv[2]).coverClosureId, upcoming);
+        assertEq(market.position(idNVDA, nv[1]).auctionId, 0, "no pre-close lot");
+        assertEq(market.position(idNVDA, nv[1]).lastBellClosureId, 0, "not marked");
+        // a retry reports the skip again and still does not revert
+        address[] memory one = new address[](1);
+        one[0] = nv[1];
+        vm.expectEmit(address(market));
+        emit ICredenceMarketEvents.BellEnforced(idNVDA, nv[1], upcoming, BellOutcome.SALE_TOO_LATE);
+        vm.prank(keeper);
+        market.enforceBell(idNVDA, one);
+    }
+
+    /// @dev One second before the fixing the same borrower joins the pre-close lot as before.
+    function test_batchJustBeforeFixingStillSells() public {
+        vm.prank(nv[1]);
+        market.setAutoCover(idNVDA, false);
+        vm.warp(_closeAt(0, 0) - 5 minutes - 1);
+        address[] memory one = new address[](1);
+        one[0] = nv[1];
+        vm.prank(keeper);
+        market.enforceBell(idNVDA, one);
+        assertGt(market.position(idNVDA, nv[1]).auctionId, 0);
+        assertGt(market.position(idNVDA, nv[1]).lastBellClosureId, 0);
     }
 }

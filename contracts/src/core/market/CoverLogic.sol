@@ -30,6 +30,11 @@ interface IAutoCover {
     function autoCover(bytes32 id, address b) external;
 }
 
+/// @dev The auction house's public `timings` getter (the PRECLOSE lot fixes `timings[PRECLOSE][0]` s before the close).
+interface IAuctionTimings {
+    function timings(AuctionKind k, uint256 i) external view returns (uint40);
+}
+
 /// @title CredenceMarket Gap Cover and Bell logic (§8.4.3 `buyCover`, `enforceBell`, R-03, R-08).
 /// @dev External library: runs by DELEGATECALL in the market's storage.
 library CoverLogic {
@@ -104,8 +109,10 @@ library CoverLogic {
             (uint8 status,,) = bellCheck($, id, p, b);
             if (status != uint8(BellStatus.NEEDS_ACTION)) continue;
             uint8 outcome = _cure($, id, p, b, pos, upcoming);
-            pos.lastBellClosureId = upcoming;
             emit ICredenceMarketEvents.BellEnforced(id, b, upcoming, outcome);
+            // QA-10: skip, don't revert. No mark and no tip, so the position stays a candidate for the next closure.
+            if (outcome == BellOutcome.SALE_TOO_LATE) continue;
+            pos.lastBellClosureId = upcoming;
             $.tip(KeeperJob.ENFORCE_BELL);
         }
         IUnderwriterPool($.w.pool).endBellBatch();
@@ -193,14 +200,26 @@ library CoverLogic {
         bool coverOn = !pos.autoCoverOptOut && !$.coverPaused(id);
         uint256 cur = $.debtOf(id, pos).ltvUp($.valueNow(id, p.assetId, pos.collateral));
         uint256 maxEff = $.maxLtvEff(id, p.maxLtv);
-        if (coverOn && cur <= $.coverableLtv(id, p)) {
-            if (_tryAutoCover(id, b)) return BellOutcome.AUTO_COVERED;
-        } else if (coverOn) {
+        bool coverable = coverOn && cur <= $.coverableLtv(id, p);
+        if (coverable && _tryAutoCover(id, b)) return BellOutcome.AUTO_COVERED;
+        // QA-10: every remaining cure needs the PRECLOSE lot; past its fixing, skip the borrower, not the batch
+        if (_precloseFixed($, p)) return BellOutcome.SALE_TOO_LATE;
+        if (coverOn && !coverable) {
             _joinPreclose($, id, p, b, pos, upcoming, maxEff);
             if (_tryAutoCover(id, b)) return BellOutcome.PRECLOSE_THEN_COVER;
         }
         _joinPreclose($, id, p, b, pos, upcoming, $.safeLtv(p.assetId, maxEff));
         return BellOutcome.PRECLOSE_SALE;
+    }
+
+    /// @dev True once the upcoming closure's PRECLOSE lot can no longer be created or joined: the auction house's
+    ///      `getOrCreate` rule, `close == 0 || now + timings[PRECLOSE][0] >= close`. The NAV stack has no auction
+    ///      house (its lots exist only inside `openSettlement`), so it keeps today's behaviour.
+    function _precloseFixed(Layout storage $, MarketParams memory p) internal view returns (bool) {
+        address ah = $.w.auctionHouse;
+        if (ah == address(0)) return false;
+        uint40 close = $.clock().closureInfo(p.assetId).nextCloseAt;
+        return close == 0 || block.timestamp + IAuctionTimings(ah).timings(AuctionKind.PRECLOSE, 0) >= close;
     }
 
     function _tryAutoCover(bytes32 id, address b) internal returns (bool) {

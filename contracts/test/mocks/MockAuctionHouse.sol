@@ -19,6 +19,11 @@ contract MockAuctionHouse {
         market = ICredenceMarket(m);
     }
 
+    /// @dev The mock has no lot fixing (`getOrCreate` never reverts `TooLate`), so no PRECLOSE lead time either.
+    function timings(AuctionKind, uint256) external pure returns (uint40) {
+        return 0;
+    }
+
     function getOrCreate(AuctionKind k, bytes32 marketId, bytes32 assetId, uint64 closureId)
         external
         returns (uint64 id)
