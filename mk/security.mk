@@ -15,7 +15,7 @@ SEC_UV_ENV     := UV_CACHE_DIR=$(CURDIR)/.tools/uv-cache UV_TOOL_DIR=$(CURDIR)/.
 SLITHER        := uvx --from slither-analyzer==$(SLITHER_VER) slither
 ADERYN         := $(CURDIR)/.tools/bin/aderyn
 SEC_SUITES     := test/{security,fuzz}/**
-# Open findings (triage QA-01..06): tests that assert the fixed behaviour; skipped unless QA_FINDINGS=1.
+# Open findings (triage QA-01..08): tests that assert the fixed behaviour; skipped unless QA_FINDINGS=1.
 SEC_FINDINGS   := QA0|gdaBuy_poolNavIsFinal|gdaBuy_settleEpoch
 
 .PHONY: security-tools security-slither security-aderyn security-static security-test security-findings \
