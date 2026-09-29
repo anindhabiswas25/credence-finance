@@ -63,10 +63,13 @@ sol! {
     #[sol(rpc)]
     interface IMockEngine {
         function setSafeLtv(bytes32 assetId, uint8 closureType, uint256 v) external;
-    }
-    #[sol(rpc)]
-    interface IMockPool {
-        function setPremium(uint256 p, uint256 u) external;
+        function setQuote(uint256 premium, uint256 el, uint256 es) external;
+        function setJointColumn(bytes32 assetId, uint256[] calldata packedZ) external;
+        struct MockRiskParams {
+            uint64 alpha; uint64 kappa; uint64 theta; uint64 costOfCap; uint64 eta; uint64 beta; uint64 uMax;
+            uint64 minPremium; uint32 kStress;
+        }
+        function params() external view returns (MockRiskParams memory);
     }
 }
 
@@ -288,8 +291,33 @@ async fn core_jobs_match_the_contracts() {
         .get_receipt()
         .await
         .unwrap();
-    IMockPool::new(pool, &d)
-        .setPremium(U256::from(PREMIUM), U256::from(200_000_000_000_000_000u128))
+    // the real UnderwriterPool (S3+) prices cover with the engine's quoteCover and checks capacity with its
+    // joint stress column: inject the premium, and an all-zero column (no stress loss) for NVDA
+    let _ = pool;
+    let me = IMockEngine::new(engine, &d);
+    let k_stress = me.params().call().await.unwrap().kStress as usize;
+    // capacity sums the uncovered exposure of every listed equity asset, so each needs a column
+    for (t, v) in book["assetIds"].as_object().unwrap() {
+        if t == "TBILL" {
+            continue;
+        }
+        me.setJointColumn(
+            v.as_str().unwrap().parse::<B256>().unwrap(),
+            vec![U256::ZERO; k_stress.div_ceil(16)],
+        )
+        .send()
+        .await
+        .unwrap()
+        .get_receipt()
+        .await
+        .unwrap();
+    }
+    IMockEngine::new(engine, &d)
+        .setQuote(
+            U256::from(PREMIUM),
+            U256::from(PREMIUM / 2),
+            U256::from(PREMIUM),
+        )
         .send()
         .await
         .unwrap()
@@ -550,7 +578,8 @@ async fn core_jobs_match_the_contracts() {
             .unwrap();
     let p: serde_json::Value = row.get("payload");
     let job = sqlx::query(
-        "select payload from ops.keeper_job where key like 'J2:%:T-2h' and payload ? 'block'",
+        // Friday's WEEKEND closure (2); since the S3 J2 fix Thursday's own overnight (closure 1) has a T-2h job too
+        "select payload from ops.keeper_job where key like 'J2:%:2:T-2h' and payload ? 'block'",
     )
     .fetch_one(&pool_db)
     .await

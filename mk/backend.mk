@@ -206,6 +206,7 @@ backend-edge-unit: ## S4 H edge cases, unit half (no infra)
 
 backend-edge-infra: contracts-build ## S4 H edge cases, infra half (needs infra-up db-migrate; anvil, not the devnode)
 	TEST_DATABASE_URL=$(TEST_DATABASE_URL) $(CARGO) test --locked -p credence-keeper --test keeper_e2e -- --ignored --test-threads=1
+	TEST_DATABASE_URL=$(TEST_DATABASE_URL) $(CARGO) test --locked -p credence-keeper --test core_e2e -- --ignored --nocapture
 	TEST_DATABASE_URL=$(TEST_DATABASE_URL) RISK_CLI=$(abspath $(BACKEND_TARGET_DIR))/debug/risk-cli $(PNPM) --filter @credence/notifier e2e
 
 backend-edge: backend-edge-unit backend-edge-infra ## S4 H: every off-chain edge case (unit + anvil/Postgres), ≤ 30 min
