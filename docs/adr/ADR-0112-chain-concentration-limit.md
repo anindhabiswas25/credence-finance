@@ -41,4 +41,4 @@ so no new storage or engine call is needed. Cost: one `engine.params()` read per
 - The NAV stack (one asset) can use at most 35 % of its capacity budget for covered policies. NAV safe LTVs sit above the
   max LTV, so NAV cover is rare; the PM may set `maxAssetShare` = 1 on the NAV pool if that proves too tight.
 - Tests: `test/unit/ConcentrationLimit.t.sol` (default, the cap binds on a second same-asset policy while another asset
-  still sells, the launch cap binds before u_max after dozens of NAV-sized policies, setter guards). QA-sec reviews.
+  still sells, the launch cap binds before u_max after dozens of small NVDA policies, setter guards). QA-sec reviews.

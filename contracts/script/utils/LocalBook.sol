@@ -37,7 +37,8 @@ library LocalBook {
         address tips;
         address pool; // the UnderwriterPool (S3)
         address auctionHouse; // equity: the AuctionHouse (S3)
-        address settlement; // NAV: a local stand-in until the S4 SettlementAdapter
+        address settlement; // NAV: the SettlementAdapter (S4)
+        address solverAuction; // NAV: the SolverAuction venue (S4)
         string[] tickers; // market name (ticker) → marketId
         bytes32[] marketIds;
     }
@@ -185,7 +186,8 @@ library LocalBook {
             _opt("tips", x.tips),
             _opt("pool", x.pool),
             _opt("auctionHouse", x.auctionHouse),
-            _opt("settlement", x.settlement)
+            _opt("settlement", x.settlement),
+            _opt("solverAuction", x.solverAuction)
         );
         return string.concat(s, ', "markets": ', _b32Map(x.tickers, x.marketIds), " }");
     }

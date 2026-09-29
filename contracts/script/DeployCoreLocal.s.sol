@@ -14,9 +14,10 @@ import {SigmaOracle} from "../src/oracle/SigmaOracle.sol";
 import {CredenceGuardian} from "../src/governance/CredenceGuardian.sol";
 import {RiskEngineRouter} from "../src/risk/RiskEngineRouter.sol";
 import {MockRiskEngine} from "../test/mocks/MockRiskEngine.sol";
-import {MockAuctionHouse} from "../test/mocks/MockAuctionHouse.sol";
 import {UnderwriterPool} from "../src/pool/UnderwriterPool.sol";
 import {AuctionHouse} from "../src/auction/AuctionHouse.sol";
+import {SettlementAdapter} from "../src/settlement/SettlementAdapter.sol";
+import {SolverAuction} from "../src/settlement/SolverAuction.sol";
 import {DeployClockLocal, MockUSDC} from "./DeployClockLocal.s.sol";
 import {LocalBook} from "./utils/LocalBook.sol";
 
@@ -25,7 +26,7 @@ import {LocalBook} from "./utils/LocalBook.sol";
 ///        with seeded Senior Vaults. Writes the one local address book (ADR-0105).
 /// @notice LOCAL ONLY (refuses 421614 / 42161). The deployer acts as timelock, guardian Safe, allocator and issuer.
 ///         S3: each stack has the real UnderwriterPool (equity on XNYS, NAV on USBANK) and the equity stack the real
-///         AuctionHouse; the NAV stack's settlement adapter is still a local stand-in (the test mock) until S4.
+///         AuctionHouse. S4: the NAV stack has the real SettlementAdapter and its SolverAuction venue (ADR-0111).
 /// @dev Env (in addition to DeployClockLocal's):
 ///      RISK_ENGINE     engine address (default: `.shared.riskEngine` of the existing book if it has code; otherwise a
 ///                      Solidity stand-in engine is deployed, e.g. on anvil)
@@ -33,6 +34,7 @@ import {LocalBook} from "./utils/LocalBook.sol";
 ///      SEED_EQUITY / SEED_NAV   USDC deposited into each vault (default 1,000,000 / 1,000,000)
 ///      SEED_POOL       USDC deposited into each UnderwriterPool (default 250,000)
 ///      MIN_BID         the auction house's minimum bid notional, loan units (default 100 USDC, testnet §8.7.1)
+///      NAV_SOLVERS     solvers allowlisted on the SolverAuction and the fund registry (default: the deployer)
 contract DeployCoreLocal is DeployClockLocal {
     struct Core {
         CredenceGuardian guardian;
@@ -50,7 +52,8 @@ contract DeployCoreLocal is DeployClockLocal {
         ProtocolReserve reserve;
         UnderwriterPool pool;
         AuctionHouse auctionHouse; // equity stack
-        MockAuctionHouse settlement; // NAV stack stand-in (S4)
+        SettlementAdapter settlement; // NAV stack (S4)
+        SolverAuction solver; // NAV stack: the native solver venue (S4)
         string[] tickers;
         bytes32[] marketIds;
     }
@@ -207,9 +210,9 @@ contract DeployCoreLocal is DeployClockLocal {
             );
         _wireRisk(c, s, nav);
         s.reserve.initializeWiring(address(s.market));
-        address[] memory payers = new address[](nav ? 2 : 3);
+        address[] memory payers = new address[](3);
         (payers[0], payers[1]) = (address(s.market), address(s.pool));
-        if (!nav) payers[2] = address(s.auctionHouse);
+        payers[2] = nav ? address(s.settlement) : address(s.auctionHouse);
         s.tips.initializeWiring(payers);
         s.market.setReserveFeeShare(3000); // 30% of the protocol fee (§12.2)
     }
@@ -217,10 +220,17 @@ contract DeployCoreLocal is DeployClockLocal {
     function _stackMarkets(Core memory k, ClockStack memory c, bool nav, StackOut memory s) internal {
         address usdc = address(c.usdc);
         if (nav) {
-            // tTBILL moves only between allowlisted holders (§8.12): the market and the settlement stand-in hold it
+            // tTBILL moves only between allowlisted holders (§8.12): the market, the adapter, the venue, the pool (pool
+            // advance) and every solver hold it
             c.registry.setAllowed(address(s.market), true);
             c.registry.setAllowed(address(s.settlement), true);
-            c.registry.setAllowed(address(s.pool), true); // backstop inventory (S4 fallback)
+            c.registry.setAllowed(address(s.solver), true);
+            c.registry.setAllowed(address(s.pool), true);
+            address[] memory solvers = _solvers();
+            for (uint256 i; i < solvers.length; ++i) {
+                c.registry.setAllowed(solvers[i], true);
+                s.solver.setSolver(solvers[i], true);
+            }
             s.tickers = new string[](1);
             s.marketIds = new bytes32[](1);
             s.tickers[0] = "TBILL";
@@ -263,7 +273,8 @@ contract DeployCoreLocal is DeployClockLocal {
             s.pool = new UnderwriterPool(
                 me, IERC20(usdc), USBANK, "Credence Underwriter USDC (funds)", "cfUP-NAV"
             );
-            s.settlement = new MockAuctionHouse();
+            s.settlement = new SettlementAdapter(me);
+            s.solver = new SolverAuction(me);
         } else {
             s.pool =
                 new UnderwriterPool(me, IERC20(usdc), XNYS, "Credence Underwriter USDC (equity)", "cfUP-EQ");
@@ -277,7 +288,10 @@ contract DeployCoreLocal is DeployClockLocal {
         address tips = address(s.tips);
         s.pool.initializeWiring(market, address(s.auctionHouse), address(s.settlement), clock, tips);
         if (nav) {
-            s.settlement.setMarket(market);
+            address[] memory venues = new address[](1);
+            venues[0] = address(s.solver);
+            s.settlement.initializeWiring(market, address(s.pool), tips, venues);
+            s.solver.initializeWiring(address(s.settlement), s.pool.asset());
             return;
         }
         uint128 minBid = uint128(vm.envOr("MIN_BID", uint256(100e6)));
@@ -297,6 +311,12 @@ contract DeployCoreLocal is DeployClockLocal {
         guardian.initializeWiring(markets, address(c.clock));
         // markReopenComplete comes from the equity auction house and the NAV settlement adapter
         c.clock.initializeWiring(address(c.oracle), eqHouse, navSettlement);
+    }
+
+    function _solvers() internal view returns (address[] memory a) {
+        address[] memory d = new address[](1);
+        d[0] = vm.addr(vm.envUint("PRIVATE_KEY"));
+        a = vm.envOr("NAV_SOLVERS", ",", d);
     }
 
     /// @dev First-loss capital for each pool (minted at once outside a Bell window, queued inside one).
@@ -361,6 +381,7 @@ contract DeployCoreLocal is DeployClockLocal {
         x.tips = address(s.tips);
         x.pool = address(s.pool);
         x.settlement = address(s.settlement);
+        x.solverAuction = address(s.solver);
         x.auctionHouse = address(s.auctionHouse);
         x.tickers = s.tickers;
         x.marketIds = s.marketIds;
