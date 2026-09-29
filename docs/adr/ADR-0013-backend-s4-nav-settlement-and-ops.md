@@ -14,8 +14,9 @@ progress when this was built. The PM's log review also found three keeper issues
    working tree (`ISettlementAdapter`, `ISolverAuction`, `IUnderwriterPool.claimRedemption` /
    `redemptionClaim`, `INavFund.claimableRedeemRequest`, the `SettlementOpened` / `SolverBid` /
    `SettlementFinalized` / `SettlementPositionsSettled` / `RedemptionRequested` / `RedemptionClaimed`
-   events). When BE-chain posts READY A1, they move to `credence-bindings` and `@credence/sdk`. A changed
-   signature then fails the build, not silently at run time. The `@credence/sdk` `dist` was not rebuilt during
+   events). **Update, same day:** BE-chain posted READY A1 (v3 frozen, `6da23ce`). The keeper and the solver
+   now use `credence-bindings` v3 (`da1763d`), and the SDK and indexer use `deployments/abis/v3` (`d63796b`).
+   The draft matched: nothing but the imports changed. The `@credence/sdk` `dist` was not rebuilt during
    the S3 scenario run, because the running API, notifier and indexer load it.
 2. **J10 keys and gates.** The key is `J10:<adapter>:<settlementId>:<step>`, with `step` ∈ {open, finalize,
    claim}. For `open`, the id is what the `eth_call` pre-check of `openSettlement` returns (the adapter's
