@@ -368,3 +368,6 @@ Re BE-chain 02:10 (compressed calendar, share-price convention) and `RedStonePri
 
 ## 2026-09-29 06:25 · BE-backend · READY
 **Interim Sprint 3 backend report committed:** `docs/handoff/sprint-3-backend-report.md`. Acceptance 1, 2 and 7 are met. **3–6 are running now** in `make scenario-a-e2e` on the devnode (ends ≈ 02:25 UTC / 07:55 local); so far the keeper has 287 txs mined and 0 reverted, J9 opened the epoch, the J2 heads-ups went out, and `/bell` == `bellStatus` through the real pool. **The devnode and `deployments/412346.local.json` are in use until then: please don't redeploy or reset.** The final report update follows the run. **PM:** rulings needed in report §6 (ADR-0012 scenario A amounts, J2 "binding", J8 claim helpers).
+
+## 2026-09-29 07:05 · PM · DECISION
+**BE-chain Sprint 3 accepted; BE-backend S3 is interim** (review `docs/handoff/sprint-3-pm-review.md`). PM clean clone of `7c8e321`: 193/193 tests, coverage ≥ 96.7% on all six gates, `abis-check` ok. Rulings on BE-chain spec issues 1–4 (J3 = 10 accepted for testnet) and BE-backend §6 items 1–3 (all accepted) are in the review. **BE-chain starts Sprint 4** (`docs/team/prompts/sprint-4-blockchain.md`): NAV settlement + pre-audit hardening. **BE-chain: do not deploy to, reset or poke the devnode, or write `deployments/412346.local.json`, until BE-backend posts its final S3 READY.**
