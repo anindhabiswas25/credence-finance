@@ -4,14 +4,8 @@ pragma solidity 0.8.30;
 import {RiskFixture} from "../utils/RiskFixture.sol";
 import {MarketState} from "../../src/libraries/Types.sol";
 
-/// @title Lending-core findings (QA-sec S4; triage QA-05, QA-06). Same convention as AuctionFindings: a `finding` test
-///        asserts the fixed behaviour and runs only with QA_FINDINGS=1; its companion pins today's behaviour.
+/// @title Lending-core findings (QA-sec S4; triage QA-05, QA-06). Regression tests of the fixes in 61761b9.
 contract MarketFindingsTest is RiskFixture {
-    modifier finding() {
-        if (!vm.envOr("QA_FINDINGS", false)) vm.skip(true);
-        _;
-    }
-
     function setUp() public {
         setUpRisk();
         _underwrite(uw1, 100_000e6);
@@ -32,41 +26,23 @@ contract MarketFindingsTest is RiskFixture {
         }
     }
 
-    /// @notice Today: the accrued view of senior supply can fall by one unit with time alone, because the pool's and
-    ///         the treasury's 10% shares are floored separately (i = 290 → 29 + 29 → 232 < 233 at i = 289).
-    function test_QA06_accruedSeniorSupplyViewDipsToday() public {
-        (uint256 b, uint256 a) = _dip();
-        emit log_named_uint("senior supply before", b);
-        emit log_named_uint("senior supply 60 s later", a);
-        assertLt(a, b, "time alone lowered senior supply");
-        assertLe(b - a, 2, "dust only");
-    }
-
-    /// @notice FINDING QA-06 (Low, BE-chain). Senior supply (and so `vault.totalAssets()`, the vault share price) must
+    /// @notice Regression of QA-06 (Low, fixed 61761b9). Senior supply (and so `vault.totalAssets()`, the vault share price) must
     ///         never fall with time alone (INV-SV-01): floor the fee total once (fees = i × (ρJ + ρp) / BPS, fp = i × ρJ /
     ///         BPS, ft = fees − fp), so the senior remainder is non-decreasing in i.
-    function test_QA06_accruedSeniorSupplyNeverFallsWithTime() public finding {
+    function test_QA06_accruedSeniorSupplyNeverFallsWithTime() public {
         (uint256 b, uint256 a) = _dip();
         assertGe(a, b);
     }
 
-    /// @notice FINDING QA-05 (Low, BE-chain). ERC-4626 `deposit` must return the shares the receiver got: on the first
+    /// @notice Regression of QA-05 (Low, fixed 61761b9). ERC-4626 `deposit` must return the shares the receiver got: on the first
     ///         deposit it returns 1e3 more (the dead shares come out of the depositor's mint after the return value is
     ///         computed), so an integrator that books the return value over-counts.
-    function test_QA05_firstDepositReturnsTheSharesMinted() public finding {
+    function test_QA05_firstDepositReturnsTheSharesMinted() public {
         SeniorVaultLike v = SeniorVaultLike(_freshVault());
         usdc.mint(address(this), 1_000e6);
         usdc.approve(address(v), 1_000e6);
         uint256 ret = v.deposit(1_000e6, address(this));
         assertEq(ret, v.balanceOf(address(this)));
-    }
-
-    function test_QA05_firstDepositReturnValueToday() public {
-        SeniorVaultLike v = SeniorVaultLike(_freshVault());
-        usdc.mint(address(this), 1_000e6);
-        usdc.approve(address(v), 1_000e6);
-        uint256 ret = v.deposit(1_000e6, address(this));
-        assertEq(ret - v.balanceOf(address(this)), 1e3);
     }
 
     function _freshVault() internal returns (address) {

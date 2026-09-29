@@ -11,13 +11,6 @@ import {Reenterer} from "./mocks/Reenterer.sol";
 abstract contract SecurityFixture is RiskFixture {
     bytes4 internal constant REENTRANT = bytes4(keccak256("ReentrancyGuardReentrantCall()"));
 
-    /// @dev A test that proves a defect runs only with QA_FINDINGS=1, so an open finding never turns the team's
-    ///      `forge test` red; the owner runs it to see it fail, and it goes green with the fix (then this is dropped).
-    modifier finding() {
-        if (!vm.envOr("QA_FINDINGS", false)) vm.skip(true);
-        _;
-    }
-
     function setUpSecurity() internal {
         setUpRisk();
         _hookify(address(usdc), 6);

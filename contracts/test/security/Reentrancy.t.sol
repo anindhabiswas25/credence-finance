@@ -568,10 +568,10 @@ contract ReentrancyTest is SecurityFixture {
         _assertSameSnap(_decodeSnap(_assertRan(r, 0)), _snap());
     }
 
-    /// @notice FINDING QA-01 (Medium, BE-chain). `AuctionHouse.gdaBuy` sends the tokens to the buyer *before*
+    /// @notice QA-01 (Medium, fixed in 61761b9): regression. `AuctionHouse.gdaBuy` sends the tokens to the buyer *before*
     ///         `pool.onGdaSale` books the sale. In the buyer's receive hook the pool already holds the sale's cash but
     ///         still counts the sold units in its inventory, so `nav()` is overstated by their cost basis.
-    function test_cross_gdaBuy_poolNavIsFinal() public finding {
+    function test_cross_gdaBuy_poolNavIsFinal() public {
         (uint64 g,) = _gda();
         vm.warp(block.timestamp + 1 days);
         Reenterer r = _attacker();
@@ -583,10 +583,10 @@ contract ReentrancyTest is SecurityFixture {
         _assertSameSnap(_decodeSnap(_assertRan(r, 0)), _snap());
     }
 
-    /// @notice FINDING QA-01, exploit. An underwriter with a withdrawal queued for epoch e settles e from inside its
+    /// @notice QA-01 exploit, regression. An underwriter with a withdrawal queued for epoch e settles e from inside its
     ///         own GDA purchase: `sharePriceAfter` — the price its withdrawal is paid at — includes the double-counted
     ///         inventory. The remaining underwriters pay the difference.
-    function test_cross_gdaBuy_settleEpochInflatesTheWithdrawalPrice() public finding {
+    function test_cross_gdaBuy_settleEpochInflatesTheWithdrawalPrice() public {
         // the attacker is an underwriter with its whole stake queued for Tuesday's epoch (1)
         Reenterer r = _attacker();
         usdc.mint(address(r), 100_000e6);

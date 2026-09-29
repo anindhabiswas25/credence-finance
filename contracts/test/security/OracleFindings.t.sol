@@ -15,11 +15,6 @@ contract OracleFindingsTest is ClockFixture {
     CredencePriceFeed internal feed;
     bytes32 internal constant A = keccak256("NVDA:XNAS");
 
-    modifier finding() {
-        if (!vm.envOr("QA_FINDINGS", false)) vm.skip(true);
-        _;
-    }
-
     function setUp() public {
         _makeCommittee();
         feed = new CredencePriceFeed(timelock, signers, 2);
@@ -39,23 +34,10 @@ contract OracleFindingsTest is ClockFixture {
         rs = _one(r);
     }
 
-    /// @notice Today: after one report at seq = 2^64 − 1, a correct later report can never land.
-    function test_QA08_maxSeqEndsTheFeedToday() public {
-        Report[] memory rs = _live(100e18, type(uint64).max);
-        feed.submit(rs, _sign(feed, rs, 2));
-        vm.warp(vm.getBlockTimestamp() + 1);
-        Report[] memory next = _live(101e18, 2);
-        bytes[] memory sigs = _sign(feed, next, 3);
-        vm.expectRevert(
-            abi.encodeWithSelector(ICredenceErrors.StaleReport.selector, A, uint64(2), type(uint64).max)
-        );
-        feed.submit(next, sigs);
-    }
-
-    /// @notice FINDING QA-08 (Medium, BE-chain + BE-backend OFF-01). A report must not be able to jump `seq` so far
+    /// @notice Regression of QA-08 (Medium, fixed 61761b9 + BE-backend OFF-01). A report must not be able to jump `seq` so far
     ///         that the feed can never advance again: bound the step on-chain (e.g. seq ≤ stored + 2^32) and have
     ///         every node refuse a seq outside [chain seq + 1, chain seq + window].
-    function test_QA08_aSeqJumpCannotEndTheFeed() public finding {
+    function test_QA08_aSeqJumpCannotEndTheFeed() public {
         Report[] memory rs = _live(100e18, type(uint64).max);
         bytes[] memory sigs = _sign(feed, rs, 2);
         try feed.submit(rs, sigs) {} catch {}

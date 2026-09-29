@@ -15,7 +15,7 @@ SEC_UV_ENV     := UV_CACHE_DIR=$(CURDIR)/.tools/uv-cache UV_TOOL_DIR=$(CURDIR)/.
 SLITHER        := uvx --from slither-analyzer==$(SLITHER_VER) slither
 ADERYN         := $(CURDIR)/.tools/bin/aderyn
 SEC_SUITES     := test/{security,fuzz}/**
-# Open findings (triage QA-01..08): tests that assert the fixed behaviour; skipped unless QA_FINDINGS=1.
+# Findings QA-01..08 (all fixed in S4): their regression tests.
 SEC_FINDINGS   := QA0|gdaBuy_poolNavIsFinal|gdaBuy_settleEpoch
 
 .PHONY: security-tools security-slither security-aderyn security-static security-test security-findings \
@@ -46,8 +46,8 @@ security-static: security-slither security-aderyn ## Both static analyzers and t
 security-test: contracts-deps ## Reentrancy, inflation / rounding fuzz (profile.ci: 10,000 runs) and the QA-sec invariants
 	cd contracts && $(SEC_FORGE_ENV) FOUNDRY_PROFILE=ci $(SEC_NICE) forge test --threads $(SEC_THREADS) --match-path '$(SEC_SUITES)'
 
-security-findings: contracts-deps ## The open-finding tests (QA_FINDINGS=1): each fails until its REQUEST is fixed
-	cd contracts && QA_FINDINGS=1 $(SEC_FORGE_ENV) $(SEC_NICE) forge test --threads $(SEC_THREADS) --match-path '$(SEC_SUITES)' \
+security-findings: contracts-deps ## The regression tests of findings QA-01..08 (docs/security/triage.md)
+	cd contracts && $(SEC_FORGE_ENV) $(SEC_NICE) forge test --threads $(SEC_THREADS) --match-path '$(SEC_SUITES)' \
 	  --match-test '$(SEC_FINDINGS)'
 
 security-invariants: contracts-deps ## The whole §14.2 catalogue + QA-sec invariants at 512 runs × depth 256 (profile.ci; CPU-heavy)
