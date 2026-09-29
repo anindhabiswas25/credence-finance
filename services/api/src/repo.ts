@@ -5,6 +5,7 @@ import { getAddress, type Address, type Hex } from "viem";
 import type { AccountView, MeRepo, Pref, PushSub } from "./me.ts";
 import type { StreamSource } from "./stream.ts";
 import { pgRiskTransferRepo } from "./rt.ts";
+import { pgSettlementRepo } from "./settlement.ts";
 
 export interface ClockRow {
   assetId: Hex;
@@ -488,7 +489,18 @@ export function pgRepos(databaseUrl: string, indexerSchema: string) {
     }));
   };
   const rt = pgRiskTransferRepo(sql, ix);
-  return { clock, auth, core, me, rt, stream, sql, close: () => sql.end() };
+  const settlement = pgSettlementRepo(sql, ix);
+  return {
+    clock,
+    auth,
+    core,
+    me,
+    rt,
+    settlement,
+    stream,
+    sql,
+    close: () => sql.end(),
+  };
 }
 
 /** In-memory repos (tests, and `API_MEMORY=1` demos). */

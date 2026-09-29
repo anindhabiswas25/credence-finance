@@ -41,6 +41,7 @@ const app = createApp({
   metrics: createMetrics(),
   core: repos.core,
   rt: repos.rt,
+  settlement: repos.settlement,
   me: repos.me,
   chain: publicClient ? viemChainReader(publicClient) : undefined,
   sets: loadSetStore(config.scenarioDirs.map((d) => resolve(repoRoot, d))),

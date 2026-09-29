@@ -34,7 +34,13 @@ describe("settlement projection", () => {
   it("a fill records the solver, an advance the redemption request", () => {
     const solver = "0x00000000000000000000000000000000000000Aa" as const;
     expect(
-      onFinalized({ filled: true, solver, price: 996n, proceeds: 9960n, requestId: 0n }),
+      onFinalized({
+        filled: true,
+        solver,
+        price: 996n,
+        proceeds: 9960n,
+        requestId: 0n,
+      }),
     ).toEqual({
       status: "filled",
       solver: solver.toLowerCase(),

@@ -13,6 +13,7 @@ import {
 import type postgres from "postgres";
 import { ICredenceMarketAbi } from "@credence/sdk";
 import type { CoreRepo } from "./repo.ts";
+import { redemptionClaimsBody, type SettlementRepo } from "./settlement.ts";
 
 // ── rows ─────────────────────────────────────────────────────────────────────────────────────────
 export interface PoolRow {
@@ -498,6 +499,8 @@ export interface RtDeps {
   loanDecimals?: number;
   /** Safe LTV for the next closure per market id (lower-case), as /v1/markets computes it. */
   safeLtvs?: () => Promise<Map<string, bigint | null>>;
+  /** NAV stack (S4): the pool's fund redemption claims, in NAV at cost (§8.6.1). */
+  settlement?: SettlementRepo;
 }
 
 const WAD = 10n ** 18n;
@@ -579,6 +582,17 @@ const PoolBody = z
         realisedPnl: z.string(),
       }),
     ),
+    redemptionClaims: z
+      .object({
+        outstandingAtCost: Amt,
+        outstanding: z.number(),
+        items: z.array(z.unknown()),
+      })
+      .nullable()
+      .openapi({
+        description:
+          "NAV stack: the pool's fund redemption claims from pool advances; outstanding ones count in NAV at cost (§8.6.1). null without the settlement tables",
+      }),
   })
   .openapi("Pool");
 
@@ -699,6 +713,12 @@ export function registerRiskTransferRoutes(app: OpenAPIHono, deps: RtDeps) {
               (e) => e.epochId === current,
             );
       const inv = await deps.rt.inventory(row.pool);
+      const claims = deps.settlement
+        ? redemptionClaimsBody(
+            await deps.settlement.redemptionClaims(row.pool),
+            d,
+          )
+        : null;
       return c.json(
         {
           stack,
@@ -733,6 +753,7 @@ export function registerRiskTransferRoutes(app: OpenAPIHono, deps: RtDeps) {
             listed: i.listed.toString(),
             realisedPnl: i.realisedPnl.toString(),
           })),
+          redemptionClaims: claims,
         },
         200,
       );

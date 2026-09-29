@@ -29,6 +29,7 @@ import {
   stackCushion,
   type RiskTransferRepo,
 } from "./rt.ts";
+import { registerSettlementRoutes, type SettlementRepo } from "./settlement.ts";
 import { registerMeRoutes, type MeRepo } from "./me.ts";
 import { FixedWindow, clientIp, rateLimit } from "./ratelimit.ts";
 import {
@@ -62,6 +63,8 @@ export interface Deps {
   me?: MeRepo;
   /** Pool, epochs, auctions and the risk page (S3); mounted only when present. */
   rt?: RiskTransferRepo;
+  /** NAV settlements and redemption claims (S4); mounted only when present. */
+  settlement?: SettlementRepo;
 }
 
 // ── schemas ──────────────────────────────────────────────────────────────────────────────────────
@@ -351,8 +354,11 @@ export function createApp(deps: Deps) {
       rt: deps.rt,
       core: deps.core,
       client: pc,
+      settlement: deps.settlement,
       safeLtvs: coreDeps ? () => safeLtvsOf(coreDeps) : undefined,
     });
+  if (deps.settlement)
+    registerSettlementRoutes(app, { settlement: deps.settlement, now });
   if (deps.me) {
     registerMeRoutes(app, {
       auth: deps.auth,

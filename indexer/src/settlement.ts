@@ -42,12 +42,10 @@ ponder.on("SolverAuction:SolverBid", async ({ event, context }) => {
     .onConflictDoNothing();
   const s = await context.db.find(settlement, { settlementId: a.id });
   if (!s) return;
-  await context.db
-    .update(settlement, { settlementId: a.id })
-    .set({
-      ...onBid(s as never, a.solver, a.price),
-      updatedBlock: event.block.number,
-    });
+  await context.db.update(settlement, { settlementId: a.id }).set({
+    ...onBid(s as never, a.solver, a.price),
+    updatedBlock: event.block.number,
+  });
 });
 
 ponder.on("Settlement:SettlementFinalized", async ({ event, context }) => {
@@ -62,12 +60,10 @@ ponder.on("Settlement:SettlementFinalized", async ({ event, context }) => {
 ponder.on(
   "Settlement:SettlementPositionsSettled",
   async ({ event, context }) => {
-    await context.db
-      .update(settlement, { settlementId: event.args.id })
-      .set({
-        positionsSettled: Number(event.args.positions),
-        updatedBlock: event.block.number,
-      });
+    await context.db.update(settlement, { settlementId: event.args.id }).set({
+      positionsSettled: Number(event.args.positions),
+      updatedBlock: event.block.number,
+    });
   },
 );
 
@@ -91,12 +87,10 @@ ponder.on("NavPool:RedemptionRequested", async ({ event, context }) => {
 
 ponder.on("NavPool:RedemptionClaimed", async ({ event, context }) => {
   const a = event.args;
-  await context.db
-    .update(redemptionClaim, { requestId: a.requestId })
-    .set({
-      status: "claimed",
-      assets: a.assets,
-      pnl: a.pnl,
-      claimedAt: event.block.timestamp,
-    });
+  await context.db.update(redemptionClaim, { requestId: a.requestId }).set({
+    status: "claimed",
+    assets: a.assets,
+    pnl: a.pnl,
+    claimedAt: event.block.timestamp,
+  });
 });
