@@ -5,7 +5,11 @@ import {
   outstandingAtCost,
   type SettlementRow,
 } from "../settlement-model";
-import { PoolV3EventsAbi } from "../abis/settlement";
+import {
+  ISettlementAdapterAbi,
+  ISolverAuctionAbi,
+  IUnderwriterPoolAbi,
+} from "@credence/sdk";
 
 const row: SettlementRow = {
   settlementId: 1n,
@@ -70,10 +74,19 @@ describe("settlement projection", () => {
     expect(outstandingAtCost([])).toBe(0n);
   });
 
-  it("binds the v3 pool redemption events", () => {
-    expect(PoolV3EventsAbi.map((x) => x.name)).toEqual([
-      "RedemptionRequested",
-      "RedemptionClaimed",
-    ]);
+  it("the v3 ABIs carry every event the handlers project", () => {
+    const events = (abi: readonly { type: string; name?: string }[]) =>
+      abi.filter((x) => x.type === "event").map((x) => x.name);
+    expect(events(ISettlementAdapterAbi)).toEqual(
+      expect.arrayContaining([
+        "SettlementOpened",
+        "SettlementFinalized",
+        "SettlementPositionsSettled",
+      ]),
+    );
+    expect(events(ISolverAuctionAbi)).toContain("SolverBid");
+    expect(events(IUnderwriterPoolAbi)).toEqual(
+      expect.arrayContaining(["RedemptionRequested", "RedemptionClaimed"]),
+    );
   });
 });

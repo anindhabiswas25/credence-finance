@@ -1,4 +1,4 @@
-// NAV settlement handlers (S4 D, Build Guide §8.8, §10.3): pure projections of the draft v3 events of the
+// NAV settlement handlers (S4 D, Build Guide §8.8, §10.3): pure projections of the v3 events of the
 // SettlementAdapter, the SolverAuction and the pool (ADR-0111). No RPC reads.
 import { ponder } from "ponder:registry";
 import { redemptionClaim, settlement, solverBid } from "ponder:schema";
@@ -67,7 +67,7 @@ ponder.on(
   },
 );
 
-ponder.on("NavPool:RedemptionRequested", async ({ event, context }) => {
+ponder.on("Pool:RedemptionRequested", async ({ event, context }) => {
   const a = event.args;
   await context.db
     .insert(redemptionClaim)
@@ -85,7 +85,7 @@ ponder.on("NavPool:RedemptionRequested", async ({ event, context }) => {
     .onConflictDoNothing();
 });
 
-ponder.on("NavPool:RedemptionClaimed", async ({ event, context }) => {
+ponder.on("Pool:RedemptionClaimed", async ({ event, context }) => {
   const a = event.args;
   await context.db.update(redemptionClaim, { requestId: a.requestId }).set({
     status: "claimed",
