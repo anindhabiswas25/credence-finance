@@ -224,10 +224,10 @@ contract MarketEdgesTest is EdgeFixture {
     }
 
     /// E-M-12 (QA-10): a Bell batch sent after the PRECLOSE lot fixing (close − 5 min) but before the close must
-    ///         still process what it can (§8.4.3 "skip, don't revert"). Today one position that needs a pre-close
-    ///         sale reverts the whole batch (`TooLate`), so the auto-cover of every other position in it is lost
-    ///         and the closure starts with them uncovered. The ops page fires at bellAt + 10 min = exactly then.
-    function test_E_M12_QA10_lateBellBatchStillAutoCovers() public finding {
+    ///         still process what it can (§8.4.3 "skip, don't revert"). Before the fix (1e07b99, ADR-0115) one
+    ///         position that needed a pre-close sale reverted the whole batch (`TooLate`), losing every auto-cover in
+    ///         it; now it gets SALE_TOO_LATE and the batch goes on. Regression.
+    function test_E_M12_QA10_lateBellBatchStillAutoCovers() public {
         _needsAction(alice);
         _needsAction(bob);
         vm.prank(bob);

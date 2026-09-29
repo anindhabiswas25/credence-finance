@@ -11,13 +11,6 @@ abstract contract EdgeFixture is RiskFixture {
     address internal bob = makeAddr("bob");
     address internal carl = makeAddr("carl");
 
-    /// @dev A test that proves an open defect runs only with QA_FINDINGS=1, so an open finding never turns the
-    ///      team's `forge test` red; the owner runs it to see it fail, and it goes green with the fix.
-    modifier finding() {
-        if (!vm.envOr("QA_FINDINGS", false)) vm.skip(true);
-        _;
-    }
-
     function setUpEdge() internal {
         setUpRisk();
         _underwrite(uw1, 500_000e6);

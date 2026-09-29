@@ -18,8 +18,8 @@ status.
 - **partly**: the test covers part of the case (the note says what is missing).
 - **gap**: no test yet; a REQUEST is open with the owner.
 
-Last run (2026-09-29, `3c82b87` + this commit): `forge test --match-path 'test/security/edge/*'` gives 48 passed and
-1 skipped (QA-10, which fails with `QA_FINDINGS=1`).
+Last run (2026-09-29, `3c82b87` + this commit): `forge test --match-path 'test/security/edge/*'` gave 48 passed and
+1 skipped (QA-10). After BE-chain's fix (`1e07b99`, ADR-0115) the QA-10 test runs unconditionally and passes: 49 passed, 0 skipped.
 
 ## 1. Contracts
 
@@ -48,7 +48,7 @@ Last run (2026-09-29, `3c82b87` + this commit): `forge test --match-path 'test/s
 | E-B-03 | The same borrower twice in one batch; a second keeper's batch in the same block | Enforced once, tipped once; the second batch is a no-op | `test_E_M09_…` | proven |
 | E-B-04 | Bell with 0 positions; with a debt-free or unknown address | No-op, no revert, no event | `test_E_M10_…` | proven |
 | E-B-05 | Manual cover at exactly maxLtv + δ (75.5 %), and just above | Accepted; `LtvAboveCoverable` (R-03) | `test_E_M11_…` | proven |
-| E-B-06 | **A Bell batch sent after the PRECLOSE fixing (close − 5 min) that holds one sale candidate** | The batch goes on ("skip, don't revert", §8.4.3); the others are auto-covered | `test_E_M12_QA10_lateBellBatchStillAutoCovers` | **DEFECT QA-10** (Medium, BE-chain + PM; the whole batch reverts `TooLate`) |
+| E-B-06 | **A Bell batch sent after the PRECLOSE fixing (close − 5 min) that holds one sale candidate** | The batch goes on ("skip, don't revert", §8.4.3); the others are auto-covered | `test_E_M12_QA10_lateBellBatchStillAutoCovers` | proven — **QA-10** (Medium) fixed `1e07b99` (SALE_TOO_LATE, the batch goes on), verified by QA-sec |
 | E-B-07 | The same batch 1 s before the PRECLOSE fixing | Both processed (cover + pre-close lot) | `test_E_M12b_…` | proven |
 | E-B-08 | Pool capacity exhausted / cover refused at the Bell | Auto-cover fails closed → pre-close sale | `unit/CredenceMarket.t.sol: test_enforceBellAutoCoverAndPreclose`; `edge/PoolEdges.t.sol: test_E_P05_…` | proven |
 | E-B-09 | Last night's epoch still unsettled at the next Bell | Cover refused (`PolicyEpochMismatch`); the Bell falls back to the pre-close sale (ADR-0110 §3) | `test_E_P05_…` | proven |
@@ -244,6 +244,6 @@ Last run (2026-09-29, `3c82b87` + this commit): `forge test --match-path 'test/s
 
 | ID | Sev. | Finding | Owner | Status |
 | --- | --- | --- | --- | --- |
-| QA-10 | Medium | A Bell batch sent after the PRECLOSE fixing (close − 5 min) reverts entirely if one position needs a pre-close sale, so every auto-cover in it is lost; the J3 ops page and the RB-01 manual run land exactly then | BE-chain (+ PM ruling) | REQUEST 2026-09-29 18:40 |
+| QA-10 | Medium | A Bell batch sent after the PRECLOSE fixing (close − 5 min) reverts entirely if one position needs a pre-close sale, so every auto-cover in it is lost; the J3 ops page and the RB-01 manual run land exactly then | BE-chain (+ PM ruling 22:00) | **FIXED** `1e07b99` (ADR-0115), verified |
 | QA-11 | Low | The senior vault's market list is append-only and capped at 32, while the market lists 64; a market never leaves it | BE-chain / PM | REQUEST (this commit) |
 | OFF-GAPS | — | Off-chain rows marked gap / partly above | BE-backend | REQUEST (this commit) |
