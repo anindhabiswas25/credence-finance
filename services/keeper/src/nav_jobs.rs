@@ -16,8 +16,8 @@
 //!   (queue over, every REOPEN settlement finalized). Key `J10:<asset>:<closureId>:completeReopen`.
 //!
 //! Every step is pre-checked with views and an `eth_call` of the exact calldata, and is restart-safe through
-//! `tx_job` (`ops.keeper_job` / `ops.keeper_tx`), like J5. Interface: BE-chain's v3 (`ISettlementAdapter`,
-//! `IUnderwriterPool.claimRedemption`, ADR-0111), bound here until `credence-bindings` carries it.
+//! `tx_job` (`ops.keeper_job` / `ops.keeper_tx`), like J5. Interface: BE-chain's frozen v3 (`ISettlementAdapter`,
+//! `IUnderwriterPool.claimRedemption`, `CredenceTreasuryFund`; ADR-0111) from `credence-bindings`.
 
 use alloy::{
     network::TransactionBuilder,
@@ -37,55 +37,11 @@ use crate::{
     tasks::{Keeper, TickReport},
 };
 
-alloy::sol! {
-    #[sol(rpc)]
-    interface ISettlementAdapterV3 {
-        struct Settlement {
-            bytes32 marketId;
-            bytes32 assetId;
-            address token;
-            address venue;
-            uint8 kind;
-            uint8 status;
-            uint64 closureId;
-            uint40 openedAt;
-            uint40 endsAt;
-            uint32 positions;
-            uint128 qty;
-            uint128 floorPrice;
-            uint128 price;
-            uint128 proceeds;
-            address solver;
-            uint256 requestId;
-        }
-        function openSettlement(bytes32 marketId, address[] calldata borrowers) external returns (uint64 settlementId);
-        function finalize(uint64 settlementId) external;
-        function completeReopen(bytes32 assetId) external;
-        function settlement(uint64 settlementId) external view returns (Settlement memory);
-        function nextSettlementId() external view returns (uint64);
-        function pool() external view returns (address);
-    }
-
-    #[sol(rpc)]
-    interface INavPoolV3 {
-        struct RedemptionClaim {
-            bytes32 marketId;
-            address fund;
-            uint64 epochId;
-            bool claimed;
-            uint128 qty;
-            uint128 cost;
-            uint128 assets;
-        }
-        function claimRedemption(uint256 requestId) external returns (uint256 assets);
-        function redemptionClaim(uint256 requestId) external view returns (RedemptionClaim memory);
-    }
-
-    #[sol(rpc)]
-    interface INavFundV3 {
-        function claimableRedeemRequest(uint256 requestId, address controller) external view returns (uint256 shares);
-    }
-}
+// v3 (BE-chain READY A1, ADR-0111): the frozen interfaces from `credence-bindings`.
+use credence_bindings::{
+    CredenceTreasuryFund as INavFundV3, ISettlementAdapter as ISettlementAdapterV3,
+    IUnderwriterPool as INavPoolV3,
+};
 
 /// SettlementStatus (Types.sol v3).
 pub mod status {

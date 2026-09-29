@@ -265,6 +265,13 @@ async fn act(
                 st.committed = true;
             } else {
                 approve(value).await?;
+                // since ADR-0113 an open bid below the fixed reserve reverts (BidBelowReserve): a low-ball
+                // profile is refused here, as the protocol intends, and marked done without a tx
+                if let Err(e) = ah.placeBid(id, qty, price).call().await {
+                    tracing::info!(bidder = %b.p.name, auction = id, %price, error = %e, "place pre-check reverted: not sent");
+                    st.placed = true;
+                    return Ok(Some(st));
+                }
                 send(
                     ah.placeBid(id, qty, price)
                         .send()

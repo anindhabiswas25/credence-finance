@@ -16,29 +16,10 @@ use alloy::{
 use anyhow::{bail, Context, Result};
 use clap::Parser;
 use credence_bidder::solver::{solver_bid, SolverConfig, SolverProfile, Window};
+use credence_bindings::ISolverAuction as ISolverAuctionV3;
 use credence_common::{env, is_dev_chain, telemetry};
 
 sol! {
-    #[sol(rpc)]
-    interface ISolverAuctionV3 {
-        struct SolverLot {
-            address token;
-            uint128 qty;
-            uint128 floorPrice;
-            uint40 endsAt;
-            bool finalized;
-            address best;
-            uint128 bestPrice;
-            uint128 escrow;
-        }
-        event SolverWindowOpened(uint64 indexed id, address token, uint256 qty, uint256 floorPrice, uint40 endsAt);
-        function bid(uint64 settlementId, uint256 price) external;
-        function lot(uint64 settlementId) external view returns (SolverLot memory);
-        function minBid(uint64 settlementId) external view returns (uint256);
-        function isSolver(address solver) external view returns (bool);
-        function loanToken() external view returns (address);
-    }
-
     #[sol(rpc)]
     interface IERC20 {
         function approve(address spender, uint256 value) external returns (bool);
