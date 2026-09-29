@@ -19,6 +19,8 @@ use alloy::{
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
+pub mod solver;
+
 pub const BPS: u128 = 10_000;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
