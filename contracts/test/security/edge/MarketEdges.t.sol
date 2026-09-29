@@ -214,7 +214,9 @@ contract MarketEdgesTest is EdgeFixture {
         usdc.approve(address(market), 1_000e6);
         vm.expectRevert(
             abi.encodeWithSelector(
-                ICredenceErrors.LtvAboveCoverable.selector, WadMath.mulDivUp(15_100e6, 1e18, 19_999e6), 0.755e18
+                ICredenceErrors.LtvAboveCoverable.selector,
+                WadMath.mulDivUp(15_100e6, 1e18, 19_999e6),
+                0.755e18
             )
         );
         market.buyCover(idTSLA, 1_000e6, false);
@@ -359,7 +361,9 @@ contract MarketEdgesTest is EdgeFixture {
         vm.prank(keeper);
         vm.expectRevert(
             abi.encodeWithSelector(
-                ICredenceErrors.ActionNotAllowedInState.selector, MarketAction.FLAG_FOR_AUCTION, ClockState.REOPEN
+                ICredenceErrors.ActionNotAllowedInState.selector,
+                MarketAction.FLAG_FOR_AUCTION,
+                ClockState.REOPEN
             )
         );
         market.flagForAuction(idNVDA, _one(bob));
@@ -377,7 +381,9 @@ contract MarketEdgesTest is EdgeFixture {
         vm.prank(keeper);
         vm.expectRevert(
             abi.encodeWithSelector(
-                ICredenceErrors.ActionNotAllowedInState.selector, MarketAction.FLAG_FOR_AUCTION, ClockState.HALTED
+                ICredenceErrors.ActionNotAllowedInState.selector,
+                MarketAction.FLAG_FOR_AUCTION,
+                ClockState.HALTED
             )
         );
         market.flagForAuction(idNVDA, _one(alice));
