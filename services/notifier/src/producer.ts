@@ -7,6 +7,7 @@
 // | bell_outcome         | position_event kind auto_cover_applied                  | AUTO:<market>:<closure>:<owner>    |
 // | reopen_queued        | position_event kind flagged, auction kind REOPEN        | REOPENQ:<auction>:<owner>          |
 // | auction_settled      | lot_position settled (every kind; PRECLOSE = the sale)  | SETTLED:<auction>:<owner>          |
+// | nav_sold             | lot_position settled in a NAV settlement (S4, §8.8)     | NAVSOLD:<settlement>:<owner>       |
 // | epoch_settled        | epoch settled × pool_holder                             | EPOCH:<pool>:<epoch>:<owner>       |
 // | withdrawal_claimable | epoch settled × pool_request withdraw of that epoch     | WITHDRAW:<pool>:<epoch>:<owner>    |
 //
@@ -15,6 +16,7 @@ import type postgres from "postgres";
 import { enqueue, type Sql } from "./queue.ts";
 import type {
   AuctionSettled,
+  NavSold,
   BellOutcome,
   EpochSettled,
   ReopenQueued,
@@ -161,6 +163,56 @@ export function auctionSettledPayload(
         ? null
         : (
             healthFactor(r.collateralAfter, v, r.lt, r.debtAfter, u) ?? 0n
+          ).toString(),
+    ...u,
+  };
+}
+
+/** A NAV position sold at T+0 (a solver fill or the pool's advance at the floor), from its PositionSettled row. */
+export function navSoldPayload(
+  r: {
+    marketId: string;
+    settlementId: bigint;
+    status: string; // filled | advanced
+    collateralSold: bigint;
+    price: bigint;
+    floorPrice: bigint;
+    proceeds: bigint;
+    penalty: bigint;
+    shortfall: bigint;
+    refund: bigint;
+    debtAfter: bigint;
+    collateralAfter: bigint;
+    lt: bigint;
+  },
+  l: Labels,
+  u: Units = DEFAULT_UNITS,
+): NavSold {
+  const t = l.ticker(r.marketId);
+  const repaid =
+    r.proceeds - r.penalty - r.refund > 0n
+      ? r.proceeds - r.penalty - r.refund
+      : 0n;
+  return {
+    marketId: r.marketId,
+    asset: t,
+    token: `t${t}`,
+    settlementId: r.settlementId.toString(),
+    path: r.status === "filled" ? "solver_fill" : "pool_advance",
+    collateralSold: r.collateralSold.toString(),
+    price: r.price.toString(),
+    floorPrice: r.floorPrice.toString(),
+    proceeds: r.proceeds.toString(),
+    penalty: r.penalty.toString(),
+    repaid: repaid.toString(),
+    refund: r.refund.toString(),
+    shortfall: r.shortfall.toString(),
+    debtAfter: r.debtAfter.toString(),
+    healthFactorAfter:
+      r.debtAfter === 0n
+        ? null
+        : (
+            healthFactor(r.collateralAfter, r.price, r.lt, r.debtAfter, u) ?? 0n
           ).toString(),
     ...u,
   };
@@ -356,7 +408,7 @@ export async function scan(
   for (const r of (await sql`
       select lp.*, a.kind, a.p_star, o.price as open_print, p.collateral as collateral_after, m.lt
         from ${ix("lot_position")} lp
-        join ${ix("auction")} a on a.auction_id = lp.auction_id
+        join ${ix("auction")} a on a.auction_id = lp.auction_id and a.market_id = lp.market_id
         left join ${ix("open_print")} o on a.kind = 0 and o.asset_id = a.asset_id and o.closure_id = a.closure_id
         join ${ix("position")} p on p.market_id = lp.market_id and p.owner = lp.owner
         join ${ix("market")} m on m.market_id = lp.market_id
@@ -385,6 +437,47 @@ export async function scan(
       `SETTLED:${r.auction_id}:${hex(r.owner)}`,
       hex(r.owner),
       "auction_settled",
+      payload,
+    );
+  }
+
+  // NAV settlements (S4): a lot of the NAV market sold at T+0 by a solver or advanced by the pool
+  for (const r of (await sql`
+      select lp.*, s.status, s.price, s.floor_price, p.collateral as collateral_after, m.lt
+        from ${ix("lot_position")} lp
+        join ${ix("settlement")} s on s.settlement_id = lp.auction_id and s.market_id = lp.market_id
+        join ${ix("position")} p on p.market_id = lp.market_id and p.owner = lp.owner
+        join ${ix("market")} m on m.market_id = lp.market_id
+       where lp.settled_at is not null and lp.settled_at >= ${since} and s.status <> 'open'`.catch(
+    (e: { code?: string }) => {
+      if (e.code === "42P01") return []; // an indexer without the S4 settlement table
+      throw e;
+    },
+  )) as postgres.Row[]) {
+    seen(r.settled_at);
+    const payload = navSoldPayload(
+      {
+        marketId: hex(r.market_id),
+        settlementId: big(r.auction_id),
+        status: String(r.status),
+        collateralSold: big(r.collateral_sold),
+        price: big(r.price),
+        floorPrice: big(r.floor_price),
+        proceeds: big(r.proceeds),
+        penalty: big(r.penalty),
+        shortfall: big(r.shortfall),
+        refund: big(r.refund),
+        debtAfter: big(r.debt_after),
+        collateralAfter: big(r.collateral_after),
+        lt: big(r.lt),
+      },
+      l,
+      u,
+    );
+    await add(
+      `NAVSOLD:${r.auction_id}:${hex(r.owner)}`,
+      hex(r.owner),
+      "nav_sold",
       payload,
     );
   }

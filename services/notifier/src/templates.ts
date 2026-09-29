@@ -115,6 +115,27 @@ export const AuctionSettled = z.object({
 });
 export type AuctionSettled = z.infer<typeof AuctionSettled>;
 
+/** NAV stack (§8.8, S4 E): a fund position sold at T+0, by a solver or advanced by the pool. */
+export const NavSold = z.object({
+  marketId: z.string(),
+  asset: z.string(), // "TBILL"
+  token: z.string(),
+  settlementId: z.string(),
+  path: z.enum(["solver_fill", "pool_advance"]),
+  collateralSold: uint,
+  price: wad, // per token: the winning bid, or the floor for a pool advance
+  floorPrice: wad, // NAV × (1 − κ_nav)
+  proceeds: uint,
+  penalty: uint,
+  repaid: uint,
+  refund: uint,
+  shortfall: uint,
+  debtAfter: uint,
+  healthFactorAfter: wad.nullable(),
+  ...Decimals,
+});
+export type NavSold = z.infer<typeof NavSold>;
+
 /** Underwriters: an epoch of their pool settled. */
 export const EpochSettled = z.object({
   stack: z.enum(["equity", "nav"]),
@@ -148,6 +169,7 @@ export const EVENTS = {
   bell_outcome: BellOutcome,
   reopen_queued: ReopenQueued,
   auction_settled: AuctionSettled,
+  nav_sold: NavSold,
   epoch_settled: EpochSettled,
   withdrawal_claimable: WithdrawalClaimable,
   email_verify: EmailVerify,
@@ -161,6 +183,7 @@ export const DEFAULT_CHANNELS: Record<EventName, Channel[]> = {
   bell_outcome: ["email", "push", "telegram"],
   reopen_queued: ["push", "telegram"],
   auction_settled: ["email", "push", "telegram"],
+  nav_sold: ["email", "push", "telegram"],
   epoch_settled: ["email"],
   withdrawal_claimable: ["email", "push"],
   email_verify: ["email"],
@@ -369,6 +392,44 @@ export function renderAuctionSettled(
   };
 }
 
+/** A fund price per token to 4 decimals ("$0.9950"): NAV prices move in tenths of a cent. */
+const navPrice = (wad: string) => `$${decimalNearest(wad, 18, 4)}`;
+
+export function renderNavSold(p: NavSold, webOrigin: string): Rendered {
+  const sold = `${tokens(p.collateralSold, p.collateralDecimals, 4)} ${p.token}`;
+  const how =
+    p.path === "solver_fill"
+      ? `sold to a solver at ${navPrice(p.price)} (floor ${navPrice(p.floorPrice)}, ${change(p.price, p.floorPrice)})`
+      : `bought by the NAV underwriter pool at the floor, ${navPrice(p.price)} (no solver bid in the window)`;
+  const paras = [
+    `Your ${p.asset} position was settled today (settlement #${p.settlementId}): ${sold} ${how}, ` +
+      `for ${usdNearest(p.proceeds, p.loanDecimals)}.`,
+    `Liquidation penalty ${usdNearest(p.penalty, p.loanDecimals)}; ${usdNearest(p.repaid, p.loanDecimals)} repaid your loan; ` +
+      `${usdNearest(p.refund, p.loanDecimals)} refunded to you.`,
+  ];
+  if (BigInt(p.shortfall) > 0n)
+    paras.push(
+      `The sale did not cover the whole debt: a shortfall of ${usdNearest(p.shortfall, p.loanDecimals)} was absorbed by the protocol's loss layers.`,
+    );
+  paras.push(
+    p.healthFactorAfter === null
+      ? "Your loan is fully repaid."
+      : `Your remaining debt is ${usdNearest(p.debtAfter, p.loanDecimals)} and your health factor is now ${ratio(p.healthFactorAfter)}.`,
+  );
+  const url = `${webOrigin}/settlements/${p.settlementId}`;
+  return {
+    subject: `${p.asset}: position settled (${sold} at ${navPrice(p.price)})`,
+    text: `${paras.join("\n\n")}\n\n${url}`,
+    html: html(paras) + link(url, `Settlement #${p.settlementId}`),
+    push: {
+      title: `${p.asset}: ${sold} sold at ${navPrice(p.price)}`,
+      body: paras[1]!,
+      tag: `navsold:${p.marketId}:${p.settlementId}`,
+      url,
+    },
+  };
+}
+
 const POOL: Record<"equity" | "nav", string> = {
   equity: "equity underwriter pool (cfUP-EQ)",
   nav: "NAV underwriter pool (cfUP-NAV)",
@@ -472,6 +533,8 @@ export function render(
       return parsed(AuctionSettled, payload, (d) =>
         renderAuctionSettled(d, webOrigin),
       );
+    case "nav_sold":
+      return parsed(NavSold, payload, (d) => renderNavSold(d, webOrigin));
     case "epoch_settled":
       return parsed(EpochSettled, payload, (d) =>
         renderEpochSettled(d, webOrigin),
