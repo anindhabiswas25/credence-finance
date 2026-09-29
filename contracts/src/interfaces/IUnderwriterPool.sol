@@ -20,9 +20,12 @@ interface IUnderwriterPool is IERC20, IUnderwriterPoolEvents, ICredenceErrors {
     function requestWithdraw(uint256 shares) external returns (uint64 epochId);
     /// @notice Pays the caller's reserved assets of a settled epoch, as far as free cash allows, oldest epoch first.
     function claimWithdraw(uint64 epochId) external returns (uint256 assets);
+    /// @notice Transfer the shares minted at `sharePriceAfter` for the caller's deposit queued into a settled
+    ///        epoch.
     function claimDeposit(uint64 epochId) external returns (uint256 shares);
 
     // ── cover (onlyMarket) ──
+    /// @notice The premium and u_after `writeCover` would produce now.
     function previewCover(CoverRequest calldata r) external view returns (uint256 premium, uint256 uAfter);
     /// @notice v2: computes the premium once (quoteCover at u_after from poolCapacity over the epoch's aggregate
     ///         K-vector), requires `premium ≤ maxPremium` and u_after ≤ u_max, adds the policy's loss vector. The market
@@ -32,8 +35,11 @@ interface IUnderwriterPool is IERC20, IUnderwriterPoolEvents, ICredenceErrors {
         returns (uint64 policyId, uint256 premium);
 
     // ── income (onlyMarket / onlyAuctionHouse) ──
+    /// @notice onlyMarket, after the transfer: swept risk fees (R-09).
     function creditRiskFee(uint256 assets) external;
+    /// @notice onlyMarket, after the transfer: a third of a liquidation penalty.
     function creditPenalty(uint256 assets) external;
+    /// @notice onlyAuctionHouse, after the transfer: forfeited REOPEN bonds.
     function creditBond(uint256 assets) external;
 
     // ── losses and backstop ──
@@ -60,8 +66,12 @@ interface IUnderwriterPool is IERC20, IUnderwriterPoolEvents, ICredenceErrors {
     function claimRedemption(uint256 requestId) external returns (uint256 assets);
 
     // ── lifecycle (permissionless, tipped) ──
+    /// @notice Permissionless, tipped, in the venue's Bell window: open the epoch (writeCover also opens it).
     function openEpoch(bytes32 venue) external;
+    /// @notice Permissionless, tipped, at the Bell deadline: freeze J for the epoch.
     function snapshotEpoch(uint64 epochId) external;
+    /// @notice Permissionless, tipped, after reopen + delay and every REOPEN lot settled: release premiums,
+    ///        write sharePriceAfter, process the queues (§8.6.3).
     function settleEpoch(uint64 epochId) external;
     /// @notice Lists the inventory of `assetId` not yet in a GDA with the auction house (F-4.5e).
     function resellInventory(bytes32 assetId) external returns (uint64 gdaId);
@@ -69,30 +79,47 @@ interface IUnderwriterPool is IERC20, IUnderwriterPoolEvents, ICredenceErrors {
     function releaseLossReserve(uint64 epochId, bytes32 assetId) external;
 
     // ── views ──
+    /// @notice NAV (§8.6.1): cash + fee receivable + inventory mark + redemption claims − unearned premiums −
+    ///        reserves − queued deposits − reserved withdrawals.
     function nav() external view returns (uint256);
+    /// @notice NAV per share (WAD, $1 = 1e18).
     function sharePrice() external view returns (uint256);
+    /// @notice u of an epoch: worst replayed loss / J.
     function utilisation(uint64 epochId) external view returns (uint256);
+    /// @notice u_max × J − worst loss of an epoch (loan units).
     function capacityHeadroom(uint64 epochId) external view returns (uint256);
+    /// @notice One epoch's times, flows and results.
     function epoch(uint64 epochId) external view returns (Epoch memory);
+    /// @notice The active epoch, or the next one whose Bell window has not opened.
     function currentEpoch(bytes32 venue) external view returns (uint64);
+    /// @notice The venue calendar the pool's epochs follow.
     function venue() external view returns (bytes32);
     /// @notice The loan token (USDC).
     function asset() external view returns (address);
+    /// @notice The unsettled epoch, if any.
     function activeEpoch() external view returns (uint64 epochId, bool exists);
+    /// @notice Cash the pool may spend: cash − queued deposits − reserved withdrawals.
     function freeCash() external view returns (uint256);
+    /// @notice Premiums of the unsettled epoch (not yet in NAV).
     function unearnedPremiums() external view returns (uint256);
+    /// @notice Σ R-11 loss reserves held back from NAV.
     function pendingLossReserve() external view returns (uint256);
+    /// @notice Backstop inventory of an asset (R-12).
     function inventory(bytes32 assetId) external view returns (Inventory memory);
+    /// @notice Assets `owner` queued into an epoch.
     function pendingDeposit(uint64 epochId, address owner) external view returns (uint256 assets);
+    /// @notice Shares `owner` queued for an epoch, and the assets already paid.
     function pendingWithdraw(uint64 epochId, address owner)
         external
         view
         returns (uint256 shares, uint256 paid);
+    /// @notice The R-11 reserve of an asset in an epoch.
     function lossReserve(uint64 epochId, bytes32 assetId) external view returns (uint256);
 
     // ── v3 (S4) ──
     /// @notice Σ cost of the unclaimed redemption claims (in NAV, §8.6.1).
     function redemptionClaimsOutstanding() external view returns (uint256);
+    /// @notice One redemption claim of the NAV pool.
     function redemptionClaim(uint256 requestId) external view returns (RedemptionClaim memory);
     /// @notice §15.1 concentration limit (WAD, 0.35 at launch): an asset's worst covered loss in an epoch stays
     ///         ≤ maxAssetShare × u_max × J (ADR-0112). `writeCover` reverts `ConcentrationExceeded` above it.

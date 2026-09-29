@@ -84,11 +84,13 @@ contract CredenceTreasuryFund is INavFund, IssuerRoles, ERC20, ERC20Permit {
         emit RedemptionsGatedSet(gated);
     }
 
+    /// @notice onlyIssuer: freeze or unfreeze every transfer.
     function setFrozen(bool f) external onlyIssuer {
         frozen = f;
         emit FrozenSet(f);
     }
 
+    /// @notice onlyIssuer: the wallet redemptions are paid from.
     function setReserveWallet(address wallet) external onlyIssuer {
         if (wallet == address(0)) revert ZeroAddress();
         reserveWallet = wallet;
@@ -177,10 +179,12 @@ contract CredenceTreasuryFund is INavFund, IssuerRoles, ERC20, ERC20Permit {
         return ICompliance(registry).canHold(a);
     }
 
+    /// @notice The issuer.
     function issuer() external view returns (address) {
         return _issuer;
     }
 
+    /// @notice 18.
     function decimals() public view override(ERC20, IERC20Metadata) returns (uint8) {
         return super.decimals();
     }

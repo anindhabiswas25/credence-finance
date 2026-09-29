@@ -122,6 +122,8 @@ contract AuctionHouse is ReentrancyGuardTransient, IAuctionHouse {
         emit LimitsSet(maxBids, minNotional_, bondBps);
     }
 
+    /// @notice onlyTimelock: the deadline offsets of an auction kind, [lotFix, biddingStart,
+    ///        commitEnd/biddingEnd, clear] (§8.7.1).
     function setTimings(AuctionKind k, uint40[4] calldata offsets) external onlyTimelock {
         bool pre = k == AuctionKind.PRECLOSE;
         // forward kinds: fix ≤ start ≤ end ≤ clear; PRECLOSE (before the close): fix ≥ start ≥ end ≥ clear
@@ -134,6 +136,8 @@ contract AuctionHouse is ReentrancyGuardTransient, IAuctionHouse {
         emit TimingsSet(k, offsets);
     }
 
+    /// @notice onlyTimelock: bids per auction (≤ 64), minimum bid notional (loan units) and the REOPEN bond
+    ///        (bps of maxNotional, R-04).
     function setLimits(uint16 maxBids_, uint128 minNotional_, uint16 bondBps_) external onlyTimelock {
         if (maxBids_ == 0 || maxBids_ > 64 || bondBps_ > BPS) revert InvalidParam();
         (maxBids, minNotional, bondBps) = (maxBids_, minNotional_, bondBps_);
@@ -442,6 +446,7 @@ contract AuctionHouse is ReentrancyGuardTransient, IAuctionHouse {
         return _gdas[gdaId];
     }
 
+    /// @notice REOPEN auctions of (asset, closure) not yet cleared and not yet settled.
     function reopenOutstanding(bytes32 assetId, uint64 closureId)
         external
         view

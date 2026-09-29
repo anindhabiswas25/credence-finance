@@ -19,6 +19,7 @@ interface IAssetClock is IAssetClockEvents, ICredenceErrors {
     /// @notice Run the transition algorithm (§8.2.2 steps 1–10). Idempotent within a block. Permissionless.
     /// @custom:state any
     function poke(bytes32 assetId) external returns (ClockState);
+    /// @notice `poke` for several assets in one call (J1).
     function pokeMany(bytes32[] calldata assetIds) external;
 
     /// @notice Stored state (may lag until poked).
@@ -27,6 +28,8 @@ interface IAssetClock is IAssetClockEvents, ICredenceErrors {
     function previewState(bytes32 assetId) external view returns (ClockState);
     /// @notice Calendar-only state now: REGULAR / EXTENDED / CLOSED (CLOSED beyond coverage).
     function calendarState(bytes32 assetId) external view returns (ClockState);
+    /// @notice The asset's clock bookkeeping: state, current closure, reference price, open print and the
+    ///        next Bell times.
     function closureInfo(bytes32 assetId) external view returns (ClockData memory);
     /// @notice bellWindowAt ≤ now < closeAt of the next scheduled close (computed from the calendar).
     function isBellWindow(bytes32 assetId) external view returns (bool);
@@ -43,6 +46,7 @@ interface IAssetClock is IAssetClockEvents, ICredenceErrors {
     function closureDays(bytes32 assetId) external view returns (uint256);
     /// @notice The most restrictive active guardian restriction ((REGULAR, 0) if none).
     function restriction(bytes32 assetId) external view returns (Restriction memory);
+    /// @notice The asset's venue calendar and kind (EQUITY / NAV).
     function assetConfig(bytes32 assetId) external view returns (AssetConfig memory);
 
     /// @notice onlyAuctionHouse / onlySettlement: the REOPEN of `closureId` is done. A stale closureId is a no-op.
@@ -60,11 +64,18 @@ interface IAssetClock is IAssetClockEvents, ICredenceErrors {
     /// @notice One-time wiring by the deployer (§7.4). Reverts on a second call.
     function initializeWiring(address oracle_, address auctionHouse_, address settlement_) external;
 
+    /// @notice The CalendarStore.
     function calendar() external view returns (address);
+    /// @notice The OracleAdapter.
     function oracle() external view returns (address);
+    /// @notice The SequencerHealth gap detector (R-20).
     function sequencerHealth() external view returns (address);
+    /// @notice The equity stack's AuctionHouse (may end an equity REOPEN).
     function auctionHouse() external view returns (address);
+    /// @notice The NAV stack's SettlementAdapter (may end a fund's REOPEN).
     function settlement() external view returns (address);
+    /// @notice The governance timelock.
     function timelock() external view returns (address);
+    /// @notice The CredenceGuardian (restrict only).
     function guardian() external view returns (address);
 }

@@ -4,7 +4,9 @@ pragma solidity 0.8.30;
 import {IFaucet} from "../interfaces/IFaucet.sol";
 
 interface IMintableCollateral {
+    /// @notice The token's capped-minter mint.
     function mint(address to, uint256 amount) external;
+    /// @notice The token's allowlist check.
     function canHold(address a) external view returns (bool);
 }
 
@@ -32,6 +34,7 @@ contract Faucet is IFaucet {
         emit OwnerTransferred(address(0), owner_);
     }
 
+    /// @notice onlyOwner: hand the faucet to a new owner.
     function transferOwnership(address newOwner) external {
         if (msg.sender != owner) revert Unauthorized();
         if (newOwner == address(0)) revert ZeroAddress();

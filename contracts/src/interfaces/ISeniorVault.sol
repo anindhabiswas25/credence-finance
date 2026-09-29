@@ -8,29 +8,48 @@ import {ISeniorVaultEvents} from "../libraries/Events.sol";
 
 /// @title Senior Vault: ERC-4626 + ERC-7540-style FIFO redeem queue (Build Guide §8.5, R-17). Interface v1.
 interface ISeniorVault is IERC4626, ISeniorVaultEvents, ICredenceErrors {
+    /// @notice Escrow shares in the FIFO redemption queue (R-17) for what idle liquidity cannot pay now.
     function requestRedeem(uint256 shares, address receiver) external returns (uint256 requestId);
+    /// @notice Pay out a processed redemption request.
     function claimRedeem(uint256 requestId) external returns (uint256 assets);
-    function processQueue(uint256 maxRequests) external; // permissionless
-    function allocate(bytes32 marketId, uint256 assets) external; // onlyAllocator, ≤ cap
-    function deallocate(bytes32 marketId, uint256 assets) external; // onlyAllocator, ≤ market liquidity
-    function setCap(bytes32 marketId, uint256 cap) external; // onlyTimelock
-    function setSupplyQueue(bytes32[] calldata ids) external; // onlyAllocator
-    function setWithdrawQueue(bytes32[] calldata ids) external; // onlyAllocator
+    /// @notice Permissionless: process up to `maxRequests` queued redemptions at the current share price as
+    ///        liquidity allows.
+    function processQueue(uint256 maxRequests) external;
+    /// @notice onlyAllocator: supply idle assets to a market (≤ its cap).
+    function allocate(bytes32 marketId, uint256 assets) external;
+    /// @notice onlyAllocator: withdraw supply from a market (≤ its liquidity).
+    function deallocate(bytes32 marketId, uint256 assets) external;
+    /// @notice onlyTimelock: a market's allocation cap.
+    function setCap(bytes32 marketId, uint256 cap) external;
+    /// @notice onlyAllocator: the order deposits are supplied in.
+    function setSupplyQueue(bytes32[] calldata ids) external;
+    /// @notice onlyAllocator: the order withdrawals pull from.
+    function setWithdrawQueue(bytes32[] calldata ids) external;
+    /// @notice Assets held by the vault and not supplied.
     function idle() external view returns (uint256);
+    /// @notice Unprocessed redemption requests.
     function queueLength() external view returns (uint256);
 
     // ── v1 additions ──
     /// @notice onlyTimelock. The allocator Safe (the timelock is always an allocator too).
     function setAllocator(address allocator) external;
+    /// @notice The allocator role.
     function allocator() external view returns (address);
+    /// @notice The governance timelock.
     function timelock() external view returns (address);
+    /// @notice The CredenceMarket it supplies.
     function market() external view returns (address);
+    /// @notice A market's allocation cap.
     function cap(bytes32 marketId) external view returns (uint256);
+    /// @notice The supply order.
     function supplyQueue() external view returns (bytes32[] memory);
+    /// @notice The withdraw order.
     function withdrawQueue() external view returns (bytes32[] memory);
+    /// @notice One redemption request.
     function redeemRequest(uint256 requestId) external view returns (RedeemRequest memory);
     /// @notice Id of the oldest unprocessed request (== nextRequestId when the queue is empty).
     function queueHead() external view returns (uint256);
+    /// @notice The id the next redemption request will get.
     function nextRequestId() external view returns (uint256);
     /// @notice Shares escrowed by unprocessed requests.
     function pendingRedeemShares() external view returns (uint256);

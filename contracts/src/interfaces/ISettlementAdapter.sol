@@ -43,19 +43,26 @@ interface ISettlementAdapter is ISettlementEvents, ICredenceErrors {
     function lotSettled(uint64 settlementId) external;
 
     // ── governance (onlyTimelock) ──
+    /// @notice onlyTimelock: the solver venues (the first is used).
     function setVenues(address[] calldata venues_) external;
     /// @notice Solver window length, 5 min ≤ w ≤ 1 day (15 min at launch).
     function setWindow(uint40 window_) external;
 
     // ── views ──
+    /// @notice The solver venues (the first is used).
     function venues() external view returns (address[] memory);
+    /// @notice Solver window length (15 min at launch).
     function window() external view returns (uint40);
     /// @notice κ_nav (WAD): the NAV lot's reserve discount, floor = NAV × (1 − κ_nav).
     function kappaNav() external view returns (uint256);
+    /// @notice One settlement (a NAV market lot sold through a venue).
     function settlement(uint64 settlementId) external view returns (Settlement memory);
+    /// @notice The id the next settlement will get.
     function nextSettlementId() external view returns (uint64);
     /// @notice REOPEN settlements of (asset, closure) opened and not yet finalized.
     function openReopenSettlements(bytes32 assetId, uint64 closureId) external view returns (uint256);
+    /// @notice The NAV market.
     function market() external view returns (address);
+    /// @notice The NAV pool (the fallback advance).
     function pool() external view returns (address);
 }

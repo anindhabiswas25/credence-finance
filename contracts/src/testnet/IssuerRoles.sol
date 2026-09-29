@@ -23,6 +23,7 @@ abstract contract IssuerRoles is ICollateralTokenEvents, ICredenceErrors {
         _;
     }
 
+    /// @notice onlyIssuer: hand the issuer role to a new address.
     function transferIssuer(address newIssuer) external onlyIssuer {
         if (newIssuer == address(0)) revert ZeroAddress();
         emit IssuerTransferred(_issuer, newIssuer);

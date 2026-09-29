@@ -30,6 +30,7 @@ library LiquidationLogic {
     using WadMath for uint256;
     using MarketLib for Layout;
 
+    /// @notice Library body of `CredenceMarket.flagForAuction` (DELEGATECALL).
     function flagForAuction(Layout storage $, bytes32 id, address[] calldata borrowers) external {
         MarketParams memory p = $.market(id);
         ClockState st = $.clock().poke(p.assetId);
@@ -129,6 +130,7 @@ library LiquidationLogic {
         emit ICredenceMarketEvents.LotsReleased(auctionId, 0, 0);
     }
 
+    /// @notice Library body of `CredenceMarket.onAuctionCleared` (DELEGATECALL).
     function onAuctionCleared(Layout storage $, uint64 auctionId, uint256 proceeds, uint256 blendedPrice)
         external
     {
@@ -144,6 +146,7 @@ library LiquidationLogic {
         emit ICredenceMarketEvents.LotCleared(auctionId, proceeds, blendedPrice);
     }
 
+    /// @notice Library body of `CredenceMarket.settlePositions` (DELEGATECALL).
     function settlePositions(Layout storage $, uint64 auctionId, address[] calldata borrowers) external {
         LotBook storage lot = $.lots[auctionId];
         if (!lot.cleared) revert ICredenceErrors.LotNotCleared(auctionId);
@@ -162,6 +165,7 @@ library LiquidationLogic {
         $.tip(KeeperJob.SETTLE);
     }
 
+    /// @notice Library body of `CredenceMarket.claimFees` (DELEGATECALL).
     function claimFees(Layout storage $, bytes32 id) external {
         MarketParams memory p = $.market(id);
         MarketState storage s = $.accrue(id);

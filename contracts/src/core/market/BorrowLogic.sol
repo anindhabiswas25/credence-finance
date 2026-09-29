@@ -55,6 +55,8 @@ library BorrowLogic {
         emit ICredenceMarketEvents.Borrow(id, b, to, assets, shares);
     }
 
+    /// @notice Library body of `CredenceMarket.withdrawCollateral` (runs by DELEGATECALL in the market's
+    ///        storage).
     function withdrawCollateral(Layout storage $, bytes32 id, address b, uint256 amount, address to)
         external
     {

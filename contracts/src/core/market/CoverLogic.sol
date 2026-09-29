@@ -25,6 +25,8 @@ import {GasGuard} from "../../libraries/GasGuard.sol";
 
 /// @dev The market's self-call used by the Bell's auto-cover, so a failed quote falls back to a sale.
 interface IAutoCover {
+    /// @notice The market's self-call that writes an auto-cover inside `enforceBell` (try/catch boundary);
+    ///        only the market itself may call it.
     function autoCover(bytes32 id, address b) external;
 }
 

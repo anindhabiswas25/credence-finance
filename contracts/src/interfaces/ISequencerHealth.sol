@@ -17,6 +17,7 @@ interface ISequencerHealth is ISequencerHealthEvents, ICredenceErrors {
     /// @return up Whether the sequencer is reported up.
     /// @return upSince When it last came up (0 = unknown / not tracked).
     function isUp() external view returns (bool up, uint40 upSince);
+    /// @notice The AssetClock (the only caller of recordPoke).
     function clock() external view returns (address);
     /// @notice One-time wiring of the AssetClock (deployer only).
     function setClock(address clock_) external;

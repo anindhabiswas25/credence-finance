@@ -155,6 +155,7 @@ contract UnderwriterPool is ERC20, ReentrancyGuardTransient, IUnderwriterPool {
         emit WiringInitialized(market_, auctionHouse_, settlement_, clock_, tips_);
     }
 
+    /// @notice onlyTimelock: minimum time after the reopen before an epoch can settle (≤ 1 day).
     function setSettleDelay(uint40 d) external onlyTimelock {
         if (d > 1 days) revert InvalidParam();
         settleDelay = d;
@@ -168,6 +169,7 @@ contract UnderwriterPool is ERC20, ReentrancyGuardTransient, IUnderwriterPool {
         emit ConcentrationLimitSet(share);
     }
 
+    /// @notice The loan token (USDC).
     function asset() external view returns (address) {
         return address(_asset);
     }
@@ -591,18 +593,22 @@ contract UnderwriterPool is ERC20, ReentrancyGuardTransient, IUnderwriterPool {
         return _currentVector(_active);
     }
 
+    /// @notice Assets the pool has ever held backstop inventory of.
     function inventoryAssets() external view returns (bytes32[] memory) {
         return _inventoryAssets;
     }
 
+    /// @notice R-11 / ADR-0112: an asset's worst covered loss in an epoch.
     function worstCovered(uint64 epochId, bytes32 assetId) external view returns (uint256) {
         return _worstCovered[epochId][assetId];
     }
 
+    /// @notice Assets reserved for settled withdrawals and not yet paid.
     function reservedUnpaid() external view returns (uint256) {
         return _reservedUnpaid;
     }
 
+    /// @notice Assets of deposits queued into unsettled epochs.
     function queuedDeposits() external view returns (uint256) {
         return _queuedDeposits;
     }

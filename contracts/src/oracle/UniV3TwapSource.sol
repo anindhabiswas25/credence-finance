@@ -9,9 +9,13 @@ import {GasGuard} from "../libraries/GasGuard.sol";
 
 /// @dev The subset of the Uniswap v3 pool interface this source reads.
 interface IUniswapV3PoolMinimal {
+    /// @notice Uniswap v3 pool: token0.
     function token0() external view returns (address);
+    /// @notice Uniswap v3 pool: token1.
     function token1() external view returns (address);
+    /// @notice Uniswap v3 pool: in-range liquidity.
     function liquidity() external view returns (uint128);
+    /// @notice Uniswap v3 pool: current price and tick.
     function slot0()
         external
         view
@@ -24,6 +28,7 @@ interface IUniswapV3PoolMinimal {
             uint8 feeProtocol,
             bool unlocked
         );
+    /// @notice Uniswap v3 pool: cumulative ticks at the given ages.
     function observe(uint32[] calldata secondsAgos)
         external
         view

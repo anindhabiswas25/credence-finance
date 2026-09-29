@@ -23,6 +23,8 @@ interface IOracleAdapter is IOracleAdapterEvents, ICredenceErrors {
         external
         view
         returns (bool ok, uint256 p, bool fallbackUsed);
+    /// @notice The feed-health flags the clock reads (staleness, disagreement, halts, issuer freeze, NAV
+    ///        validity).
     function feedHealth(bytes32 assetId) external view returns (FeedHealth memory);
     /// @notice dexTwap(1h) < 90% × refPrice while CLOSED or HALTED.
     function stressFlag(bytes32 assetId) external view returns (bool);
@@ -32,6 +34,7 @@ interface IOracleAdapter is IOracleAdapterEvents, ICredenceErrors {
     function haltReferencePrice(bytes32 assetId) external view returns (uint256 p, uint40 t);
     /// @notice The 1-hour DEX TWAP in token terms, and whether it is usable (configured, ok, deep enough).
     function dexTwap(bytes32 assetId) external view returns (uint256 p, bool usable);
+    /// @notice An asset's price wiring.
     function config(bytes32 assetId) external view returns (OracleConfig memory);
 
     /// @notice onlyTimelock. Lists or re-points an asset's sources. Reads `sharesPerToken` from the token on first
@@ -49,6 +52,8 @@ interface IOracleAdapter is IOracleAdapterEvents, ICredenceErrors {
     function setSharesPerToken(bytes32 assetId, uint256 newSharesPerToken) external;
     /// @notice One-time wiring of the AssetClock (deployer only).
     function setClock(address clock_) external;
+    /// @notice The AssetClock.
     function clock() external view returns (address);
+    /// @notice The governance timelock.
     function timelock() external view returns (address);
 }

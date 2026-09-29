@@ -15,7 +15,9 @@ interface ICalendarStore is ICalendarStoreEvents, ICredenceErrors {
     /// @custom:state any (governance). onlyTimelock.
     function appendSessions(bytes32 venue, Session[] calldata s) external;
 
+    /// @notice Number of sessions stored for a venue.
     function sessionCount(bytes32 venue) external view returns (uint256);
+    /// @notice Session `i` of a venue (UTC unix seconds).
     function session(bytes32 venue, uint256 i) external view returns (Session memory);
     /// @notice Up to `count` sessions starting at `from` (truncated at the end of the calendar).
     function sessions(bytes32 venue, uint256 from, uint256 count) external view returns (Session[] memory);
@@ -23,5 +25,6 @@ interface ICalendarStore is ICalendarStoreEvents, ICredenceErrors {
     function coverageEnd(bytes32 venue) external view returns (uint40);
     /// @notice Index of the first session whose `extClose > t` (binary search). `found = false` if none.
     function findSession(bytes32 venue, uint40 t) external view returns (uint256 index, bool found);
+    /// @notice The governance timelock (the only writer).
     function timelock() external view returns (address);
 }

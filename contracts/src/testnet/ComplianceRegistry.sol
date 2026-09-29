@@ -30,6 +30,7 @@ contract ComplianceRegistry is IComplianceRegistry {
         _;
     }
 
+    /// @notice onlyOwner: hand the registry to a new owner.
     function transferOwnership(address newOwner) external onlyOwner {
         if (newOwner == address(0)) revert ZeroAddress();
         emit OwnerTransferred(owner, newOwner);
@@ -66,6 +67,7 @@ contract ComplianceRegistry is IComplianceRegistry {
         return (from == address(0) || isAllowed[from]) && (to == address(0) || isAllowed[to]);
     }
 
+    /// @notice Whether `account` is allowlisted.
     function canHold(address account) external view returns (bool) {
         return isAllowed[account];
     }

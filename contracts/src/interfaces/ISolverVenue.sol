@@ -11,6 +11,7 @@ import {ISettlementEvents} from "../libraries/Events.sol";
 interface ISolverVenue is ICredenceErrors {
     /// @notice onlyAdapter.
     function open(uint64 settlementId, address token, uint256 qty, uint256 floorPrice, uint40 endsAt) external;
+    /// @notice The best bid so far (solver 0 = none).
     function best(uint64 settlementId) external view returns (address solver, uint256 price);
     /// @notice onlyAdapter, at or after `endsAt`.
     function finalize(uint64 settlementId) external returns (bool filled, uint256 proceeds);
@@ -22,18 +23,24 @@ interface ISolverAuction is ISolverVenue, ISettlementEvents {
     ///         ≥ 1.0001 × best (rounded up). Escrows qty × price in USDC (rounded up). The outbid solver is
     ///         refunded at once (or, if the push fails, credited for `withdrawRefund`).
     function bid(uint64 settlementId, uint256 price) external;
-    function setSolver(address solver, bool allowed) external; // onlyTimelock
+    /// @notice onlyTimelock: allowlist or remove a solver.
+    function setSolver(address solver, bool allowed) external;
 
     // ── v3 ──
     /// @notice Once, by the timelock: the adapter that may open and finalize windows, and the payment token.
     function initializeWiring(address adapter_, address loanToken_) external;
     /// @notice Pays a refund whose push failed.
     function withdrawRefund() external returns (uint256 amount);
+    /// @notice Whether `solver` may bid.
     function isSolver(address solver) external view returns (bool);
+    /// @notice One solver window (lot, floor, deadline, best bid and its escrow).
     function lot(uint64 settlementId) external view returns (SolverLot memory);
     /// @notice The minimum next bid: max(floor, best × 1.0001 rounded up).
     function minBid(uint64 settlementId) external view returns (uint256);
+    /// @notice Refunds whose push failed, claimable with `withdrawRefund`.
     function refundOwed(address solver) external view returns (uint256);
+    /// @notice The SettlementAdapter (opens and finalizes windows).
     function adapter() external view returns (address);
+    /// @notice The payment token (USDC).
     function loanToken() external view returns (address);
 }

@@ -82,11 +82,13 @@ contract RedStonePriceSource is IPriceSource {
 
     // ───────────── governance ─────────────
 
+    /// @notice onlyTimelock: the RedStone data-feed id of an asset.
     function setFeed(bytes32 assetId, bytes32 feedId) external onlyTimelock {
         _feeds[assetId].feedId = feedId;
         emit FeedSet(assetId, feedId);
     }
 
+    /// @notice onlyTimelock: the RedStone signers and threshold.
     function setCommittee(address[] calldata signers_, uint8 threshold_) external onlyTimelock {
         _setCommittee(signers_, threshold_);
     }
@@ -317,10 +319,12 @@ contract RedStonePriceSource is IPriceSource {
         return (0, false);
     }
 
+    /// @notice The RedStone signers.
     function signers() external view returns (address[] memory) {
         return _signers;
     }
 
+    /// @notice The RedStone data-feed id of an asset.
     function feedOf(bytes32 assetId) external view returns (bytes32) {
         return _feeds[assetId].feedId;
     }

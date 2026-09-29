@@ -64,6 +64,7 @@ contract CredenceStockToken is ICollateralToken, IssuerRoles, ERC20, ERC20Permit
         return _issuer;
     }
 
+    /// @notice 18.
     function decimals() public view override(ERC20, IERC20Metadata) returns (uint8) {
         return super.decimals();
     }
