@@ -367,13 +367,15 @@ contract CredencePriceFeedTest is ClockFixture, IPriceFeedEvents {
 
     /// @dev seq is strictly increasing per asset; assets are independent.
     function testFuzz_seqMonotone(uint64 s1, uint64 s2) public {
-        s1 = uint64(bound(s1, 1, type(uint64).max - 1));
+        s1 = uint64(bound(s1, 1, 2 ** 32)); // QA-08: one step is at most MAX_SEQ_STEP
         Report[] memory rs = _one(Report(A, 0, 1e18, uint40(vm.getBlockTimestamp()), 0, 2, s1));
         feed.submit(rs, _sign(feed, rs, 2));
         rs = _one(Report(A, 0, 1e18, uint40(vm.getBlockTimestamp()), 0, 2, s2));
         bytes[] memory sigs = _sign(feed, rs, 2);
         if (s2 <= s1) {
             vm.expectRevert(abi.encodeWithSelector(ICredenceErrors.StaleReport.selector, A, s2, s1));
+        } else if (s2 - s1 > 2 ** 32) {
+            vm.expectRevert(abi.encodeWithSelector(ICredenceErrors.SeqStepTooLarge.selector, A, s2, s1));
         }
         feed.submit(rs, sigs);
         // another asset starts from 0

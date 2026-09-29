@@ -158,6 +158,21 @@ contract SeniorVault is ERC4626, ISeniorVault, ReentrancyGuardTransient {
         return Math.min(balanceOf(owner), _convertToShares(_available(), Math.Rounding.Floor));
     }
 
+    /// @inheritdoc ERC4626
+    /// @dev QA-05: on the first deposit 1e3 of the minted shares go to 0xdead; the return value is what the receiver got.
+    function deposit(uint256 assets, address receiver) public override(ERC4626, IERC4626) returns (uint256) {
+        bool first = totalSupply() == 0;
+        uint256 shares = super.deposit(assets, receiver);
+        return first ? shares - DEAD_SHARES : shares;
+    }
+
+    /// @inheritdoc ERC4626
+    /// @dev QA-05: on the first mint the receiver still gets exactly `shares`; the caller also pays for the 1e3 dead
+    ///      shares.
+    function mint(uint256 shares, address receiver) public override(ERC4626, IERC4626) returns (uint256) {
+        return super.mint(totalSupply() == 0 ? shares + DEAD_SHARES : shares, receiver);
+    }
+
     function _decimalsOffset() internal pure override returns (uint8) {
         return 6;
     }

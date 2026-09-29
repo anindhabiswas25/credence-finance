@@ -21,6 +21,8 @@ contract CredencePriceFeed is ICredencePriceFeed, EIP712 {
     uint256 public constant RING_SIZE = 96;
     /// @notice An official open print may carry an exchange timestamp up to this much before the scheduled open.
     uint40 public constant OPEN_TOLERANCE = 60;
+    /// @notice QA-08: the largest seq step one report may take (the relayer counts up by 1 per report).
+    uint64 public constant MAX_SEQ_STEP = 2 ** 32;
 
     address public immutable timelock;
 
@@ -146,6 +148,8 @@ contract CredencePriceFeed is ICredencePriceFeed, EIP712 {
 
         AssetFeed storage f = _feeds[r.assetId];
         if (r.seq <= f.seq) revert StaleReport(r.assetId, r.seq, f.seq);
+        // QA-08: one signed report must not be able to push seq so far that the feed can never advance again
+        if (r.seq - f.seq > MAX_SEQ_STEP) revert SeqStepTooLarge(r.assetId, r.seq, f.seq);
         f.seq = r.seq;
 
         uint8 kind = r.kind;

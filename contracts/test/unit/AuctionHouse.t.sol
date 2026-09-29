@@ -89,7 +89,9 @@ contract AuctionHouseTest is RiskFixture {
         house.placeBid(id, q1, 148e18);
         vm.prank(b2);
         house.placeBid(id, q2, 146e18);
+        // QA-02: a bid below the reserve can never fill, so it may not take a slot
         vm.prank(b3);
+        vm.expectRevert(ICredenceErrors.BidBelowReserve.selector);
         house.placeBid(id, uint128(q), 140e18);
         vm.prank(b1);
         vm.expectRevert(abi.encodeWithSelector(ICredenceErrors.AlreadyBid.selector, id, b1));
@@ -128,10 +130,7 @@ contract AuctionHouseTest is RiskFixture {
         vm.prank(b2);
         house.claim(id);
         assertEq(usdc.balanceOf(b2), 1_000_000e6 - pay2);
-        vm.prank(b3);
-        house.claim(id);
         assertEq(usdc.balanceOf(b3), 1_000_000e6);
-        assertEq(tNVDA.balanceOf(b3), 0);
         vm.prank(b3);
         vm.expectRevert(ICredenceErrors.NothingToClaim.selector);
         house.claim(id);
@@ -195,16 +194,19 @@ contract AuctionHouseTest is RiskFixture {
         assertEq(a.pStar, 139e18);
         assertEq(a.filled, q);
         assertEq(a.qPool, 0);
-        // the non-revealer's bond went to the pool; the REOPEN is over (last tranche, queue window passed)
-        assertEq(usdc.balanceOf(address(up)) - poolBefore, 20_000e6);
+        // the non-revealer's and (QA-02) the low-ball's bonds went to the pool; the REOPEN is over (last tranche,
+        // queue window passed)
+        assertEq(usdc.balanceOf(address(up)) - poolBefore, 40_000e6);
+        assertFalse(house.bid(id, b2).revealed, "a reveal below R stays unrevealed");
         assertFalse(_clockData(NVDA).reopenPending);
         assertEq(clk.reopenCompletions(), 1);
         vm.prank(b3);
         vm.expectRevert(ICredenceErrors.NothingToClaim.selector);
         house.claim(id);
         vm.prank(b2);
+        vm.expectRevert(ICredenceErrors.NothingToClaim.selector);
         house.claim(id);
-        assertEq(usdc.balanceOf(b2), 1_000_000e6, "low-ball: bond refunded");
+        assertEq(usdc.balanceOf(b2), 1_000_000e6 - 20_000e6, "low-ball: bond forfeited (QA-02)");
         _settle(id, alice);
         assertTrue(house.allReopenLotsSettled(VENUE, 1));
         assertTrue(house.reopenSettled(NVDA, 2));
@@ -336,6 +338,13 @@ contract AuctionHouseTest is RiskFixture {
         test_intradayClearsAtUniformPriceWithBackstop();
         Inventory memory inv = up.inventory(NVDA);
         uint256 navBefore = up.nav();
+        // QA-04: never listed at a closed-market valuation
+        clk.setState(NVDA, ClockState.HALTED);
+        vm.expectRevert(
+            abi.encodeWithSelector(ICredenceErrors.ActionNotAllowedInState.selector, 8, ClockState.HALTED)
+        );
+        up.resellInventory(NVDA);
+        clk.setState(NVDA, ClockState.REGULAR);
         uint64 g = up.resellInventory(NVDA);
         Gda memory gd = house.gda(g);
         assertEq(gd.qty, inv.qty);
@@ -349,10 +358,17 @@ contract AuctionHouseTest is RiskFixture {
         vm.warp(block.timestamp + 1 days);
         uint256 q = gd.qty / 4;
         uint256 cost = house.gdaPrice(g, q);
-        // after 24 h the oldest units cost about half of k: the price of q lies between k/2·q and k·q
-        assertGt(cost, q * 153e18 / 2 / 1e30);
-        assertLt(cost, q * 153e18 / 1e30);
+        // after 24 h the oldest units' GDA price is about half of k, below the S4 floor (1 − κ)·V = $145.50 (QA-03)
+        assertEq(cost, (q * 145.5e18 + 1e30 - 1) / 1e30, "floored at (1 - kappa) x V");
         _fund(b1, 1_000_000e6);
+        // QA-03: no sale while the market is shut
+        clk.setState(NVDA, ClockState.CLOSED);
+        vm.prank(b1);
+        vm.expectRevert(
+            abi.encodeWithSelector(ICredenceErrors.ActionNotAllowedInState.selector, 7, ClockState.CLOSED)
+        );
+        house.gdaBuy(g, q, cost);
+        clk.setState(NVDA, ClockState.REGULAR);
         vm.prank(b1);
         vm.expectRevert(abi.encodeWithSelector(ICredenceErrors.CostAboveMax.selector, cost, cost - 1));
         house.gdaBuy(g, q, cost - 1);

@@ -168,4 +168,5 @@ interface ICredenceErrors {
     error SettlementNotOpen(uint64 settlementId);
     error NoVenue();
     error UnknownRedemption(uint256 requestId);
+    error SeqStepTooLarge(bytes32 assetId, uint64 seq, uint64 storedSeq);
 }

@@ -41,7 +41,6 @@ contract UnderwriterPool is ERC20, ReentrancyGuardTransient, IUnderwriterPool {
 
     uint256 internal constant WAD = 1e18;
     uint256 internal constant GDA_EMISSION_PERIOD = 3 days; // r_e = inventory / 3 days
-    uint256 internal constant MAX_WITHDRAW_EPOCHS = 64; // scanned for FIFO priority
 
     // ───────────── configuration ─────────────
     address public immutable timelock;
@@ -232,6 +231,7 @@ contract UnderwriterPool is ERC20, ReentrancyGuardTransient, IUnderwriterPool {
         _withdrawPaid[epochId][msg.sender] += assets;
         _epochPaid[epochId] += assets;
         _reservedUnpaid -= assets;
+        _advanceHead();
         _asset.safeTransfer(msg.sender, assets);
         emit WithdrawClaimed(epochId, msg.sender, assets, owed - assets);
     }
@@ -351,7 +351,7 @@ contract UnderwriterPool is ERC20, ReentrancyGuardTransient, IUnderwriterPool {
 
     /// @inheritdoc IUnderwriterPool
     function resellInventory(bytes32 assetId) external nonReentrant returns (uint64 gdaId) {
-        gdaId = PoolLib.listInventory(_inventory[assetId], assetId, market, auctionHouse);
+        gdaId = PoolLib.listInventory(_inventory[assetId], assetId, market, auctionHouse, clock);
         _tip();
     }
 
@@ -688,16 +688,14 @@ contract UnderwriterPool is ERC20, ReentrancyGuardTransient, IUnderwriterPool {
         emit EpochQueuesProcessed(e, w, reserved, d, minted);
     }
 
-    /// @dev Unpaid reserved withdrawals of settled epochs older than `e`. Epochs whose remainder is rounding dust
-    ///      (≤ 1 unit per withdrawer) are skipped and the head moves past them.
-    function _olderUnpaid(uint64 e) internal view returns (uint256 sum) {
-        uint256 n = _withdrawEpochs.length;
-        for (uint256 i = _withdrawHead; i < n && i < _withdrawHead + MAX_WITHDRAW_EPOCHS; ++i) {
-            uint64 x = _withdrawEpochs[i];
-            if (x >= e) break;
-            uint256 left = _epochs[x].withdrawAssetsReserved - _epochPaid[x];
-            if (left > _withdrawers[x]) sum += left;
-        }
+    /// @dev QA-07: moves the FIFO head past settled epochs whose withdrawals are paid (PoolLib.advanceHead).
+    function _advanceHead() internal {
+        _withdrawHead = PoolLib.advanceHead(_epochs, _epochPaid, _withdrawers, _withdrawEpochs, _withdrawHead);
+    }
+
+    /// @dev Unpaid reserved withdrawals of settled epochs older than `e` (PoolLib.olderUnpaid).
+    function _olderUnpaid(uint64 e) internal view returns (uint256) {
+        return PoolLib.olderUnpaid(_epochs, _epochPaid, _withdrawers, _withdrawEpochs, _withdrawHead, e);
     }
 
     function _depositEpoch() internal view returns (uint64 e, bool queue) {

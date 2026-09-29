@@ -60,7 +60,7 @@ contracts-fmt-check: ## Check Solidity formatting (CI)
 	cd $(CONTRACTS_DIR) && forge fmt --check
 
 contracts-snapshot: contracts-deps ## Write the gas snapshot (contracts/.gas-snapshot)
-	cd $(CONTRACTS_DIR) && forge snapshot --no-match-path 'test/invariant/*'
+	cd $(CONTRACTS_DIR) && forge snapshot --no-match-path 'test/{invariant,security,fuzz}/**'
 
 contracts-clean: ## Remove Foundry build output
 	cd $(CONTRACTS_DIR) && forge clean

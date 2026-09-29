@@ -1171,6 +1171,27 @@
   },
   {
     "type": "error",
+    "name": "SeqStepTooLarge",
+    "inputs": [
+      {
+        "name": "assetId",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "seq",
+        "type": "uint64",
+        "internalType": "uint64"
+      },
+      {
+        "name": "storedSeq",
+        "type": "uint64",
+        "internalType": "uint64"
+      }
+    ]
+  },
+  {
+    "type": "error",
     "name": "SessionIndexOutOfRange",
     "inputs": [
       {

@@ -5,7 +5,8 @@ import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IER
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import {Inventory, Session, MarketKind, MarketParams, RedemptionClaim} from "../libraries/Types.sol";
+import {Inventory, Session, MarketKind, MarketParams, RedemptionClaim, ClockState, Epoch} from "../libraries/Types.sol";
+import {IAssetClock} from "../interfaces/IAssetClock.sol";
 import {IUnderwriterPoolEvents} from "../libraries/Events.sol";
 import {INavFund} from "../interfaces/INavFund.sol";
 import {IAuctionHouse} from "../interfaces/IAuctionHouse.sol";
@@ -27,6 +28,7 @@ library PoolLib {
     uint256 internal constant GDA_START_MARKUP = 1.02e18; // F-4.5e: k = 1.02 × V
     uint256 internal constant GDA_DECAY = 8_022_536_812_036; // ln 2 / 86,400 s (WAD per second): half-life 24 h
     uint256 internal constant GDA_EMISSION_PERIOD = 3 days; // r_e = inventory / 3 days
+    uint256 internal constant MAX_WITHDRAW_EPOCHS = 64; // scanned for FIFO priority
 
     uint256 internal constant WAD = 1e18;
     uint40 internal constant BELL_WINDOW = 2 hours; // §8.2.2
@@ -142,11 +144,18 @@ library PoolLib {
 
     // ───────────── GDA resale (F-4.5e) ─────────────
 
-    /// @notice Hands the inventory of `assetId` not yet in a GDA to the auction house and starts a GDA over it.
-    function listInventory(Inventory storage inv, bytes32 assetId, address market, address auctionHouse)
-        external
-        returns (uint64 gdaId)
-    {
+    /// @notice Hands the inventory of `assetId` not yet in a GDA to the auction house and starts a GDA over it. Only
+    ///         while the asset's clock is REGULAR, so k = 1.02 × V comes from the live cross-checked price, never a
+    ///         closed-market min(reference, DEX TWAP) (QA-04, ADR-0113).
+    function listInventory(
+        Inventory storage inv,
+        bytes32 assetId,
+        address market,
+        address auctionHouse,
+        IAssetClock clock
+    ) external returns (uint64 gdaId) {
+        ClockState st = clock.poke(assetId);
+        if (st != ClockState.REGULAR) revert ICredenceErrors.ActionNotAllowedInState(8, st); // 8 = list resale
         if (inv.gdaId != 0) revert ICredenceErrors.GdaRunning(inv.gdaId);
         uint256 free = inv.qty - inv.inGda;
         if (free == 0) revert ICredenceErrors.NoInventory(assetId);
@@ -209,5 +218,43 @@ library PoolLib {
         assets = asset.balanceOf(address(this)) - bal;
         c.assets = uint128(assets);
         cost = c.cost;
+    }
+
+    // ───────────── withdrawal FIFO (§8.6.3) ─────────────
+
+    /// @notice Unpaid reserved withdrawals of settled epochs older than `e`, scanning up to 64 epochs from `head`.
+    ///         Epochs whose remainder is rounding dust (≤ 1 unit per withdrawer) are skipped.
+    function olderUnpaid(
+        mapping(uint64 => Epoch) storage epochs,
+        mapping(uint64 => uint256) storage paid,
+        mapping(uint64 => uint32) storage withdrawers,
+        uint64[] storage withdrawEpochs,
+        uint256 head,
+        uint64 e
+    ) external view returns (uint256 sum) {
+        uint256 n = withdrawEpochs.length;
+        for (uint256 i = head; i < n && i < head + MAX_WITHDRAW_EPOCHS; ++i) {
+            uint64 x = withdrawEpochs[i];
+            if (x >= e) break;
+            uint256 left = epochs[x].withdrawAssetsReserved - paid[x];
+            if (left > withdrawers[x]) sum += left;
+        }
+    }
+
+    /// @notice QA-07: the new FIFO head, past every leading settled epoch whose withdrawals are paid (≤ 1 unit of dust
+    ///         per withdrawer), so `olderUnpaid` keeps covering the oldest unpaid epochs after 64 of them.
+    function advanceHead(
+        mapping(uint64 => Epoch) storage epochs,
+        mapping(uint64 => uint256) storage paid,
+        mapping(uint64 => uint32) storage withdrawers,
+        uint64[] storage withdrawEpochs,
+        uint256 head
+    ) external view returns (uint256 h) {
+        h = head;
+        uint256 n = withdrawEpochs.length;
+        for (uint256 end = h + MAX_WITHDRAW_EPOCHS; h < n && h < end; ++h) {
+            uint64 x = withdrawEpochs[h];
+            if (epochs[x].withdrawAssetsReserved - paid[x] > withdrawers[x]) break;
+        }
     }
 }

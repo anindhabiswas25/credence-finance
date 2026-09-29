@@ -149,8 +149,10 @@ library MarketLib {
             KinkedRateModel.utilization(s.totalBorrowAssets, s.totalSupplyAssets), $.params[id].rate
         );
         i = KinkedRateModel.interest(s.totalBorrowAssets, r, dt);
+        // QA-06: floor the two fee shares once, together, so the senior remainder i − fees never falls as i grows
+        uint256 fees = i * (uint256(s.feePoolBps) + s.feeTreasuryBps) / BPS;
         fp = i * s.feePoolBps / BPS;
-        ft = i * s.feeTreasuryBps / BPS;
+        ft = fees - fp;
     }
 
     function accruedView(Layout storage $, bytes32 id) internal view returns (MarketState memory s) {

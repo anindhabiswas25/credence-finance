@@ -6,7 +6,6 @@ import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IER
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {ReentrancyGuardTransient} from "@openzeppelin/contracts/utils/ReentrancyGuardTransient.sol";
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
-import {FixedPointMathLib} from "solady/utils/FixedPointMathLib.sol";
 import {
     AuctionKind,
     AuctionPhase,
@@ -14,12 +13,14 @@ import {
     Bid,
     Gda,
     ClockData,
+    ClockState,
     MarketParams,
     LotInfo,
     MarketKind,
     KeeperJob
 } from "../libraries/Types.sol";
 import {GasGuard} from "../libraries/GasGuard.sol";
+import {GdaLib} from "./GdaLib.sol";
 import {IAuctionHouse} from "../interfaces/IAuctionHouse.sol";
 import {ICredenceMarket} from "../interfaces/ICredenceMarket.sol";
 import {IUnderwriterPool} from "../interfaces/IUnderwriterPool.sol";
@@ -44,6 +45,7 @@ contract AuctionHouse is ReentrancyGuardTransient, IAuctionHouse {
     uint256 internal constant WAD = 1e18;
     uint256 internal constant BPS = 10_000;
     uint256 internal constant REOPEN_QUEUE = 120; // §8.4.3, market flag window after the open print
+    uint8 internal constant GDA_BUY = 7; // `ActionNotAllowedInState` action code of gdaBuy (after MarketAction's 0–6)
 
     address public immutable timelock;
     ICredenceMarket public market;
@@ -293,6 +295,9 @@ contract AuctionHouse is ReentrancyGuardTransient, IAuctionHouse {
         bytes32 c =
             keccak256(abi.encode(block.chainid, address(this), auctionId, msg.sender, qty, price, salt));
         if (c != b.commitment) revert BadReveal();
+        // QA-02: a reveal below R can never fill; it stays unrevealed, so its bond is forfeited at clearing like a
+        // non-reveal's (a free commit slot would otherwise be free griefing)
+        if (price < a.reserve) return;
         MarketParams memory p = market.marketParams(a.marketId);
         uint256 notional = _value(qty, price, p, Math.Rounding.Ceil);
         if (notional > b.maxNotional) revert RevealAboveMaxNotional(notional, b.maxNotional);
@@ -312,6 +317,8 @@ contract AuctionHouse is ReentrancyGuardTransient, IAuctionHouse {
         Auction storage a = _auction(auctionId);
         if (a.kind == AuctionKind.REOPEN) revert WrongKind(uint8(a.kind));
         _window(a, AuctionPhase.OPEN_BIDDING, a.deadlines[1], a.deadlines[2]);
+        // QA-02: a bid below the reserve fixed with the lot can never fill, so it may not take one of the 64 slots
+        if (price < a.reserve) revert BidBelowReserve();
         MarketParams memory p = market.marketParams(a.marketId);
         uint256 notional = _value(qty, price, p, Math.Rounding.Ceil);
         if (notional < minNotional || notional == 0) revert BidTooSmall(notional, minNotional);
@@ -364,17 +371,21 @@ contract AuctionHouse is ReentrancyGuardTransient, IAuctionHouse {
     }
 
     /// @inheritdoc IAuctionHouse
+    /// @dev S4 (QA-01, QA-03, ADR-0113): only while the asset's clock is REGULAR (live price, the market open), never
+    ///      below (1 − κ) × V_live, and the pool books the sale before the tokens leave (a receive hook sees final NAV).
     function gdaBuy(uint64 gdaId, uint256 qty, uint256 maxCost) external nonReentrant returns (uint256 cost) {
         Gda storage g = _gdas[gdaId];
         if (!g.active) revert UnknownGda(gdaId);
+        ClockState st = clock.poke(g.assetId);
+        if (st != ClockState.REGULAR) revert ActionNotAllowedInState(GDA_BUY, st);
         _checkHolder(g.token, msg.sender);
         cost = gdaPrice(gdaId, qty);
         if (cost > maxCost) revert CostAboveMax(cost, maxCost);
         g.sold += uint128(qty);
         if (g.sold == g.qty) g.active = false;
         IERC20(_loanToken()).safeTransferFrom(msg.sender, address(pool), cost);
-        IERC20(g.token).safeTransfer(msg.sender, qty);
         pool.onGdaSale(g.assetId, qty, cost);
+        IERC20(g.token).safeTransfer(msg.sender, qty);
         emit GdaBought(gdaId, msg.sender, qty, cost);
     }
 
@@ -390,28 +401,12 @@ contract AuctionHouse is ReentrancyGuardTransient, IAuctionHouse {
     }
 
     /// @inheritdoc IAuctionHouse
-    /// @dev Continuous GDA: units are emitted at r per second from `start`; the unit emitted at s costs
-    ///      k·e^{−λ(now − s)}. Buying q units takes the oldest unsold ones, whose age is T = now − start − sold / r:
-    ///      P(q) = k · r · (e^{λq/r} − 1) · e^{−λT} / λ, in loan units, rounded up. Only emitted units can be bought.
+    /// @dev GdaLib.cost: the continuous GDA price, floored at qty × (1 − κ) × V (ADR-0113).
     function gdaPrice(uint64 gdaId, uint256 qty) public view returns (uint256) {
         Gda storage g = _gdas[gdaId];
         if (!g.active) revert UnknownGda(gdaId);
-        if (qty == 0) return 0;
-        uint256 elapsed = block.timestamp - g.start;
-        uint256 emitted = Math.min(uint256(g.qty), elapsed * g.emissionPerSec);
-        uint256 available = emitted > g.sold ? emitted - g.sold : 0;
-        if (qty > available) revert GdaInsufficient(available, qty);
-        uint256 age = elapsed - uint256(g.sold) / g.emissionPerSec; // T ≥ 0 because sold ≤ emitted
-        uint256 x = uint256(g.decay).mulDiv(qty, g.emissionPerSec); // λq/r, WAD
-        uint256 growth = uint256(FixedPointMathLib.expWad(int256(x))) - WAD;
-        uint256 decayF = uint256(FixedPointMathLib.expWad(-int256(uint256(g.decay) * age)));
-        uint8 cd = IERC20Metadata(g.token).decimals();
-        // k (WAD per whole token) × r (units/s) / 10^cd → WAD value per second; / λ → WAD value
-        uint256 perSec = uint256(g.k).mulDiv(g.emissionPerSec, 10 ** cd);
-        uint256 value = perSec.mulDiv(WAD, g.decay, Math.Rounding.Ceil)
-            .mulDiv(growth, WAD, Math.Rounding.Ceil)
-            .mulDiv(decayF, WAD, Math.Rounding.Ceil);
-        return value.mulDiv(1, _loanScale(), Math.Rounding.Ceil);
+        uint256 floorPrice = _oracle().valuationPrice(g.assetId).mulDiv(WAD - _engine().params().kappa, WAD);
+        return GdaLib.cost(g, qty, floorPrice, _loanScale());
     }
 
     // ═════════════════════════════ views ═════════════════════════════
