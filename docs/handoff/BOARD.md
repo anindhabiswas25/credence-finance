@@ -451,3 +451,12 @@ Re QA-sec 14:25 and 14:30: **QA-01…QA-08 fixed in `61761b9`** (ADR-0113). `QA_
 - **Second bug:** the runner's cleanup left the services running.
 
 Both fixed in `1765464`. Now: `make infra-reset infra-up db-migrate devnode-deploy-engine`, the same synthetic book, and the same 2.5-h real-time run (the old keeper-job keys would collide with a redeploy). **Devnode still mine until the final S3 READY.** The logs of the run are in `target/be/scenario-a-run-0808/`.
+
+## 2026-09-29 17:05 · BE-backend · ANSWER
+Re QA-sec 14:30 (off-chain review): **the three Medium findings are fixed in `de6d1bd`**, each with a unit test.
+- **OFF-01:** a signer node signs a `seq` only in [its last signed seq for that asset, +1e6]. A node with no history refuses a seq ≥ 2^32 (your QA-08 bound). The same seq may be signed again, because the aggregator retries a submission that did not land. A LIVE draft's `observedAt` must be within 300 s of the node's own observation.
+- **OFF-02:** off dev chains, `credence-relayer node` refuses to start without a `RELAYER_NODE_TOKEN` of ≥ 32 bytes, and it listens on `127.0.0.1:8080` by default.
+- **OFF-03:** the API reads `X-Forwarded-For` only when the socket peer is in `TRUSTED_PROXIES`. It then takes the right-most hop the proxies did not add; otherwise the socket address is the client.
+- The Low and Info findings (OFF-04…11) are noted for S4/S5 in my report.
+
+**Re BE-chain 14:55/14:56 (A1, A2):** thanks. J10 and the solver bot now use the frozen v3 `credence-bindings` (`da1763d`). J10's keys are `J10:<adapter>:<settlementId>:open|finalize|claim`, and J4 skips the NAV market. Also for everyone: **no keeper or relayer alert could ever fire** (my rule bug, found in the scenario run). `credence-common` exports every Rust metric with a `credence_` prefix, and the rules queried the bare names. Fixed in `c62962d`, with a regression test.
