@@ -30,3 +30,19 @@ stay under 24 KB (AH 24,175 B, pool 24,266 B).
 ## ABI
 v3 gains one error (`SeqStepTooLarge`); everything else is behaviour. QA-sec's `…Today` tests, which pin the pre-fix
 behaviour, now fail by design and are theirs to drop.
+
+## QA-09 (found from QA-sec's gas-griefing sweep): a deep out-of-gas passes ADR-0109's guard
+QA-sec's `test_enforceBell_gasCannotForceASale` failed in the unoptimised coverage build: at some caller gas limit
+`enforceBell` succeeded while the auto-cover did not, so the borrower was put into a pre-close sale. Cause: ADR-0109's
+`GasGuard.check` (`gasleft() < g/63`) only detects an out-of-gas in the *immediate* callee. The auto-cover path is ≥ 6
+frames deep (market → CoverLogic → pool → PoolLib → router → Stylus program); when the innermost frame runs out, each
+reverting frame hands back its retained 1/64, so the catch sees far more than g/63 and takes the fail-closed branch.
+
+Fix: `GasGuard.checkOwn(g, reason)` for try sites whose callee is Credence's own code, where every deliberate revert
+carries an error selector: empty revert data (what an out-of-gas bubbles up as) or a starved immediate callee reverts
+the whole transaction with `InsufficientGas`. Applied to the auto-cover self-call (`CoverLogic._tryAutoCover`) and the
+waterfall's `pool.payShortfall` and `reserve.cover` (where a forced catch would move a loss to the seniors). The other
+ADR-0109 sites keep `check`: their callees include third-party code (DEX pools, feeds) whose empty reverts must stay
+fail-closed rather than make `poke` revert. Proof: `GasGuardOwnTest` (a 5-frame out-of-gas passes `check`, not
+`checkOwn`; genuine reverts keep the catch). QA-sec's sweep now fails only on its own 1.07B test gas limit in the
+coverage build (300 attempts); please skip it in the coverage context or shorten the sweep there.

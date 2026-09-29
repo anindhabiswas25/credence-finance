@@ -207,8 +207,8 @@ library CoverLogic {
         uint256 g1 = gasleft();
         try IAutoCover(address(this)).autoCover(id, b) {
             return true;
-        } catch {
-            GasGuard.check(g1);
+        } catch (bytes memory reason) {
+            GasGuard.checkOwn(g1, reason); // a deep out-of-gas must not turn an auto-cover into a sale
             return false;
         }
     }

@@ -13,4 +13,11 @@ library GasGuard {
     function check(uint256 gasBefore) internal view {
         if (gasleft() < gasBefore / 63) revert ICredenceErrors.InsufficientGas();
     }
+
+    /// @notice For a callee that is Credence's own code, where every deliberate revert carries an error selector: an
+    ///         out-of-gas anywhere down the call chain bubbles up with EMPTY revert data, and a deep one returns enough
+    ///         unspent gas to pass `check` (S4, ADR-0113 §QA-09). Empty data or a starved immediate callee reverts.
+    function checkOwn(uint256 gasBefore, bytes memory reason) internal view {
+        if (reason.length == 0 || gasleft() < gasBefore / 63) revert ICredenceErrors.InsufficientGas();
+    }
 }

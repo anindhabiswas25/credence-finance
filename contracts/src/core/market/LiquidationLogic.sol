@@ -323,8 +323,8 @@ library LiquidationLogic {
         uint256 bal = token.balanceOf(address(this));
         uint256 g2 = gasleft();
         try IUnderwriterPool($.w.pool).payShortfall(s) {}
-        catch {
-            GasGuard.check(g2);
+        catch (bytes memory reason) {
+            GasGuard.checkOwn(g2, reason); // a deep out-of-gas must not move the loss to the seniors
         }
         uint256 paidPool = WadMath.min(token.balanceOf(address(this)) - bal, s);
         uint256 paidReserve;
@@ -332,8 +332,8 @@ library LiquidationLogic {
             bal = token.balanceOf(address(this));
             uint256 g3 = gasleft();
             try IProtocolReserve($.w.reserve).cover(s - paidPool) {}
-            catch {
-                GasGuard.check(g3);
+            catch (bytes memory reason) {
+                GasGuard.checkOwn(g3, reason);
             }
             paidReserve = WadMath.min(token.balanceOf(address(this)) - bal, s - paidPool);
         }
