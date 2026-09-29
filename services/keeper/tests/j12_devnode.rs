@@ -1,6 +1,7 @@
 //! J12 Stylus activation check on the nitro devnode (anvil has no Stylus), run with `make keeper-j12-e2e`:
-//! the Risk Engine from the unified address book (`shared.riskEngine`, ADR-0105) reports its ArbWasm
-//! `programTimeLeft`, the gauge is set, and an address that is not an activated program raises the
+//! `shared.riskEngine` is the Solidity RiskEngineRouter (ADR-0108), so J12 checks its two Stylus programs
+//! (`pricing()`, `auction()`): both gauges are set with no alert (S4 A: the router itself used to raise a
+//! false "programTimeLeft 0 days"), and an address that is not an activated program raises the
 //! `stylus-activation` alert. Needs `make infra-up db-migrate` and an engine on the devnode
 //! (`make devnode-deploy-engine`).
 
@@ -62,39 +63,52 @@ async fn j12_reads_program_time_left_from_the_address_book() {
         .unwrap();
     let pool = credence_common::db::connect(&url, 2).await.unwrap();
 
-    // the precompile directly, for the expected value
+    // the precompile directly, for the expected values: the router is not a program, its two targets are
     let p = alloy::providers::ProviderBuilder::new().connect_http(rpc_url.parse().unwrap());
-    let direct = IArbWasm::new(ARB_WASM, &p)
-        .programTimeLeft(engine)
-        .call()
-        .await
-        .unwrap();
     assert!(
-        direct > 30 * 86_400,
-        "engine should be freshly activated, got {direct} s"
+        IArbWasm::new(ARB_WASM, &p)
+            .programTimeLeft(engine)
+            .call()
+            .await
+            .is_err(),
+        "shared.riskEngine should be the Solidity router (ADR-0108), not a program"
     );
-
-    // 1. the real engine: gauge set, no alert
+    let router = credence_keeper::bindings::IRiskEngineRouter::new(engine, &p);
+    let programs = [
+        ("riskEngine.pricing", router.pricing().call().await.unwrap()),
+        (
+            "riskEngine.auctionMath",
+            router.auction().call().await.unwrap(),
+        ),
+    ];
     let metrics = Metrics::detached();
     let k = keeper(&rpc_url, vec![("riskEngine".into(), engine)], &metrics);
     let mut conn = pool.acquire().await.unwrap();
     let rep = k.tick(&mut conn).await.unwrap();
-    let got = metrics
-        .program_time_left
-        .with_label_values(&["riskEngine"])
-        .get() as u64;
-    assert!(
-        got <= direct && direct - got < 3_600,
-        "gauge {got} vs precompile {direct}"
-    );
+    for (label, program) in programs {
+        let direct = IArbWasm::new(ARB_WASM, &p)
+            .programTimeLeft(program)
+            .call()
+            .await
+            .unwrap();
+        assert!(
+            direct > 30 * 86_400,
+            "{label} should be freshly activated, got {direct} s"
+        );
+        let got = metrics.program_time_left.with_label_values(&[label]).get() as u64;
+        assert!(
+            got <= direct && direct - got < 3_600,
+            "{label}: gauge {got} vs precompile {direct}"
+        );
+        println!(
+            "{label} {program}: programTimeLeft {got} s ({} days)",
+            got / 86_400
+        );
+    }
     assert!(
         rep.alerts.iter().all(|a| !a.contains("stylus")),
         "{:?}",
         rep.alerts
-    );
-    println!(
-        "riskEngine {engine}: programTimeLeft {got} s ({} days)",
-        got / 86_400
     );
 
     // 2. an address that is not an activated program: time left 0 and a P2 alert (fresh DB, so J12 runs again)
