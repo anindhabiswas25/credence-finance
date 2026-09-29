@@ -317,11 +317,15 @@ describe("CORS and rate limits", () => {
   });
 
   it("returns 429 past the per-IP limit", async () => {
-    const a = app({ rateLimitPerMin: 3 });
+    const a = app({ rateLimitPerMin: 3, trustedProxies: ["10.0.0.1"] });
+    // through our proxy (OFF-03: X-Forwarded-For is trusted only from it)
+    const viaProxy = { incoming: { socket: { remoteAddress: "10.0.0.1" } } };
     const hit = () =>
-      a.request("/v1/clock/NVDA:XNAS", {
-        headers: { "x-forwarded-for": "203.0.113.9" },
-      });
+      a.request(
+        "/v1/clock/NVDA:XNAS",
+        { headers: { "x-forwarded-for": "203.0.113.9" } },
+        viaProxy,
+      );
     for (let i = 0; i < 3; i++) expect((await hit()).status).toBe(200);
     const r = await hit();
     expect(r.status).toBe(429);
@@ -329,11 +333,30 @@ describe("CORS and rate limits", () => {
     // another client is unaffected
     expect(
       (
-        await a.request("/v1/clock/NVDA:XNAS", {
-          headers: { "x-forwarded-for": "198.51.100.1" },
-        })
+        await a.request(
+          "/v1/clock/NVDA:XNAS",
+          { headers: { "x-forwarded-for": "198.51.100.1" } },
+          viaProxy,
+        )
       ).status,
     ).toBe(200);
+    // a client that forges the header without our proxy is limited by its own address
+    const direct = { incoming: { socket: { remoteAddress: "203.0.113.50" } } };
+    for (let i = 0; i < 3; i++)
+      await a.request(
+        "/v1/clock/NVDA:XNAS",
+        { headers: { "x-forwarded-for": `192.0.2.${i}` } },
+        direct,
+      );
+    expect(
+      (
+        await a.request(
+          "/v1/clock/NVDA:XNAS",
+          { headers: { "x-forwarded-for": "192.0.2.99" } },
+          direct,
+        )
+      ).status,
+    ).toBe(429);
   });
 });
 

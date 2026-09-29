@@ -50,6 +50,8 @@ pub struct Node {
     domain: Eip712Domain,
     state: RwLock<HashMap<B256, AssetObservation>>,
     last_print_poll: RwLock<HashMap<(B256, Kind), u64>>,
+    /// OFF-01: the highest seq this node signed per asset.
+    signed_seq: RwLock<HashMap<B256, u64>>,
     metrics: Metrics,
     clock: fn() -> u64,
 }
@@ -119,6 +121,7 @@ impl Node {
             domain,
             state: Default::default(),
             last_print_poll: Default::default(),
+            signed_seq: Default::default(),
             metrics,
             clock: now_s,
         }
@@ -336,7 +339,10 @@ impl Node {
                 status: MarketStatus::from_u8(r.marketStatus).unwrap_or(MarketStatus::Closed),
             };
             let own = snap.assets.iter().find(|a| a.asset_id == r.assetId);
-            if let Err(why) = verify(&draft, own, now) {
+            let last = self.signed_seq.read().await.get(&r.assetId).copied();
+            if let Err(why) =
+                crate::ocr::verify_seq(r.seq, last).and_then(|_| verify(&draft, own, now))
+            {
                 let label = match &why {
                     Refusal::OutOfTolerance { .. } => "out_of_tolerance",
                     Refusal::StatusMismatch { .. } => "status_mismatch",
@@ -344,6 +350,8 @@ impl Node {
                     Refusal::NoObservation => "no_observation",
                     Refusal::FromFuture => "from_future",
                     Refusal::UnsupportedKind => "unsupported_kind",
+                    Refusal::SeqOutOfWindow { .. } => "seq_out_of_window",
+                    Refusal::ObservedAtMismatch { .. } => "observed_at_mismatch",
                 };
                 self.metrics
                     .refusals
@@ -355,7 +363,14 @@ impl Node {
         }
         let signature = if refused.is_empty() && !reports.is_empty() {
             match self.signer.sign_hash(&digest(&self.domain, &reports)).await {
-                Ok(sig) => Some(Bytes::from(sig.as_bytes().to_vec())),
+                Ok(sig) => {
+                    let mut seen = self.signed_seq.write().await;
+                    for r in &reports {
+                        let e = seen.entry(r.assetId).or_insert(0);
+                        *e = (*e).max(r.seq);
+                    }
+                    Some(Bytes::from(sig.as_bytes().to_vec()))
+                }
                 Err(e) => {
                     refused.push((usize::MAX, format!("signer error: {e}")));
                     None

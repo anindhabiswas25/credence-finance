@@ -37,10 +37,31 @@ export class FixedWindow {
   }
 }
 
-export function clientIp(headers: Headers, remote?: string): string {
-  // behind a proxy the first X-Forwarded-For hop is the client; trust it only when set by our proxy
-  const xff = headers.get("x-forwarded-for");
-  return (xff?.split(",")[0]?.trim() || remote || "unknown").toLowerCase();
+/**
+ * The client address for per-IP limits (OFF-03). X-Forwarded-For is client-controlled, so it is read only
+ * when the socket peer is one of our proxies; then the right-most hop that is not a trusted proxy is the
+ * client (every proxy appends the address it saw). Without trusted proxies the socket address is the client.
+ */
+export function clientIp(
+  headers: Headers,
+  remote?: string,
+  trustedProxies: readonly string[] = [],
+): string {
+  const norm = (a: string) =>
+    a
+      .trim()
+      .toLowerCase()
+      .replace(/^::ffff:/, "");
+  const peer = remote ? norm(remote) : undefined;
+  const trusted = new Set(trustedProxies.map(norm));
+  if (!peer || !trusted.has(peer)) return peer || "unknown";
+  const hops = (headers.get("x-forwarded-for") ?? "")
+    .split(",")
+    .map(norm)
+    .filter(Boolean);
+  for (let i = hops.length - 1; i >= 0; i--)
+    if (!trusted.has(hops[i]!)) return hops[i]!;
+  return peer;
 }
 
 export function rateLimit(

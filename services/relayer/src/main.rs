@@ -48,7 +48,8 @@ enum Cmd {
     Node {
         #[arg(long, env = "NODE_ID", default_value = "node-1")]
         id: String,
-        #[arg(long, env = "NODE_LISTEN", default_value = "0.0.0.0:8080")]
+        /// Private by default (OFF-02); expose it on a private network interface explicitly.
+        #[arg(long, env = "NODE_LISTEN", default_value = "127.0.0.1:8080")]
         listen: SocketAddr,
     },
     /// The aggregator of one feed.
@@ -147,6 +148,16 @@ fn node_config(
         filter: FilterConfig::default(),
         auth_token: env::optional("RELAYER_NODE_TOKEN"),
     })
+}
+
+/// OFF-02: off dev chains, a standalone node refuses to start without a `RELAYER_NODE_TOKEN` of ≥ 32 bytes.
+fn check_node_token(chain_id: u64, token: Option<&str>) -> Result<()> {
+    match token {
+        Some(t) if t.len() >= 32 => Ok(()),
+        _ if is_dev_chain(chain_id) => Ok(()),
+        Some(_) => bail!("RELAYER_NODE_TOKEN must be at least 32 bytes"),
+        None => bail!("RELAYER_NODE_TOKEN is required for a signer node off dev chains (OFF-02)"),
+    }
 }
 
 fn feed_address() -> Result<Address> {
@@ -563,6 +574,11 @@ async fn main() -> Result<()> {
             Ok(())
         }
         Cmd::Node { id, listen } => {
+            // OFF-02 (QA-sec): a node's /v1/sign is a signing oracle; off dev chains it needs a bearer token
+            check_node_token(
+                common.chain_id,
+                env::optional("RELAYER_NODE_TOKEN").as_deref(),
+            )?;
             let (vendor, cal) = build_vendor(&common, Some(metrics.clone())).await?;
             let n = node(&common, &id, "RELAYER_NODE", None, vendor, cal, metrics).await?;
             tokio::spawn(n.clone().run());
@@ -588,5 +604,18 @@ async fn main() -> Result<()> {
             agg.run(ops).await;
             Ok(())
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::check_node_token;
+
+    #[test]
+    fn off02_node_token_required_off_dev_chains() {
+        assert!(check_node_token(412_346, None).is_ok());
+        assert!(check_node_token(421_614, None).is_err());
+        assert!(check_node_token(421_614, Some("short")).is_err());
+        assert!(check_node_token(42_161, Some(&"x".repeat(32))).is_ok());
     }
 }

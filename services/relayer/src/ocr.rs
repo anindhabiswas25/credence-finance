@@ -20,6 +20,14 @@ use std::collections::HashMap;
 
 /// A node signs only if the proposal is within this distance of its own observation (0.10%).
 pub const SIGN_TOLERANCE_PPM: u128 = 1_000;
+/// OFF-01 (QA-sec): once a node has signed an asset, it signs only seqs in [last, last + SEQ_WINDOW] (the same
+/// seq again: the aggregator retries a submission that did not land).
+pub const SEQ_WINDOW: u64 = 1_000_000;
+/// OFF-01: without history (a fresh node), no seq at or above the feed's own step bound (QA-08, 2^32).
+pub const SEQ_MAX_FRESH: u64 = 1 << 32;
+/// OFF-01: a LIVE draft's observedAt must be within this of the node's own LIVE observation time (prints are
+/// sparse in extended hours, so minutes, not seconds).
+pub const OBSERVED_AT_TOLERANCE_S: u64 = 300;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -191,6 +199,23 @@ pub enum Refusal {
     FromFuture,
     #[error("unsupported kind")]
     UnsupportedKind,
+    #[error("seq {seq} outside the window after the last signed {last:?}")]
+    SeqOutOfWindow { seq: u64, last: Option<u64> },
+    #[error("observedAt {draft} is {diff} s from own observation")]
+    ObservedAtMismatch { draft: u64, diff: u64 },
+}
+
+/// OFF-01: is `seq` a plausible next seq for an asset whose last signed seq is `last`?
+pub fn verify_seq(seq: u64, last: Option<u64>) -> Result<(), Refusal> {
+    let ok = match last {
+        Some(l) => seq >= l && seq - l <= SEQ_WINDOW,
+        None => seq > 0 && seq < SEQ_MAX_FRESH,
+    };
+    if ok {
+        Ok(())
+    } else {
+        Err(Refusal::SeqOutOfWindow { seq, last })
+    }
 }
 
 /// A node's check of one draft against its own observation of that asset.
@@ -228,6 +253,13 @@ pub fn verify(draft: &Draft, own: Option<&AssetObservation>, now: u64) -> Result
             let sd = own.live_session_date.ok_or(Refusal::NoObservation)?;
             if sd != draft.session_date {
                 return Err(Refusal::SessionMismatch { own: sd });
+            }
+            let diff = draft.observed_at.abs_diff(live.observed_at);
+            if diff > OBSERVED_AT_TOLERANCE_S {
+                return Err(Refusal::ObservedAtMismatch {
+                    draft: draft.observed_at,
+                    diff,
+                });
             }
             within(live.price_wad)
         }
@@ -449,5 +481,24 @@ mod tests {
         assert_eq!((nodes.len(), drafts.len()), (3, 2));
         // only one node accepts anything → no quorum
         assert!(choose_quorum(&[vec![true], vec![false], vec![false]], 2).is_none());
+    }
+
+    #[test]
+    fn off01_seq_window() {
+        assert!(verify_seq(1, None).is_ok());
+        assert!(verify_seq(0, None).is_err());
+        assert!(
+            verify_seq(u64::MAX, None).is_err(),
+            "a fresh node never signs the feed-ending seq"
+        );
+        assert!(verify_seq(SEQ_MAX_FRESH, None).is_err());
+        assert!(
+            verify_seq(41, Some(41)).is_ok(),
+            "a retried submission re-signs the same seq"
+        );
+        assert!(verify_seq(42, Some(41)).is_ok());
+        assert!(verify_seq(40, Some(41)).is_err());
+        assert!(verify_seq(41 + SEQ_WINDOW + 1, Some(41)).is_err());
+        assert!(verify_seq(u64::MAX, Some(41)).is_err());
     }
 }

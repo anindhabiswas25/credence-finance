@@ -35,6 +35,8 @@ const Env = z.object({
   ALLOWLIST_PER_IP_PER_HOUR: z.coerce.number().int().default(5),
   RATE_LIMIT_PER_MIN: z.coerce.number().int().default(120),
   RATE_LIMIT_AUTH_PER_MIN: z.coerce.number().int().default(20),
+  /** OFF-03: comma-separated addresses of our reverse proxies; X-Forwarded-For is trusted only from them. */
+  TRUSTED_PROXIES: z.string().default(""),
   NODE_ENV: z.string().default("development"),
 });
 
@@ -54,6 +56,8 @@ export type Config = {
   allowlistPerIpPerHour: number;
   rateLimitPerMin: number;
   rateLimitAuthPerMin: number;
+  /** OFF-03: peers whose X-Forwarded-For is trusted (empty: the socket address is the client). */
+  trustedProxies?: string[];
   secureCookies: boolean;
 };
 
@@ -82,6 +86,9 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
       .filter(Boolean),
     rateLimitPerMin: e.RATE_LIMIT_PER_MIN,
     rateLimitAuthPerMin: e.RATE_LIMIT_AUTH_PER_MIN,
+    trustedProxies: e.TRUSTED_PROXIES.split(",")
+      .map((s) => s.trim().toLowerCase())
+      .filter(Boolean),
     secureCookies: e.NODE_ENV === "production",
   };
 }

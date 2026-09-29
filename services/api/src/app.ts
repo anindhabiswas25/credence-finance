@@ -200,7 +200,7 @@ export function createApp(deps: Deps) {
     } catch {
       remote = undefined;
     }
-    return clientIp(c.req.raw.headers, remote);
+    return clientIp(c.req.raw.headers, remote, config.trustedProxies);
   };
   const general = new FixedWindow(config.rateLimitPerMin, 60_000, now);
   const authLimiter = new FixedWindow(config.rateLimitAuthPerMin, 60_000, now);

@@ -212,18 +212,23 @@ describe("POST /v1/testnet/allowlist", () => {
     cookie: string | undefined,
     ip = "1.2.3.4",
   ) =>
-    app.request("/v1/testnet/allowlist", {
-      method: "POST",
-      headers: {
-        ...(cookie ? { cookie } : {}),
-        "content-type": "application/json",
-        "x-forwarded-for": ip,
+    app.request(
+      "/v1/testnet/allowlist",
+      {
+        method: "POST",
+        headers: {
+          ...(cookie ? { cookie } : {}),
+          "content-type": "application/json",
+          "x-forwarded-for": ip,
+        },
+        body: JSON.stringify({ attest: true }),
       },
-      body: JSON.stringify({ attest: true }),
-    });
+      // the request arrives through our proxy (OFF-03: X-Forwarded-For is trusted only from it)
+      { incoming: { socket: { remoteAddress: "10.0.0.1" } } },
+    );
 
   it("queues once per address (idempotent), records the attestation, rate-limits per IP", async () => {
-    const { app } = mk();
+    const { app } = mk({ trustedProxies: ["10.0.0.1"] });
     expect((await post(app, undefined)).status).toBe(401);
     const cookie = await signIn(app);
     const a = await post(app, cookie);
