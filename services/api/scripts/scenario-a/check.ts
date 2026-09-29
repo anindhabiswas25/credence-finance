@@ -385,8 +385,14 @@ for (const e of (await events(market, ICredenceMarketAbi, "Flagged")).filter(
 for (const n of ["uma", "sara"]) {
   await expectJob(
     `EPOCH:${lc(pool)}:${epochId}:${lc(actors[n]!)}`,
-    `epoch settled for ${n}: share price == EpochSettled.sharePriceAfter`,
-    (p) => p.sharePriceAfter === String(settled.args.sharePriceAfter),
+    `epoch settled for ${n}: share price == EpochSettled.sharePriceAfter (the template's unit: loan base units per share)`,
+    // the pool's share price is WAD dollars per share; the notifier sends loan base units per whole share
+    (p) =>
+      p.sharePriceAfter ===
+      String(
+        (settled.args.sharePriceAfter as bigint) /
+          10n ** BigInt(18 - Number(p.loanDecimals ?? 6)),
+      ),
   );
 }
 {

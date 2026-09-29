@@ -24,7 +24,8 @@ cast call "$(jq -r .equity.pool $BOOK)" "venue()(bytes32)" --rpc-url "$RPC_URL" 
 PIDS=()
 tree() { local c; echo "$1"; for c in $(pgrep -P "$1" 2>/dev/null); do tree "$c"; done; }
 cleanup() { local rc=$?; local p; touch "$OUT/.finished"
-  [ $rc -ne 0 ] && ! grep -q '^ABORTED' "$OUT/check.log" && echo "FAILED: runner exited with status $rc at $(date -u +%FT%TZ)" p=$( { for x in "${PIDS[@]:-}"; do [ -n "$x" ] && tree "$x"; done; } | tr '\n' ' '); [ -n "$p" ] && { kill $p 2>/dev/null || true; sleep 1; kill -9 $p 2>/dev/null || true; }; true; }
+  [ $rc -ne 0 ] && ! grep -q '^ABORTED' "$OUT/check.log" && echo "FAILED: runner exited with status $rc at $(date -u +%FT%TZ)"
+  p=$( { for x in "${PIDS[@]:-}"; do [ -n "$x" ] && tree "$x"; done; } | tr '\n' ' '); [ -n "$p" ] && { kill $p 2>/dev/null || true; sleep 1; kill -9 $p 2>/dev/null || true; }; true; }
 trap cleanup EXIT
 trap 'exit 2' TERM INT HUP
 start() { local name=$1; shift; ( "$@" >"$OUT/$name.log" 2>&1 ) & PIDS+=($!); echo "$name $!" >> "$OUT/.services"; echo "started $name (log $SCENARIO_DIR/$name.log)"; }
