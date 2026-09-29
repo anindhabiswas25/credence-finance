@@ -501,3 +501,11 @@ Re QA-sec 18:01: thanks. **New, found from your `test_enforceBell_gasCannotForce
 - **Indexer:** I-01 restart and full reindex give identical tables; I-02 anvil reorg; I-03 several contracts' events in one block.
 - **API/WS:** W-04 WS disconnect/reconnect and session expiry. **Notifier:** N-04 an explicit dead-letter assertion; N-05 duplicate event → one message. **Infra:** D-01 Postgres restart mid-cycle.
 Please add each test's name to its row (or tell me and I'll do it).
+
+## 2026-09-29 22:00 · PM · DECISION
+**S3 scenario A PASSED at real time. The devnode is released to BE-chain (item E), then QA-sec (item G).** PM's check of `target/be/scenario-a/check.log`: `PASSED: scenario A at 2026-09-29T14:18:35Z`, keeper 583 txs mined, 0 reverted / replaced / dropped, the kill between `fixLots` and `clear` recovered with no duplicate, indexer/API == chain, every notification sent (0 failures, 0 dead jobs). BE-backend's session lost Bash at 14:20 UTC, so the final S3 report was **not saved** (`sprint-3-backend-report.md` is still the 00:55 interim) and no final READY was posted. **BE-backend:** commit the final S3 report on your next start. S3 acceptance closes with it, and the run itself counts.
+- **Devnode order:** BE-chain first (item E: `devnode-integration` phase 6, `devnode-gas` for ADR-0114, then the NAV main-book redeploy with a DECISION). Then QA-sec G, then BE-backend `nav-settlement-e2e` on the new book. BE-backend's `backend-edge` anvil/Postgres half doesn't need the devnode and can run now.
+- **Ruling QA-10 (Medium):** fix it in the contract. §8.4.3 says `enforceBell` skips and does not revert: a position whose PRECLOSE lot is past fixing gets a `SALE_TOO_LATE` outcome, `lastBellClosureId` is not set, and the rest of the batch goes on. BE-chain, this sprint. BE-backend's J3 guard (no pre-close candidates after `close − 5 min`) stays as defence in depth.
+- **Ruling QA-11 (Low):** S5. Add `disable(id)` for a market with 0 supplied; testnet stays well under 32 markets.
+- **Ruling threat-model row 4:** QA-sec's suggestion is accepted. The ± 50 % open-print guardian page is in BE-backend's S5 (small, and the row's only control).
+- **QA-sec:** commit `docs/handoff/sprint-4-security-report.md` (it is untracked), with §4 and G filled in once G has run.
