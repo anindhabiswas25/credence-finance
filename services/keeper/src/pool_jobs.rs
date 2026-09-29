@@ -53,6 +53,12 @@ pub enum PoolStep {
     Settle,
 }
 
+/// A WAD ratio as f64 (metrics only).
+pub fn wad_to_f64(v: alloy::primitives::U256) -> f64 {
+    let s = v.to_string();
+    s.parse::<f64>().unwrap_or(f64::MAX) / 1e18
+}
+
 /// What the pool's lifecycle needs at chain time `now`. `active` = the unsettled epoch (id, phase,
 /// bellAt, reopenAt), if any; the venue's next Bell window and close come from the clock.
 pub fn pool_step(
@@ -139,6 +145,30 @@ impl Keeper {
         } else {
             None
         };
+        // §16.1 alert inputs: epoch not settled (reopenAt + 2 h) and pool utilisation (u > 45 %)
+        let unsettled = match active {
+            Some((_, ph, _, reopen)) if ph != epoch_phase::SETTLED && reopen > 0 => {
+                now.saturating_sub(reopen)
+            }
+            _ => 0,
+        };
+        self.metrics
+            .epoch_unsettled_seconds
+            .with_label_values(&[&s.stack])
+            .set(unsettled as i64);
+        let u = match active {
+            Some((e, ..)) => pool
+                .utilisation(e)
+                .call()
+                .await
+                .map(wad_to_f64)
+                .unwrap_or(0.0),
+            None => 0.0,
+        };
+        self.metrics
+            .pool_utilisation
+            .with_label_values(&[&s.stack])
+            .set(u);
         let lots_settled = match active {
             Some((e, epoch_phase::SNAPSHOT, _, _)) => IAuctionHouse::new(s.house, p)
                 .allReopenLotsSettled(venue, e)

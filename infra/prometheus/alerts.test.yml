@@ -129,3 +129,84 @@ tests:
         exp_alerts:
           - exp_labels: { severity: P2, job: J5 }
             exp_annotations: { summary: "Keeper J5: a tx reverted on chain in the last hour" }
+
+  # ── S4 F: pool / auction alerts ──
+  - name: bell not enforced at bellAt + 10 min
+    interval: 10s
+    input_series:
+      - series: 'keeper_bell_unenforced_positions{asset="NVDA"}'
+        values: "0 0 3 3"
+      - series: 'keeper_bell_unenforced_positions{asset="AAPL"}'
+        values: "0 0 0 0"
+    alert_rule_test:
+      - eval_time: 10s
+        alertname: BellNotEnforced
+        exp_alerts: []
+      - eval_time: 30s
+        alertname: BellNotEnforced
+        exp_alerts:
+          - exp_labels: { severity: P1, asset: NVDA }
+            exp_annotations: { summary: "NVDA: 3 NEEDS_ACTION position(s) left at bellAt + 10 min" }
+
+  - name: reopen stuck after 15 min
+    interval: 1m
+    input_series:
+      - series: 'keeper_reopen_pending_seconds{asset="TSLA"}'
+        values: "0+60x20"
+    alert_rule_test:
+      - eval_time: 15m # 900 s: not yet (> 900)
+        alertname: ReopenStuck
+        exp_alerts: []
+      - eval_time: 16m
+        alertname: ReopenStuck
+        exp_alerts:
+          - exp_labels: { severity: P1, asset: TSLA }
+            exp_annotations: { summary: "TSLA: REOPEN not complete 16m 0s after the open print (> 15 min)" }
+
+  - name: epoch not settled 2 h after reopen
+    interval: 10m
+    input_series:
+      - series: 'keeper_epoch_unsettled_seconds{pool="equity"}'
+        values: "0+600x14"
+    alert_rule_test:
+      - eval_time: 120m
+        alertname: EpochNotSettled
+        exp_alerts: []
+      - eval_time: 130m
+        alertname: EpochNotSettled
+        exp_alerts:
+          - exp_labels: { severity: P2, pool: equity }
+            exp_annotations: { summary: "equity pool: epoch not settled 2h 10m 0s after reopenAt (> 2 h)" }
+
+  - name: pool utilisation above 45%
+    interval: 10s
+    input_series:
+      - series: 'keeper_pool_utilisation_ratio{pool="equity"}'
+        values: "0.40 0.45 0.46"
+    alert_rule_test:
+      - eval_time: 10s # exactly 45%: not above
+        alertname: PoolUtilisation
+        exp_alerts: []
+      - eval_time: 20s
+        alertname: PoolUtilisation
+        exp_alerts:
+          - exp_labels: { severity: P2, pool: equity }
+            exp_annotations: { summary: "equity pool utilisation 46% (> 45%)" }
+
+  - name: shortfall reached the reserve, not after a keeper restart
+    interval: 5m
+    input_series:
+      # reserve: 1 → 2 at 15 min (a new escalation); senior: stays 1 across a restart gap (no new one)
+      - series: 'keeper_shortfall_escalations{layer="reserve"}'
+        values: "1 1 1 2 2 2"
+      - series: 'keeper_shortfall_escalations{layer="senior"}'
+        values: "1 1 _ _ 1 1"
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: ShortfallEscalated
+        exp_alerts: []
+      - eval_time: 20m
+        alertname: ShortfallEscalated
+        exp_alerts:
+          - exp_labels: { severity: P1, layer: reserve }
+            exp_annotations: { summary: "A shortfall reached the reserve in the last hour" }

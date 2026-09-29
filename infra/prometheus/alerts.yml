@@ -1,4 +1,4 @@
-# §16.1 alerts that are measurable before the pool and auction house exist (S2). Owner: BE-backend.
+# Every §16.1 alert (S2: feeds, keeper, housekeeping; S4: Bell, reopen, epoch, pool, shortfall). Owner: BE-backend.
 # Severity label = the guide's P1/P2 (P3 = operability, not in the guide). Unit tests: alerts.test.yml
 # (`make obs-check` runs promtool). Runbooks: docs/runbooks (RB-xx in the annotations).
 groups:
@@ -74,6 +74,38 @@ groups:
         annotations:
           summary: "Stylus {{ $labels.program }}: programTimeLeft {{ $value | humanizeDuration }}"
           runbook: RB-10
+
+  # S4 F: the pool / auction §16.1 alerts, from the keeper's gauges (it reads the chain every tick)
+  - name: credence-risk
+    rules:
+      - alert: BellNotEnforced
+        # J3 publishes the NEEDS_ACTION positions still open from bellAt + 10 min (0 before)
+        expr: keeper_bell_unenforced_positions > 0
+        labels: { severity: P1 }
+        annotations:
+          summary: "{{ $labels.asset }}: {{ $value }} NEEDS_ACTION position(s) left at bellAt + 10 min"
+      - alert: ReopenStuck
+        # seconds since the open print (net of the R-20 extension) while the asset is still in REOPEN
+        expr: keeper_reopen_pending_seconds > 900
+        labels: { severity: P1 }
+        annotations:
+          summary: "{{ $labels.asset }}: REOPEN not complete {{ $value | humanizeDuration }} after the open print (> 15 min)"
+      - alert: EpochNotSettled
+        expr: keeper_epoch_unsettled_seconds > 7200
+        labels: { severity: P2 }
+        annotations:
+          summary: "{{ $labels.pool }} pool: epoch not settled {{ $value | humanizeDuration }} after reopenAt (> 2 h)"
+      - alert: PoolUtilisation
+        expr: keeper_pool_utilisation_ratio > 0.45
+        labels: { severity: P2 }
+        annotations:
+          summary: "{{ $labels.pool }} pool utilisation {{ $value | humanizePercentage }} (> 45%)"
+      - alert: ShortfallEscalated
+        # a Shortfall paid from the protocol reserve (paidReserve > 0) or hit the senior vault (seniorLoss > 0)
+        expr: delta(keeper_shortfall_escalations[1h]) > 0
+        labels: { severity: P1 }
+        annotations:
+          summary: "A shortfall reached the {{ $labels.layer }} in the last hour"
 
   - name: credence-services
     rules:

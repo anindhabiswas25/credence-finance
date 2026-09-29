@@ -81,6 +81,8 @@ pub struct CoreJobs {
     last_j4: Mutex<HashMap<B256, u64>>,
     /// Last read outcome per market, so a market is logged once per change, not every tick (S4 A).
     read_state: Mutex<HashMap<B256, ReadState>>,
+    /// §16.1 shortfall alert: next block to scan for `Shortfall`, and the escalations seen (reserve, senior).
+    pub shortfall_scan: Mutex<(u64, u64, u64)>,
     /// J10: the NAV stack's settlement adapter (`nav.settlement`), if deployed. Its markets are settled by
     /// J10, not flagged by J4 (a direct `flagForAuction` on a NAV market reverts in v3).
     pub nav: Option<crate::nav_jobs::NavStack>,
@@ -173,9 +175,26 @@ impl CoreJobs {
             from_block: 0,
             last_j4: Mutex::new(HashMap::new()),
             read_state: Mutex::new(HashMap::new()),
+            shortfall_scan: Mutex::new((0, 0, 0)),
             nav: None,
         }
     }
+}
+
+/// Which loss layers beyond the pool a `Shortfall` reached: (reserve, senior) as 0/1.
+pub fn shortfall_layers(paid_reserve: U256, senior_loss: U256) -> (u64, u64) {
+    (
+        u64::from(!paid_reserve.is_zero()),
+        u64::from(!senior_loss.is_zero()),
+    )
+}
+
+/// §16.1 "Reopen stuck": seconds since the open print (net of the R-20 phase extension) while REOPEN.
+pub fn reopen_pending_s(ctx: &RiskCtx, now: u64) -> u64 {
+    if ctx.clock_state != crate::auction_jobs::REOPEN_STATE || ctx.open_print_at == 0 {
+        return 0;
+    }
+    now.saturating_sub(ctx.open_print_at + ctx.phase_extension)
 }
 
 /// Which heads-up stage is due for a close at `close_at` (and a Bell deadline `bell_at`), if any.
@@ -243,6 +262,10 @@ impl Keeper {
             let Ok(ctx) = read else {
                 continue;
             };
+            self.metrics
+                .reopen_pending_seconds
+                .with_label_values(&[&m.asset])
+                .set(reopen_pending_s(&ctx, now) as i64);
             for (name, r) in [
                 ("J2", self.j2(conn, &core, m, &ctx, now).await),
                 ("J3", self.j3(conn, &core, m, &ctx, now, rep).await),
@@ -265,6 +288,9 @@ impl Keeper {
         }
         if let Err(e) = self.pools_tick(conn, &core, rep).await {
             tracing::warn!(error = %e, "pool lifecycle failed");
+        }
+        if let Err(e) = self.shortfall_scan(&core).await {
+            tracing::debug!(error = %e, "shortfall scan failed");
         }
         if let Err(e) = self.nav_tick(conn, &core, rep).await {
             tracing::warn!(error = %e, "J10 NAV settlement failed");
@@ -541,6 +567,14 @@ impl Keeper {
             }
         }
         let plan = self.j3_plan(conn, core, m, ctx).await?;
+        self.metrics
+            .bell_unenforced
+            .with_label_values(&[&m.asset])
+            .set(if now >= ctx.bell_at + BELL_PAGE_AFTER_S {
+                plan.len() as i64
+            } else {
+                0
+            });
         if plan.is_empty() {
             return Ok(());
         }
@@ -745,6 +779,59 @@ impl Keeper {
         Ok(())
     }
 
+    /// §16.1 "Shortfall reached the reserve or senior": scan the markets' `Shortfall` events (≤ 10,000
+    /// blocks per tick) and publish how many paid from the reserve (`paidReserve > 0`) or hit the senior
+    /// vault (`seniorLoss > 0`). A gauge recounted from the start block and published only once the scan
+    /// reached the head, so a restart never looks like a new escalation to the alert.
+    pub(crate) async fn shortfall_scan(&self, core: &CoreJobs) -> Result<()> {
+        use alloy::{providers::Provider, rpc::types::Filter, sol_types::SolEvent};
+        let p = self.rpc.primary();
+        let head = p.get_block_number().await?;
+        let (from, mut reserve, mut senior) = {
+            let g = core.shortfall_scan.lock().expect("shortfall");
+            (g.0.max(core.from_block), g.1, g.2)
+        };
+        if from > head {
+            return Ok(());
+        }
+        let to = head.min(from + 9_999);
+        let mut markets: Vec<Address> = core.markets.iter().map(|m| m.market).collect();
+        markets.sort();
+        markets.dedup();
+        let logs = p
+            .get_logs(
+                &Filter::new()
+                    .address(markets)
+                    .event_signature(abi::ICredenceMarket::Shortfall::SIGNATURE_HASH)
+                    .from_block(from)
+                    .to_block(to),
+            )
+            .await?;
+        for l in logs {
+            if let Ok(e) = abi::ICredenceMarket::Shortfall::decode_log_data(l.data()) {
+                let (r, sn) = shortfall_layers(e.paidReserve, e.seniorLoss);
+                reserve += r;
+                senior += sn;
+                if r + sn > 0 {
+                    tracing::warn!(market = %e.id, owner = %e.owner, shortfall = %e.s, paid_reserve = %e.paidReserve, senior_loss = %e.seniorLoss, "shortfall reached the reserve or the senior vault");
+                }
+            }
+        }
+        *core.shortfall_scan.lock().expect("shortfall") = (to + 1, reserve, senior);
+        if to < head {
+            return Ok(()); // still catching up: publishing a partial count would look like new escalations
+        }
+        self.metrics
+            .shortfall_escalations
+            .with_label_values(&["reserve"])
+            .set(reserve as i64);
+        self.metrics
+            .shortfall_escalations
+            .with_label_values(&["senior"])
+            .set(senior as i64);
+        Ok(())
+    }
+
     async fn allowlist(&self, conn: &mut PgConnection, core: &CoreJobs, now: u64) -> Result<()> {
         let Some(registry) = core.registry else {
             return Ok(());
@@ -874,6 +961,13 @@ pub type SharedCore = Arc<CoreJobs>;
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn alert_inputs() {
+        assert_eq!(shortfall_layers(U256::ZERO, U256::ZERO), (0, 0));
+        assert_eq!(shortfall_layers(U256::from(5), U256::ZERO), (1, 0));
+        assert_eq!(shortfall_layers(U256::from(5), U256::from(1)), (1, 1));
+    }
 
     #[test]
     fn unpriced_markets_are_logged_once_per_change() {
