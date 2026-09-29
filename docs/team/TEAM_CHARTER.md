@@ -49,6 +49,19 @@ Engineers run **at the same time, in the same working tree**. Never create, edit
 - **Local chain:** the devnode is shared (`make infra-up`, owned by BE-backend). Do not run `make infra-down` or `infra-reset` without posting on the board first.
 - **Address book:** every local deploy writes to **one** file, `deployments/<chainId>.local.json`, owned by BE-chain, with the `shared.riskEngine` key included. No separate per-component address files.
 
+
+## 2b. Two engineers, S4 close and S5 (from 2026-09-30)
+
+The user runs two sessions for all the work before testnet. QE, QA-sec and DevOps are not staffed. Their paths move as below until the PM changes this section. The Frontend is out of scope, and `apps/web/**` is the user's own work: nobody touches it.
+
+| Path | Owner in S5 |
+| --- | --- |
+| Everything BE-chain owned in §2, plus the QA-sec contract paths (`contracts/test/security/**`, `contracts/test/fuzz/**`, `docs/security/**`, `mk/security.mk`, `.github/workflows/security.yml`), plus QE's (`calibration/**`, `mk/quant.mk`, `.github/workflows/calibration.yml`), plus `contracts/script/testnet/**`, `.github/workflows/deploy-testnet.yml`, `deployments/421614.json` | **Engineer A (BE-chain)** |
+| Everything BE-backend owned in §2, plus `infra/prod/**`, `docs/runbooks/**`, `.github/workflows/deploy-services.yml` | **Engineer B (BE-backend)** |
+| `docs/qa/edge-cases.md` | Engineer A, except the off-chain rows of §2, which Engineer B edits |
+
+No run longer than about 30 minutes (user, 2026-09-30). Edge-case tests replace long runs.
+
 ## 3. Git rules
 
 - One branch: `main`. There is no branch switching, because you share the working tree with another engineer.
