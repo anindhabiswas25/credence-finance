@@ -472,6 +472,28 @@ mod tests {
         U256::from_str_radix(&format!("{i}{:0<18}", f), 10).unwrap()
     }
 
+    #[test]
+    fn edge_sequencer_gap_extends_the_reopen_window_before_the_stuck_alert() {
+        use crate::{auction_jobs::REOPEN_STATE, core_jobs::reopen_pending_s};
+        let mut c = ctx();
+        c.clock_state = REOPEN_STATE;
+        c.open_print_at = 10_000;
+        assert_eq!(
+            reopen_pending_s(&c, 10_900),
+            900,
+            "15 min after the print: at the alert line"
+        );
+        // R-20: a 5-min sequencer gap extends the phase, so the same wall time is 5 min less "stuck"
+        c.phase_extension = 300;
+        assert_eq!(reopen_pending_s(&c, 10_900), 600);
+        // before the print (0) and outside REOPEN (HALTED mid-cycle) nothing is pending
+        c.open_print_at = 0;
+        assert_eq!(reopen_pending_s(&c, 10_900), 0);
+        c.open_print_at = 10_000;
+        c.clock_state = 4; // HALTED (ClockState: REGULAR, EXTENDED, CLOSED, REOPEN, HALTED, CORP_ACTION)
+        assert_eq!(reopen_pending_s(&c, 99_999), 0);
+    }
+
     fn ctx() -> RiskCtx {
         RiskCtx {
             block: 1,
