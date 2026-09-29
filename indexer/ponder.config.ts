@@ -1,5 +1,5 @@
 // Ponder 0.17 config (Build Guide §10.3). S1: clock + price feeds. S2: markets, positions, Senior Vaults
-// and σ. S3: the underwriter pools and the auction house (interfaces v2).
+// and σ. S3: the underwriter pools and the auction house (interfaces v2). S4: NAV settlements (draft v3).
 //
 // Env: PONDER_CHAIN_ID (default 412346, the devnode), PONDER_RPC_URL (else PONDER_RPC_URL_<chainId>,
 // else RPC_URL), PONDER_WS_URL, DATABASE_URL, DEPLOYMENTS_FILE (else deployments/<chainId>[.local].json).
@@ -15,6 +15,11 @@ import {
   IUnderwriterPoolAbi,
 } from "@credence/sdk";
 import { indexerBook, stackAddresses } from "./src/book";
+import {
+  PoolV3EventsAbi,
+  SettlementAdapterEventsAbi,
+  SolverAuctionEventsAbi,
+} from "./src/abis/settlement";
 
 const chainId = Number(process.env.PONDER_CHAIN_ID ?? 412346);
 const rpc =
@@ -41,6 +46,11 @@ const priceFeedAbi = [...CredencePriceFeedAbi, reportAcceptedV0] as const;
 const vaults = stackAddresses(book, "vault");
 const pools = stackAddresses(book, "pool");
 const houses = stackAddresses(book, "auctionHouse");
+// S4 D: the NAV stack's settlement adapter and solver venue (draft v3 events, ADR-0111)
+const navBook = (book as { nav?: Record<string, string | undefined> }).nav;
+const settlementAdapter = navBook?.settlement as `0x${string}` | undefined;
+const solverAuction = navBook?.solverAuction as `0x${string}` | undefined;
+const navPool = navBook?.pool as `0x${string}` | undefined;
 
 export default createConfig({
   database: process.env.DATABASE_URL
@@ -91,6 +101,25 @@ export default createConfig({
       chain: "credence",
       abi: IAuctionHouseAbi,
       address: houses.length ? houses : ZERO,
+      startBlock: book.startBlock,
+    },
+    Settlement: {
+      chain: "credence",
+      abi: SettlementAdapterEventsAbi,
+      address: settlementAdapter ?? ZERO,
+      startBlock: book.startBlock,
+    },
+    // the NAV pool's v3 redemption-claim events (the v2 pool ABI above has none of them)
+    NavPool: {
+      chain: "credence",
+      abi: PoolV3EventsAbi,
+      address: navPool ?? ZERO,
+      startBlock: book.startBlock,
+    },
+    SolverAuction: {
+      chain: "credence",
+      abi: SolverAuctionEventsAbi,
+      address: solverAuction ?? ZERO,
       startBlock: book.startBlock,
     },
     RiskEngine: {

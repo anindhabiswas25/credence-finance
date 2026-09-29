@@ -436,3 +436,66 @@ export const poolHolder = onchainTable(
   }),
   (table) => ({ pk: primaryKey({ columns: [table.pool, table.owner] }) }),
 );
+
+/** NAV-stack settlements (S4 D, §8.8): `SettlementOpened` → `SolverBid`* → `SettlementFinalized`. */
+export const settlement = onchainTable(
+  "settlement",
+  (t) => ({
+    settlementId: t.bigint().primaryKey(),
+    adapter: t.hex().notNull(),
+    marketId: t.hex().notNull(),
+    venue: t.hex().notNull(),
+    qty: t.bigint().notNull(),
+    floorPrice: t.bigint().notNull(), // WAD per token (NAV × (1 − κ_nav))
+    endsAt: t.bigint().notNull(),
+    status: t.text().notNull(), // open | filled | advanced
+    bids: t.integer().notNull(),
+    bestPrice: t.bigint(),
+    bestSolver: t.hex(),
+    solver: t.hex(), // the winner (filled only)
+    price: t.bigint(), // winning bid, or the floor for a pool advance
+    proceeds: t.bigint(), // loan units paid to the market
+    requestId: t.bigint(), // the fund redemption (advanced only)
+    positionsSettled: t.integer(),
+    openedAt: t.bigint().notNull(),
+    finalizedAt: t.bigint(),
+    updatedBlock: t.bigint().notNull(),
+  }),
+  (table) => ({
+    byMarket: index().on(table.marketId, table.status),
+  }),
+);
+
+/** Every accepted solver bid (`SolverBid`). */
+export const solverBid = onchainTable(
+  "solver_bid",
+  (t) => ({
+    id: t.text().primaryKey(), // txHash:logIndex
+    settlementId: t.bigint().notNull(),
+    solver: t.hex().notNull(),
+    price: t.bigint().notNull(),
+    block: t.bigint().notNull(),
+    ts: t.bigint().notNull(),
+  }),
+  (table) => ({ bySettlement: index().on(table.settlementId) }),
+);
+
+/** The pool's fund redemption claims from `fallbackAdvance` (in NAV at cost until claimed, §8.6.1). */
+export const redemptionClaim = onchainTable(
+  "redemption_claim",
+  (t) => ({
+    requestId: t.bigint().primaryKey(),
+    pool: t.hex().notNull(),
+    epochId: t.bigint().notNull(),
+    marketId: t.hex().notNull(),
+    fund: t.hex().notNull(),
+    qty: t.bigint().notNull(),
+    cost: t.bigint().notNull(),
+    status: t.text().notNull(), // outstanding | claimed
+    assets: t.bigint(),
+    pnl: t.bigint(), // signed: assets − cost
+    requestedAt: t.bigint().notNull(),
+    claimedAt: t.bigint(),
+  }),
+  (table) => ({ byPool: index().on(table.pool, table.status) }),
+);
