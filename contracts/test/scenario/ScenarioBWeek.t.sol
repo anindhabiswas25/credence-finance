@@ -85,7 +85,9 @@ contract ScenarioBWeekTest is RiskFixture {
         for (uint256 i; i < 5; ++i) {
             bytes32 a = _assets()[i];
             clk.setState(a, ClockState.REGULAR);
-            clk.setNextClose(a, _closeAt(0, d), fri ? ClosureType.WEEKEND : ClosureType.OVERNIGHT, fri ? 3 : 1);
+            clk.setNextClose(
+                a, _closeAt(0, d), fri ? ClosureType.WEEKEND : ClosureType.OVERNIGHT, fri ? 3 : 1
+            );
             clk.setCursor(a, uint32(_session(0, d)));
             clk.setClosureId(a, uint64(d + 1));
         }
@@ -139,9 +141,15 @@ contract ScenarioBWeekTest is RiskFixture {
 
     /// @dev A loan at exactly max LTV rounds its debt up past the limit, so it is posted with the price 1 cent higher
     ///      (the doc's 75.00 % loans are pre-existing positions).
-    function _loanAtMax(address b, bytes32 id, bytes32 asset, MockERC20 t, uint256 q, uint256 debt, uint256 px)
-        internal
-    {
+    function _loanAtMax(
+        address b,
+        bytes32 id,
+        bytes32 asset,
+        MockERC20 t,
+        uint256 q,
+        uint256 debt,
+        uint256 px
+    ) internal {
         orc.setPrice(asset, px + 0.01e18);
         _position(b, id, t, q, debt);
         orc.setPrice(asset, px);
@@ -180,7 +188,11 @@ contract ScenarioBWeekTest is RiskFixture {
         vm.warp(_at(2, 1100));
         if (!umarOnMonday) {
             uint256 umarShares = _underwrite(umar, 20_000e6);
-            assertLt(umarShares, 20_000e18, "R-09: the fee receivable since Monday belongs to the earlier underwriters");
+            assertLt(
+                umarShares,
+                20_000e18,
+                "R-09: the fee receivable since Monday belongs to the earlier underwriters"
+            );
         }
 
         // Thu 13:00: TSLA −9 % to $364; Ben's debt 14,809.35, HF 0.98 → Kai flags; INTRADAY lot of 20.23 TSLA
@@ -214,7 +226,9 @@ contract ScenarioBWeekTest is RiskFixture {
         assertEq(a.qPool, 0);
         // the doc rounds the lot to 20.2287 (7,326.43); F-4.5a at the doc's debt gives 20.22863, so the chain's
         // proceeds are ≈ 1.6 cents lower. Identity to the unit, doc within 3 cents (Appendix A rule for rounded lots).
-        assertEq(a.proceeds, (uint256(a.lot) * 362.18e18 + 1e30 - 1) / 1e30, "proceeds = lot x p*, to the unit");
+        assertEq(
+            a.proceeds, (uint256(a.lot) * 362.18e18 + 1e30 - 1) / 1e30, "proceeds = lot x p*, to the unit"
+        );
         _cents(a.proceeds, 732_643, 3, "S-B: Aria pays 7,326.43");
         // settlement: 3 % penalty 219.79 split 73.26 x 3; 7,106.64 repays Ben; he owes 7,702.72
         uint256 poolCash = usdc.balanceOf(address(up));
@@ -315,7 +329,12 @@ contract ScenarioBWeekTest is RiskFixture {
             clk.setOpenPrint(_assets()[i], prints[i], printAt);
             orc.setPrice(_assets()[i], prints[i]);
         }
-        _cents(market.debtOf(idNVDA, priya), 1_351_902, 50, "S-B: Priya's debt 13,519.02 (doc: +7.016 days; +-$0.50)");
+        _cents(
+            market.debtOf(idNVDA, priya),
+            1_351_902,
+            50,
+            "S-B: Priya's debt 13,519.02 (doc: +7.016 days; +-$0.50)"
+        );
         // the doc's Monday debts carry ≈ 7.016 days of interest (to ≈ 09:52), the chain reads them at 09:30
         _cents(market.debtOf(idCOIN, dev), 2_254_259, 6, "S-B: Dev's debt 22,542.59 (doc +22 min)");
         address[] memory pr = new address[](1);
@@ -340,7 +359,9 @@ contract ScenarioBWeekTest is RiskFixture {
         assertEq(an.reserve, 153.648e18);
         assertEq(ac.reserve, 218.25e18);
         assertEq(ac.lot, 100e18, "Dev: full close");
-        assertApproxEqAbs(an.lot, 59.0752e18, 0.02e18, "S-B: lot 59.08 NVDA (G-14: 59.0752 at the doc's debt)");
+        assertApproxEqAbs(
+            an.lot, 59.0752e18, 0.02e18, "S-B: lot 59.08 NVDA (G-14: 59.0752 at the doc's debt)"
+        );
 
         // 09:32–09:35 commits: Aria on both lots; Zed on COIN with an $86 bond (maxNotional $860)
         usdc.mint(aria, 50_000e6);
@@ -374,7 +395,11 @@ contract ScenarioBWeekTest is RiskFixture {
         assertEq(ac.pStar, 219e18);
         assertEq(ac.filled, 60e18);
         assertEq(ac.qPool, 40e18, "S-B: the pool backstops 40 COIN");
-        assertEq(poolCash + 86e6 - usdc.balanceOf(address(up)), 8_730e6, "S-B: the pool pays 8,730.00 (40 x 218.25)");
+        assertEq(
+            poolCash + 86e6 - usdc.balanceOf(address(up)),
+            8_730e6,
+            "S-B: the pool pays 8,730.00 (40 x 218.25)"
+        );
         assertEq(up.epoch(FRI).bonds, 86e6, "S-B: Zed's 86 to the pool");
         assertEq(ac.proceeds, 21_870e6, "S-B: Dev's proceeds 13,140.00 + 8,730.00 = 21,870.00");
         _cents(an.proceeds, 921_715, 50, "S-B: Priya's proceeds 9,217.15 (+-$0.50 with the lot)");
@@ -387,7 +412,8 @@ contract ScenarioBWeekTest is RiskFixture {
         uint256 dPriya = market.debtOf(idNVDA, priya);
         uint256 dDev = market.debtOf(idCOIN, dev);
         poolCash = usdc.balanceOf(address(up));
-        uint256 seniorBefore = market.marketState(idNVDA).totalSupplyAssets + market.marketState(idCOIN).totalSupplyAssets;
+        uint256 seniorBefore =
+            market.marketState(idNVDA).totalSupplyAssets + market.marketState(idCOIN).totalSupplyAssets;
         vm.recordLogs();
         vm.startPrank(kai);
         market.settlePositions(nvdaId, pr);
@@ -397,7 +423,9 @@ contract ScenarioBWeekTest is RiskFixture {
         _cents(penaltyP, 27_651, 2, "S-B: Priya's penalty 276.51");
         uint256 repaidP = an.proceeds - penaltyP;
         _cents(repaidP, 894_064, 50, "S-B: 8,940.64 repays Priya");
-        assertApproxEqAbs(market.debtOf(idNVDA, priya), dPriya - repaidP, 1, "D - (1 - lambda) P, to the unit");
+        assertApproxEqAbs(
+            market.debtOf(idNVDA, priya), dPriya - repaidP, 1, "D - (1 - lambda) P, to the unit"
+        );
         _cents(market.debtOf(idNVDA, priya), 457_838, 50, "S-B: Priya owes 4,578.38");
         assertEq(market.position(idNVDA, priya).collateral / 1e16, 4_092, "Priya keeps 40.92 NVDA");
         assertEq(market.position(idCOIN, dev).borrowShares, 0, "Dev owes nothing (non-recourse)");
@@ -461,7 +489,9 @@ contract ScenarioBWeekTest is RiskFixture {
         emit log_named_decimal_uint("S-B Sara receives (doc 9,998.82)", paid, 6);
         // with the doc's 100,000 shares (Umar in on Monday) the chain's price and Sara's payout are the doc's
         if (umarOnMonday) {
-            assertApproxEqAbs(price, 0.9998823e18, 0.0000015e18, "S-B: share price 0.9998823 (NAV within 15 cents)");
+            assertApproxEqAbs(
+                price, 0.9998823e18, 0.0000015e18, "S-B: share price 0.9998823 (NAV within 15 cents)"
+            );
             _cents(paid, 999_882, 2, "S-B: Sara receives 9,998.82");
         }
         // the doc's arithmetic at its own inputs, to the cent
@@ -483,7 +513,8 @@ contract ScenarioBWeekTest is RiskFixture {
             }
         }
         assertEq(n, 1, "one shortfall (Dev)");
-        uint256 seniorAfter = market.marketState(idNVDA).totalSupplyAssets + market.marketState(idCOIN).totalSupplyAssets;
+        uint256 seniorAfter =
+            market.marketState(idNVDA).totalSupplyAssets + market.marketState(idCOIN).totalSupplyAssets;
         assertGe(seniorAfter, seniorBefore, "the Senior Vault is made whole");
     }
 }

@@ -130,11 +130,17 @@ contract MockAuctionMathProgram {
         return (assets.length == sigmas.length, s + cur.length + add.length + kappa + uMax, equity + k);
     }
 
-    function liquidationLot(uint256 debt, uint256 qty, uint256, uint256, uint256, uint256, uint256, uint8, uint8)
-        external
-        pure
-        returns (uint256)
-    {
+    function liquidationLot(
+        uint256 debt,
+        uint256 qty,
+        uint256,
+        uint256,
+        uint256,
+        uint256,
+        uint256,
+        uint8,
+        uint8
+    ) external pure returns (uint256) {
         return debt + qty;
     }
 

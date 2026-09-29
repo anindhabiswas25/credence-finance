@@ -274,9 +274,14 @@ contract SettlementAdapter is ISettlementAdapter, ReentrancyGuardTransient {
     }
 
     /// @dev p̄ = proceeds / qty in WAD per token, rounded down.
-    function _priceDown(uint256 proceeds, uint256 qty, address token, IERC20 loan) internal view returns (uint256) {
+    function _priceDown(uint256 proceeds, uint256 qty, address token, IERC20 loan)
+        internal
+        view
+        returns (uint256)
+    {
         return proceeds.mulDivDown(
-            10 ** IERC20Metadata(token).decimals() * 1e18, qty * 10 ** IERC20Metadata(address(loan)).decimals()
+            10 ** IERC20Metadata(token).decimals() * 1e18,
+            qty * 10 ** IERC20Metadata(address(loan)).decimals()
         );
     }
 

@@ -19,7 +19,9 @@ interface ISettlementAdapter is ISettlementEvents, ICredenceErrors {
     ///         is left, it reverts `NothingToSettle`. The caller receives the market's FLAG tips plus one
     ///         OPEN_SETTLEMENT tip.
     /// @return settlementId the new settlement (the market lot id); see the `SettlementOpened` event.
-    function openSettlement(bytes32 marketId, address[] calldata borrowers) external returns (uint64 settlementId);
+    function openSettlement(bytes32 marketId, address[] calldata borrowers)
+        external
+        returns (uint64 settlementId);
     /// @notice After the window (`block.timestamp ≥ endsAt`). Filled: the tokens go to the solver and its escrow to
     ///         the market. No bid: the pool pays qty × floor (`fallbackAdvance`), takes the tokens and requests
     ///         their redemption; this reverts `RedemptionsGated` while the fund gates redemptions (retry later).

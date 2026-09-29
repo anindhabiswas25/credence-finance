@@ -59,7 +59,11 @@ contract LoadScenarioSet is Script {
             _triples(b, ".sigmaFloors", ".floors");
         for (uint256 i; i < fIds.length; ++i) {
             calls = _add(
-                calls, engine, abi.encodeCall(IRiskEngine.setSigmaFloor, (fIds[i], fTypes[i], floors[i])), "setSigmaFloor", false
+                calls,
+                engine,
+                abi.encodeCall(IRiskEngine.setSigmaFloor, (fIds[i], fTypes[i], floors[i])),
+                "setSigmaFloor",
+                false
             );
         }
         string[] memory sets = _strings(b, ".scenarioSets");
@@ -88,21 +92,40 @@ contract LoadScenarioSet is Script {
                 uint256[] memory words = _words(j, string.concat(".columns[", vm.toString(i), "]"));
                 bytes32 got = keccak256(abi.encodePacked(words));
                 if (got != hashes[i]) revert Mismatch("joint columnHash", hashes[i], got);
-                calls = _add(calls, engine, abi.encodeCall(IRiskEngine.setJointColumn, (ids[i], words)), "jointColumn", false);
+                calls = _add(
+                    calls,
+                    engine,
+                    abi.encodeCall(IRiskEngine.setJointColumn, (ids[i], words)),
+                    "jointColumn",
+                    false
+                );
                 checks = _check(
-                    checks, abi.encodeCall(IRiskEngine.jointHash, (ids[i])), hashes[i], "jointColumn", sets.length == 0 && i == 0
+                    checks,
+                    abi.encodeCall(IRiskEngine.jointHash, (ids[i])),
+                    hashes[i],
+                    "jointColumn",
+                    sets.length == 0 && i == 0
                 );
             }
         }
         if (sender == IRiskEngine(engine).sigmaOracle()) {
-            (bytes32[] memory ids, uint8[] memory types, uint256[] memory values) = _triples(b, ".sigmas", ".values");
+            (bytes32[] memory ids, uint8[] memory types, uint256[] memory values) =
+                _triples(b, ".sigmas", ".values");
             for (uint256 i; i < ids.length; ++i) {
-                calls = _add(calls, engine, abi.encodeCall(IRiskEngine.updateSigma, (ids[i], types[i], values[i])), "updateSigma", false);
+                calls = _add(
+                    calls,
+                    engine,
+                    abi.encodeCall(IRiskEngine.updateSigma, (ids[i], types[i], values[i])),
+                    "updateSigma",
+                    false
+                );
             }
         }
         string memory out = vm.envOr(
             "PLAN_OUT",
-            string.concat(vm.projectRoot(), "/../deployments/", vm.toString(block.chainid), ".risk-load.local.json")
+            string.concat(
+                vm.projectRoot(), "/../deployments/", vm.toString(block.chainid), ".risk-load.local.json"
+            )
         );
         vm.writeFile(out, string.concat('{ "calls": ', calls, "], \"checks\": ", checks, "] }\n"));
         console2.log("load plan:", out);

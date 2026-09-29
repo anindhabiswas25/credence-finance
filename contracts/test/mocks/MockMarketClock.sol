@@ -53,7 +53,10 @@ contract MockMarketClock {
     }
 
     function markReopenComplete(bytes32 a, uint64 closureId) external {
-        require(msg.sender == auctionHouse || (settlement != address(0) && msg.sender == settlement), "only auction house");
+        require(
+            msg.sender == auctionHouse || (settlement != address(0) && msg.sender == settlement),
+            "only auction house"
+        );
         require(closureId == d[a].closureId && d[a].reopenPending, "not pending");
         d[a].reopenPending = false;
         ++reopenCompletions;

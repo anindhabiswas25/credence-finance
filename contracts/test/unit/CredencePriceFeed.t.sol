@@ -80,7 +80,9 @@ contract CredencePriceFeedTest is ClockFixture, IPriceFeedEvents {
     function test_submit2of3and3of3() public {
         Report[] memory rs = _one(_live(100e18, uint40(vm.getBlockTimestamp())));
         vm.expectEmit(true, false, false, true);
-        emit ReportAccepted(A, ReportKind.LIVE, 100e18, uint40(vm.getBlockTimestamp()), 1, FeedMarketStatus.REGULAR);
+        emit ReportAccepted(
+            A, ReportKind.LIVE, 100e18, uint40(vm.getBlockTimestamp()), 1, FeedMarketStatus.REGULAR
+        );
         feed.submit(rs, _sign(feed, rs, 2));
         rs = _one(_live(101e18, uint40(vm.getBlockTimestamp())));
         feed.submit(rs, _sign(feed, rs, 3));

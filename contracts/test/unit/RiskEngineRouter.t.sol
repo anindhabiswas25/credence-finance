@@ -131,7 +131,8 @@ contract RiskEngineRouterTest is Test {
         uint8[] memory types = new uint8[](1);
         types[0] = 2;
         uint256[] memory one = new uint256[](1);
-        (bool ok, uint256 u, uint256 w) = router.poolCapacity(new uint256[](2), new uint256[](3), assets, types, one, one, 9);
+        (bool ok, uint256 u, uint256 w) =
+            router.poolCapacity(new uint256[](2), new uint256[](3), assets, types, one, one, 9);
         assertTrue(ok);
         assertEq(u, 0.05e18 + 5 + 0.03e18 + 0.5e18, "sigmas + kappa + uMax forwarded");
         assertEq(w, 9 + 256);

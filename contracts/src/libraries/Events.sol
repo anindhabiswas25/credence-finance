@@ -283,7 +283,9 @@ interface ISettlementEvents {
     event VenuesSet(address[] venues);
     event WindowSet(uint40 window);
     // SolverAuction
-    event SolverWindowOpened(uint64 indexed id, address token, uint256 qty, uint256 floorPrice, uint40 endsAt);
+    event SolverWindowOpened(
+        uint64 indexed id, address token, uint256 qty, uint256 floorPrice, uint40 endsAt
+    );
     event SolverRefunded(uint64 indexed id, address indexed solver, uint256 amount, bool pushed);
     event SolverSet(address indexed solver, bool allowed);
     event RefundWithdrawn(address indexed solver, uint256 amount);

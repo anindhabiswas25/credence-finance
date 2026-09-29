@@ -121,7 +121,8 @@ contract ScenarioAWeekTest is CoreFixture {
         assertEq(st, 1);
         _cents(repayP, 289_678, "G-10 repay 2,896.78");
         assertApproxEqAbs(addValP * 1e30 / 180e18, 22.584e18, 0.0005e18, "G-10 add 22.584 NVDA");
-        (, uint256 repayM, uint256 addValM) = engine.bellStatus(TSLA, 2, 75_000e6, 55_535.10e6, 0.75e18, 0, false);
+        (, uint256 repayM, uint256 addValM) =
+            engine.bellStatus(TSLA, 2, 75_000e6, 55_535.1e6, 0.75e18, 0, false);
         _cents(repayM, 852_709, "G-11 repay 8,527.09");
         assertApproxEqAbs(addValM * 1e30 / 250e18, 54.419e18, 0.0005e18, "G-11 add 54.419 TSLA");
 
@@ -171,7 +172,9 @@ contract ScenarioAWeekTest is CoreFixture {
         // larger because it sizes on the projected debt (R-08)
         uint256 g17 = engine.precloseLot(55_536.02e6, 300e18, 250e18, 247.5e18, SAFE_TSLA, 0.01e18, 18, 6);
         assertApproxEqAbs(g17, 96.5454e18, 0.00005e18, "G-17 96.5454");
-        assertEq(x, engine.precloseLot(dMaya, 300e18, 250e18, 247.5e18, SAFE_TSLA, 0.01e18, 18, 6), "lot at D_proj");
+        assertEq(
+            x, engine.precloseLot(dMaya, 300e18, 250e18, 247.5e18, SAFE_TSLA, 0.01e18, 18, 6), "lot at D_proj"
+        );
         assertGt(x, g17);
 
         // ── 16:00: the batch clears at $249.50 (Mo); settlement: 1% penalty split ⅓ / ⅓ / ⅓ ──
@@ -188,8 +191,12 @@ contract ScenarioAWeekTest is CoreFixture {
         uint256 third = penalty / 3;
         assertEq(usdc.balanceOf(address(pool)) - poolBefore, third, "pool: 1/3 of the penalty");
         assertEq(reserve.balance(), third, "reserve: 1/3");
-        assertEq(usdc.balanceOf(address(treasury)) - treasuryBefore, penalty - 2 * third, "treasury: the rest");
-        assertApproxEqAbs(market.debtOf(idTSLA, maya), debtBefore - (proceeds - penalty), 1, "debt - (1 - lambda) P");
+        assertEq(
+            usdc.balanceOf(address(treasury)) - treasuryBefore, penalty - 2 * third, "treasury: the rest"
+        );
+        assertApproxEqAbs(
+            market.debtOf(idTSLA, maya), debtBefore - (proceeds - penalty), 1, "debt - (1 - lambda) P"
+        );
         assertEq(market.position(idTSLA, maya).collateral, 300e18 - x);
         (bs,,,) = market.bellStatus(idTSLA, maya);
         assertEq(uint8(bs), uint8(BellStatus.SAFE), "Maya is safe into the weekend");

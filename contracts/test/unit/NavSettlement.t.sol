@@ -59,7 +59,9 @@ contract NavSettlementTest is NavFixture {
         uint256 floorPrice = uint256(96.5e18) * 995 / 1000;
         uint256 kb = usdc.balanceOf(keeper);
         vm.expectEmit(true, true, false, true, address(adapter));
-        emit ISettlementEvents.SettlementOpened(1, idTBILL, address(solver), x, floorPrice, uint40(block.timestamp + 15 minutes));
+        emit ISettlementEvents.SettlementOpened(
+            1, idTBILL, address(solver), x, floorPrice, uint40(block.timestamp + 15 minutes)
+        );
         uint64 id = _open();
         assertEq(id, 1);
         Settlement memory s = adapter.settlement(id);
@@ -120,7 +122,9 @@ contract NavSettlementTest is NavFixture {
         clk.setState(TBILL, ClockState.HALTED);
         vm.expectRevert(
             abi.encodeWithSelector(
-                ICredenceErrors.ActionNotAllowedInState.selector, MarketAction.FLAG_FOR_AUCTION, ClockState.HALTED
+                ICredenceErrors.ActionNotAllowedInState.selector,
+                MarketAction.FLAG_FOR_AUCTION,
+                ClockState.HALTED
             )
         );
         _open();
@@ -163,7 +167,9 @@ contract NavSettlementTest is NavFixture {
         vm.expectRevert(abi.encodeWithSelector(ICredenceErrors.NotAllowlisted.selector, stranger));
         solver.bid(id, s.floorPrice);
         vm.prank(solverA);
-        vm.expectRevert(abi.encodeWithSelector(ICredenceErrors.SolverBidTooLow.selector, s.floorPrice - 1, s.floorPrice));
+        vm.expectRevert(
+            abi.encodeWithSelector(ICredenceErrors.SolverBidTooLow.selector, s.floorPrice - 1, s.floorPrice)
+        );
         solver.bid(id, s.floorPrice - 1);
 
         vm.prank(solverA);
@@ -355,7 +361,9 @@ contract NavSettlementTest is NavFixture {
         assertEq(adapter.settlement(id).closureId, 4);
         assertEq(adapter.openReopenSettlements(TBILL, 4), 1);
 
-        vm.expectRevert(abi.encodeWithSelector(ICredenceErrors.TooEarly.selector, uint40(block.timestamp + 120)));
+        vm.expectRevert(
+            abi.encodeWithSelector(ICredenceErrors.TooEarly.selector, uint40(block.timestamp + 120))
+        );
         adapter.completeReopen(TBILL);
         vm.warp(block.timestamp + 121);
         vm.expectRevert(abi.encodeWithSelector(ICredenceErrors.ReopenNotOver.selector, TBILL));
@@ -364,7 +372,9 @@ contract NavSettlementTest is NavFixture {
         address dev = _borrower2();
         vm.expectRevert(
             abi.encodeWithSelector(
-                ICredenceErrors.ActionNotAllowedInState.selector, MarketAction.FLAG_FOR_AUCTION, ClockState.REOPEN
+                ICredenceErrors.ActionNotAllowedInState.selector,
+                MarketAction.FLAG_FOR_AUCTION,
+                ClockState.REOPEN
             )
         );
         adapter.openSettlement(idTBILL, _one(dev));
@@ -473,7 +483,9 @@ contract NavSettlementTest is NavFixture {
         solver.open(50, address(fund), 1, 1, uint40(block.timestamp + 1));
         vm.expectRevert(ICredenceErrors.InvalidParam.selector);
         solver.open(50, address(fund), 1, 1, uint40(block.timestamp + 1));
-        vm.expectRevert(abi.encodeWithSelector(ICredenceErrors.TooEarly.selector, uint40(block.timestamp + 1)));
+        vm.expectRevert(
+            abi.encodeWithSelector(ICredenceErrors.TooEarly.selector, uint40(block.timestamp + 1))
+        );
         solver.finalize(50);
         vm.expectRevert(abi.encodeWithSelector(ICredenceErrors.UnknownSettlement.selector, 51));
         solver.finalize(51);

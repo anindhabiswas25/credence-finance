@@ -91,14 +91,22 @@ contract NavSettlementScenarioTest is ClockFixture {
         usdc = new MockERC20("USD Coin", "USDC", 6);
         registry = new ComplianceRegistry(address(this));
         fund = new CredenceTreasuryFund(
-            "Credence Test Treasury Fund", "tTBILL", issuer, address(registry), address(usdc), issuerReserve, nav
+            "Credence Test Treasury Fund",
+            "tTBILL",
+            issuer,
+            address(registry),
+            address(usdc),
+            issuerReserve,
+            nav
         );
         engine = new MockRiskEngine(timelock, timelock);
         vm.prank(timelock);
         engine.setParams(RiskParams(0.001e18, 0.03e18, 1e18, 0.15e18, 4e18, 0.975e18, 0.5e18, 0.5e6, 256));
         _deployLending();
         vm.startPrank(timelock);
-        oracle.setAssetConfig(FUND, address(navFeed), address(0), address(0), address(fund), MarketKind.NAV, 0);
+        oracle.setAssetConfig(
+            FUND, address(navFeed), address(0), address(0), address(fund), MarketKind.NAV, 0
+        );
         clock.listAsset(FUND, USBANK, MarketKind.NAV);
         id = market.createMarket(_navParams());
         vault.setCap(id, 5_000_000e6);
@@ -123,7 +131,9 @@ contract NavSettlementScenarioTest is ClockFixture {
         reserve = new ProtocolReserve(timelock, address(usdc), address(treasury));
         guardianC = new CredenceGuardian(timelock, guardian);
         market = new CredenceMarket(timelock, address(guardianC));
-        vault = new SeniorVault(IERC20(address(usdc)), "csUSDC-NAV", "csUSDC-NAV", timelock, address(market), allocator);
+        vault = new SeniorVault(
+            IERC20(address(usdc)), "csUSDC-NAV", "csUSDC-NAV", timelock, address(market), allocator
+        );
         up = new UnderwriterPool(timelock, IERC20(address(usdc)), USBANK, "cfUP-NAV", "cfUP-NAV");
         adapter = new SettlementAdapter(timelock);
         venue = new SolverAuction(timelock);
@@ -160,7 +170,8 @@ contract NavSettlementScenarioTest is ClockFixture {
             tips.setTip(j, 1e6);
         }
         vm.stopPrank();
-        address[7] memory allowed = [address(market), address(adapter), address(venue), address(up), solver, ava, bo];
+        address[7] memory allowed =
+            [address(market), address(adapter), address(venue), address(up), solver, ava, bo];
         for (uint256 i; i < allowed.length; ++i) {
             registry.setAllowed(allowed[i], true);
         }
@@ -276,7 +287,9 @@ contract NavSettlementScenarioTest is ClockFixture {
         assertEq(uint8(s.status), uint8(SettlementStatus.FILLED));
         assertEq(s.proceeds, escrow, "cash in (solver) = cash out (market)");
         assertEq(fund.balanceOf(solver), s.qty, "tokens to the solver");
-        assertApproxEqAbs(market.debtOf(id, ava), debtBefore - (escrow - escrow / 100), 2, "D - (1 - lambda) P");
+        assertApproxEqAbs(
+            market.debtOf(id, ava), debtBefore - (escrow - escrow / 100), 2, "D - (1 - lambda) P"
+        );
         assertGe(market.healthFactor(id, ava), 1.1e18, "HF above H* (sold over the floor)");
         adapter.completeReopen(FUND);
         assertEq(uint8(clock.poke(FUND)), uint8(ClockState.REGULAR));
@@ -295,7 +308,9 @@ contract NavSettlementScenarioTest is ClockFixture {
         uint256 cost = uint256(s.qty) * s.floorPrice / 1e30;
         assertEq(s.proceeds, cost, "the pool paid qty x floor");
         assertEq(up.redemptionClaimsOutstanding(), cost, "the claim is in NAV at cost (8.6.1)");
-        assertEq(up.nav(), navBefore + cost / 100 / 3, "NAV: cash -> claim at cost, plus the pool's penalty third");
+        assertEq(
+            up.nav(), navBefore + cost / 100 / 3, "NAV: cash -> claim at cost, plus the pool's penalty third"
+        );
         assertEq(fund.pendingRedeemRequest(s.requestId, address(up)), s.qty);
         assertGe(market.healthFactor(id, bo), 1.09e18, "Bo back near H* at the floor");
 
@@ -316,7 +331,9 @@ contract NavSettlementScenarioTest is ClockFixture {
         assertEq(uint8(clock.poke(FUND)), uint8(ClockState.HALTED));
         vm.expectRevert(
             abi.encodeWithSelector(
-                ICredenceErrors.ActionNotAllowedInState.selector, MarketAction.FLAG_FOR_AUCTION, ClockState.HALTED
+                ICredenceErrors.ActionNotAllowedInState.selector,
+                MarketAction.FLAG_FOR_AUCTION,
+                ClockState.HALTED
             )
         );
         adapter.openSettlement(id, _one(ava));

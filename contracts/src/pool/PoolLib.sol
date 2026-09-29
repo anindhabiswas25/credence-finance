@@ -224,7 +224,9 @@ library PoolLib {
             cost: uint128(cost),
             assets: 0
         });
-        emit IUnderwriterPoolEvents.RedemptionRequested(epochId, requestId, marketId, address(fund), qty, cost);
+        emit IUnderwriterPoolEvents.RedemptionRequested(
+            epochId, requestId, marketId, address(fund), qty, cost
+        );
     }
 
     /// @notice claimRedemption body: redeems a fulfilled request into the pool. Returns what arrived and the claim's
@@ -318,17 +320,20 @@ library PoolLib {
     /// @notice `writeCover` / `previewCover` quote: the policy's K-loss vector, capacity over the stored vector plus the
     ///         uncovered bounds of every market (the policy's own collateral counted as covered), then the premium
     ///         at u_after. Reverts `CapacityExceeded` above u_max (INV-POOL-02).
-    function quote(address market, IRiskEngine eng, uint256[] memory current, uint256 j, CoverRequest calldata r)
-        external
-        view
-        returns (uint256 premium, uint256 uAfter, uint256 worst, uint256[] memory add)
-    {
+    function quote(
+        address market,
+        IRiskEngine eng,
+        uint256[] memory current,
+        uint256 j,
+        CoverRequest calldata r
+    ) external view returns (uint256 premium, uint256 uAfter, uint256 worst, uint256[] memory add) {
         add = eng.coverLossVector(r.assetId, r.closureType, r.collateralValue, r.debtProjected);
         bool ok;
         (ok, uAfter, worst) = _capacityView(market, eng, current, add, j, r.marketId, r.collateralValue);
         if (!ok) revert ICredenceErrors.CapacityExceeded(uAfter, eng.params().uMax);
-        (premium,,) =
-            eng.quoteCover(r.assetId, r.closureType, r.closureDays, r.collateralValue, r.debtProjected, uAfter);
+        (premium,,) = eng.quoteCover(
+            r.assetId, r.closureType, r.closureDays, r.collateralValue, r.debtProjected, uAfter
+        );
     }
 
     // ───────────── Bell batch: cached uncovered bound (S4 J3 prototype, ADR-0114) ─────────────
@@ -379,8 +384,9 @@ library PoolLib {
             j
         );
         if (!ok) revert ICredenceErrors.CapacityExceeded(uAfter, eng.params().uMax);
-        (premium,,) =
-            eng.quoteCover(r.assetId, r.closureType, r.closureDays, r.collateralValue, r.debtProjected, uAfter);
+        (premium,,) = eng.quoteCover(
+            r.assetId, r.closureType, r.closureDays, r.collateralValue, r.debtProjected, uAfter
+        );
     }
 
     function _loadOrBuild(address market, IRiskEngine eng, uint256 n, uint256 k, uint256 batchId)
@@ -405,7 +411,8 @@ library PoolLib {
         }
         bytes32[] memory ids = ICredenceMarket(market).marketIds();
         for (uint256 m; m < ids.length; ++m) {
-            (bytes32 asset, uint8 t, uint256 value, uint256 safe) = ICredenceMarket(market).uncoveredExposure(ids[m]);
+            (bytes32 asset, uint8 t, uint256 value, uint256 safe) =
+                ICredenceMarket(market).uncoveredExposure(ids[m]);
             uint256 slot = uint256(keccak256(abi.encode(base, ids[m])));
             assembly {
                 tstore(slot, add(safe, 1))

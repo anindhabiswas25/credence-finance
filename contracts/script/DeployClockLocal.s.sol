@@ -96,12 +96,22 @@ contract DeployClockLocal is Script {
         c.assetIds = new bytes32[](c.tickers.length);
         for (uint256 i; i < c.tickers.length; ++i) {
             CredenceStockToken t = new CredenceStockToken(
-                string.concat("Credence Test ", c.tickers[i]), string.concat("t", c.tickers[i]), me, address(0)
+                string.concat("Credence Test ", c.tickers[i]),
+                string.concat("t", c.tickers[i]),
+                me,
+                address(0)
             );
             bytes32 assetId = keccak256(bytes(string.concat(c.tickers[i], ":XNAS")));
-            c.oracle.setAssetConfig(
-                assetId, address(c.feedA), address(c.feedB), address(0), address(t), MarketKind.EQUITY, 250_000e18
-            );
+            c.oracle
+                .setAssetConfig(
+                    assetId,
+                    address(c.feedA),
+                    address(c.feedB),
+                    address(0),
+                    address(t),
+                    MarketKind.EQUITY,
+                    250_000e18
+                );
             c.clock.listAsset(assetId, XNYS, MarketKind.EQUITY);
             t.setMinter(address(c.faucet), type(uint128).max);
             c.faucet.configure(address(t), 50e18, false);
@@ -116,9 +126,10 @@ contract DeployClockLocal is Script {
             "Credence Test T-Bill Fund", "tTBILL", me, address(c.registry), address(c.usdc), me, 1e18
         );
         c.tbill = keccak256("TBILL:USBANK");
-        c.oracle.setAssetConfig(
-            c.tbill, address(c.navFeed), address(0), address(0), address(c.fund), MarketKind.NAV, 0
-        );
+        c.oracle
+            .setAssetConfig(
+                c.tbill, address(c.navFeed), address(0), address(0), address(c.fund), MarketKind.NAV, 0
+            );
         c.clock.listAsset(c.tbill, USBANK, MarketKind.NAV);
         c.fund.setMinter(address(c.faucet), type(uint128).max);
         c.faucet.configure(address(c.fund), 100_000e18, true);

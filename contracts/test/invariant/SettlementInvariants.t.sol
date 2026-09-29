@@ -2,7 +2,13 @@
 pragma solidity 0.8.30;
 
 import {console2} from "forge-std/Test.sol";
-import {Settlement, SettlementStatus, SolverLot, LotInfo, RedemptionClaim} from "../../src/libraries/Types.sol";
+import {
+    Settlement,
+    SettlementStatus,
+    SolverLot,
+    LotInfo,
+    RedemptionClaim
+} from "../../src/libraries/Types.sol";
 import {NavFixture} from "../utils/NavFixture.sol";
 import {SettlementHandler, NavSys} from "./SettlementHandler.sol";
 
@@ -43,9 +49,22 @@ contract SettlementInvariantsTest is NavFixture {
         targetContract(address(h));
         bytes4[] memory w = new bytes4[](16);
         bytes4[16] memory sel = [
-            h.borrow.selector, h.borrow.selector, h.stress.selector, h.navMove.selector, h.stress.selector,
-            h.open.selector, h.open.selector, h.bid.selector, h.bid.selector, h.warp.selector, h.finalize.selector,
-            h.finalize.selector, h.fulfillAndClaim.selector, h.clockState.selector, h.gate.selector, h.repay.selector
+            h.borrow.selector,
+            h.borrow.selector,
+            h.stress.selector,
+            h.navMove.selector,
+            h.stress.selector,
+            h.open.selector,
+            h.open.selector,
+            h.bid.selector,
+            h.bid.selector,
+            h.warp.selector,
+            h.finalize.selector,
+            h.finalize.selector,
+            h.fulfillAndClaim.selector,
+            h.clockState.selector,
+            h.gate.selector,
+            h.repay.selector
         ];
         for (uint256 i; i < 16; ++i) {
             w[i] = sel[i];
@@ -90,14 +109,20 @@ contract SettlementInvariantsTest is NavFixture {
             uint64 id = h.ids(i);
             Settlement memory s = adapter.settlement(id);
             assertEq(market.lotInfo(id).totalQty, s.qty, "released = settled qty");
-            if (s.status == SettlementStatus.OPEN) atVenue += s.qty;
-            else if (s.status == SettlementStatus.FILLED) assertEq(h.solverTokens(id), s.qty, "solver got the lot");
-            else assertEq(up.redemptionClaim(s.requestId).qty, s.qty, "pool redeems the lot");
+            if (s.status == SettlementStatus.OPEN) {
+                atVenue += s.qty;
+            } else if (s.status == SettlementStatus.FILLED) {
+                assertEq(h.solverTokens(id), s.qty, "solver got the lot");
+            } else {
+                assertEq(up.redemptionClaim(s.requestId).qty, s.qty, "pool redeems the lot");
+            }
         }
         assertEq(fund.balanceOf(address(solver)), atVenue, "venue holds only open lots");
         assertEq(fund.balanceOf(address(adapter)), 0, "adapter keeps no tokens");
         assertEq(fund.balanceOf(address(up)), 0, "pool tokens go straight into redemption");
-        assertEq(fund.balanceOf(address(market)), market.marketState(idTBILL).totalCollateral, "market collateral");
+        assertEq(
+            fund.balanceOf(address(market)), market.marketState(idTBILL).totalCollateral, "market collateral"
+        );
     }
 
     /// INV-SET-03: no fill below the floor, every live best bid ≥ floor, floor = NAV × 99.5 % at the open.
@@ -135,5 +160,4 @@ contract SettlementInvariantsTest is NavFixture {
         console2.logBytes4(h.lastOpenErr());
     }
 }
-
 

@@ -47,7 +47,9 @@ contract ConcentrationLimitTest is RiskFixture {
         usdc.mint(bob, 250e6);
         vm.startPrank(bob);
         usdc.approve(address(market), 250e6);
-        vm.expectRevert(abi.encodeWithSelector(ICredenceErrors.ConcentrationExceeded.selector, NVDA, 2 * w1, cap));
+        vm.expectRevert(
+            abi.encodeWithSelector(ICredenceErrors.ConcentrationExceeded.selector, NVDA, 2 * w1, cap)
+        );
         market.buyCover(idNVDA, 250e6, false);
         vm.stopPrank();
 

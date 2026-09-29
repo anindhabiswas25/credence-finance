@@ -73,7 +73,13 @@ abstract contract NavFixture is Test {
         usdc = new MockERC20("USD Coin", "USDC", 6);
         registry = new ComplianceRegistry(address(this));
         fund = new CredenceTreasuryFund(
-            "Credence Test Treasury Fund", "tTBILL", issuer, address(registry), address(usdc), issuerReserve, NAV0
+            "Credence Test Treasury Fund",
+            "tTBILL",
+            issuer,
+            address(registry),
+            address(usdc),
+            issuerReserve,
+            NAV0
         );
         clk = new MockMarketClock();
         orc = new MockMarketOracle();
@@ -81,14 +87,21 @@ abstract contract NavFixture is Test {
         vm.prank(timelock);
         engine.setParams(RiskParams(0.001e18, 0.03e18, 1e18, 0.15e18, 4e18, 0.975e18, 0.5e18, 0.5e6, 256));
         _calendar();
-        up = new UnderwriterPool(timelock, IERC20(address(usdc)), VENUE, "Credence Underwriter USDC (funds)", "cfUP-NAV");
+        up = new UnderwriterPool(
+            timelock, IERC20(address(usdc)), VENUE, "Credence Underwriter USDC (funds)", "cfUP-NAV"
+        );
         tips = new KeeperTips(timelock, address(usdc));
         treasury = new Treasury(timelock, address(usdc), address(tips));
         reserve = new ProtocolReserve(timelock, address(usdc), address(treasury));
         guardianC = new CredenceGuardian(timelock, safe);
         market = new CredenceMarket(timelock, address(guardianC));
         vault = new SeniorVault(
-            IERC20(address(usdc)), "Credence Senior USDC (funds)", "csUSDC-NAV", timelock, address(market), allocator
+            IERC20(address(usdc)),
+            "Credence Senior USDC (funds)",
+            "csUSDC-NAV",
+            timelock,
+            address(market),
+            allocator
         );
         adapter = new SettlementAdapter(timelock);
         solver = new SolverAuction(timelock);
@@ -130,7 +143,8 @@ abstract contract NavFixture is Test {
         guardianC.initializeWiring(ms, address(clk));
 
         // tTBILL moves only between allowlisted holders (§8.12)
-        address[6] memory allowed = [address(market), address(adapter), address(solver), address(up), solverA, solverB];
+        address[6] memory allowed =
+            [address(market), address(adapter), address(solver), address(up), solverA, solverB];
         for (uint256 i; i < allowed.length; ++i) {
             registry.setAllowed(allowed[i], true);
         }

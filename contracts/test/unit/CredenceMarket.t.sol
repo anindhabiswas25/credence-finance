@@ -28,7 +28,9 @@ contract CredenceMarketTest is CoreFixture {
 
     function test_depositSuppliesDownTheQueue() public view {
         MarketState memory s = market.marketState(idAAPL);
-        assertEq(s.totalSupplyAssets, 230_000e6, "first market in the supply queue gets everything under its cap");
+        assertEq(
+            s.totalSupplyAssets, 230_000e6, "first market in the supply queue gets everything under its cap"
+        );
         assertEq(vault.totalAssets(), 230_000e6);
         assertEq(vault.balanceOf(address(0xdead)), 1e3, "dead shares");
     }
