@@ -11,7 +11,7 @@ Owner: Product Manager · Applies to every engineer session working in this repo
 | **Backend Engineer (BE-backend)** | **Active** | Relayer, keeper, indexer, API, notifier, DB, infra, TS SDK, calendar generator | S1 |
 | **Quant Engineer (QE)** | **Active from S2** | Calibration pipeline, scenario sets, joint stress set, σ methodology, backtest, launch parameters | S2 |
 | Frontend Engineer | Planned | Web app, risk page, bidder console | S3 |
-| QA / Security Engineer | Planned | Invariant review, e2e, pre-audit gates, threat model | S4 |
+| **QA / Security Engineer (QA-sec)** | **Active from S4** | Static analysis and triage, reentrancy / fuzz / security invariants, invariant review, threat-model walkthrough, off-chain security review, pre-audit gates | S4 |
 | DevOps / SRE | Planned | Testnet deploy pipeline, monitoring, on-call tooling | S5 |
 
 ## 2. Path ownership (the most important rule)
@@ -20,7 +20,9 @@ Engineers run **at the same time, in the same working tree**. Never create, edit
 
 | Path | Owner |
 | --- | --- |
-| `contracts/**` | BE-chain |
+| `contracts/**` (except the two QA-sec paths below) | BE-chain |
+| `contracts/test/security/**`, `contracts/test/fuzz/**` | **QA-sec from S4** |
+| `docs/security/**`, `mk/security.mk`, `.github/workflows/security.yml`, `.tools/` (project-local tool installs, git-ignored) | **QA-sec from S4** |
 | `crates/risk-core/**`, `crates/risk-cli/**`, `crates/risk-py/**`, `crates/risk-wasm/**`, `stylus/**`, root `Stylus.toml` | BE-chain |
 | `crates/credence-bindings/**` | BE-chain (generated from contract ABIs) |
 | `deployments/abis/**` | BE-chain (frozen ABIs) |
@@ -40,8 +42,10 @@ Engineers run **at the same time, in the same working tree**. Never create, edit
 
 ## 2a. Shared machine rules (added after S1)
 
-- **Separate Cargo target dirs** (S1 had lock contention): BE-chain uses the default `target/`, BE-backend `CARGO_TARGET_DIR=target/be`, and QE `CARGO_TARGET_DIR=target/quant`.
+- **Separate Cargo target dirs** (S1 had lock contention): BE-chain uses the default `target/`, BE-backend `CARGO_TARGET_DIR=target/be`, QE `CARGO_TARGET_DIR=target/quant`, and QA-sec `CARGO_TARGET_DIR=target/qa` (forge: `FOUNDRY_OUT=target/qa/forge-out FOUNDRY_CACHE_PATH=target/qa/forge-cache`).
 - **Global tools** (rustup toolchains, foundry, cargo-stylus, node, uv): before installing or upgrading one, post a `DECISION` on the board and wait until no other role's build is running. Two concurrent rustup installs corrupted a toolchain in S1.
+- **Three engineers at once (from S4):** the user runs up to three sessions at the same time. The machine has 16 threads and 15 GB of RAM. While a real-time devnode run is live (from its owner's DECISION to its READY), every other role runs heavy jobs with `nice -n 19`, `forge … --threads 4` and `CARGO_BUILD_JOBS=4`. A slow machine must never make the keeper miss a deadline.
+- **Long runs survive the session:** any run longer than 30 min is started with `setsid nohup` inside `systemd-inhibit --what=idle:sleep:handle-lid-switch`, and it must write an explicit `ABORTED` line if it dies.
 - **Local chain:** the devnode is shared (`make infra-up`, owned by BE-backend). Do not run `make infra-down` or `infra-reset` without posting on the board first.
 - **Address book:** every local deploy writes to **one** file, `deployments/<chainId>.local.json`, owned by BE-chain, with the `shared.riskEngine` key included. No separate per-component address files.
 

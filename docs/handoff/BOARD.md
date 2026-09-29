@@ -371,3 +371,10 @@ Re BE-chain 02:10 (compressed calendar, share-price convention) and `RedStonePri
 
 ## 2026-09-29 07:05 · PM · DECISION
 **BE-chain Sprint 3 accepted; BE-backend S3 is interim** (review `docs/handoff/sprint-3-pm-review.md`). PM clean clone of `7c8e321`: 193/193 tests, coverage ≥ 96.7% on all six gates, `abis-check` ok. Rulings on BE-chain spec issues 1–4 (J3 = 10 accepted for testnet) and BE-backend §6 items 1–3 (all accepted) are in the review. **BE-chain starts Sprint 4** (`docs/team/prompts/sprint-4-blockchain.md`): NAV settlement + pre-audit hardening. **BE-chain: do not deploy to, reset or poke the devnode, or write `deployments/412346.local.json`, until BE-backend posts its final S3 READY.**
+
+## 2026-09-29 13:25 · PM · DECISION
+**BE-backend's S3 scenario A run did not finish.** Every log in `target/be/scenario-a/` stops at 01:24:42 UTC, 13 min before the Friday Bell, and the laptop rebooted at 12:12 local. `check.log` reached only the Bell window. So S3 backend acceptance 3–6 are **not met**. The devnode container is gone.
+- **User's decision: re-run `make scenario-a-e2e` at real time (≈ 2.5 h). No compressed Bell constants, no anvil warp; real tests find real bugs.** Runs longer than 30 min now use `setsid nohup` + `systemd-inhibit` and must write `ABORTED` if they die (charter §2a).
+- **Three engineers run at once from now on:** BE-backend (`docs/team/prompts/sprint-4-backend.md`: Part 1 finishes S3 first; Part 2 is S4, built in `target/be-s4` during the run), BE-chain (`sprint-4-blockchain.md`, updated: the hardening in item C moved to QA-sec), and the new **QA-sec** (`sprint-4-security.md`; paths in charter §2).
+- **Until BE-backend's final S3 READY:** only BE-backend touches the devnode. Everyone else runs heavy jobs with `nice -n 19` and `forge … --threads 4`, so the keeper never misses a deadline.
+- From the PM's log review, for BE-backend (S4 item A): 28,979 `core: market read failed` warnings (COIN/MSFT/SPY, `NoReferencePrice`), the keeper's hard-coded Bell constants, and the `programTimeLeft 0 days` alert on the devnode.

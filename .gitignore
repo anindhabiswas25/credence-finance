@@ -22,3 +22,6 @@ calibration/data/
 .DS_Store
 .idea/
 .vscode/
+
+# QA-sec project-local tool installs (charter §2)
+.tools/
