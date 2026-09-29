@@ -10,7 +10,10 @@ ROOT=$PWD
 export RPC_URL=${RPC_URL:-http://127.0.0.1:8547}
 export DATABASE_URL=${DATABASE_URL:-postgres://credence:credence@127.0.0.1:${POSTGRES_PORT:-5433}/credence}
 export SCENARIO_DIR=${SCENARIO_DIR:-target/be/scenario-a}
-OUT=$ROOT/$SCENARIO_DIR; mkdir -p "$OUT"; : > "$OUT/deliveries.jsonl"
+OUT=$ROOT/$SCENARIO_DIR; mkdir -p "$OUT"; : > "$OUT/deliveries.jsonl"; rm -f "$OUT/restart.log" "$OUT/.finished"; : > "$OUT/.services"
+# everything this runner prints goes to check.log too; a dying run must leave a line there (ABORTED/FAILED/OK)
+exec > >(tee "$OUT/check.log") 2>&1
+echo "scenario A runner started $(date -u +%FT%TZ) (pid $$)"
 VIEWS=indexer_scenario_a; P_PONDER=42191; P_API=18798; P_MOCK=18799
 BIN=$ROOT/target/be/debug
 BOOK=deployments/412346.local.json
@@ -20,10 +23,45 @@ cast call "$(jq -r .equity.pool $BOOK)" "venue()(bytes32)" --rpc-url "$RPC_URL" 
 
 PIDS=()
 tree() { local c; echo "$1"; for c in $(pgrep -P "$1" 2>/dev/null); do tree "$c"; done; }
-cleanup() { local p; p=$( { for x in "${PIDS[@]:-}"; do [ -n "$x" ] && tree "$x"; done; } | tr '\n' ' '); [ -n "$p" ] && { kill $p 2>/dev/null || true; sleep 1; kill -9 $p 2>/dev/null || true; }; true; }
+cleanup() { local rc=$?; local p; touch "$OUT/.finished"
+  [ $rc -ne 0 ] && ! grep -q '^ABORTED' "$OUT/check.log" && echo "FAILED: runner exited with status $rc at $(date -u +%FT%TZ)" p=$( { for x in "${PIDS[@]:-}"; do [ -n "$x" ] && tree "$x"; done; } | tr '\n' ' '); [ -n "$p" ] && { kill $p 2>/dev/null || true; sleep 1; kill -9 $p 2>/dev/null || true; }; true; }
 trap cleanup EXIT
-start() { local name=$1; shift; ( "$@" >"$OUT/$name.log" 2>&1 ) & PIDS+=($!); echo "started $name (log $SCENARIO_DIR/$name.log)"; }
+trap 'exit 2' TERM INT HUP
+start() { local name=$1; shift; ( "$@" >"$OUT/$name.log" 2>&1 ) & PIDS+=($!); echo "$name $!" >> "$OUT/.services"; echo "started $name (log $SCENARIO_DIR/$name.log)"; }
 node_api() { (cd services/api && node "$@"); }
+
+# Watchdog (S4 brief Part 1.3): the last run died with the laptop and left no line in check.log. Every 10 s:
+#  - the devnode answers and its head block advances: RPC down > 60 s, or the head block's time > 60 s behind
+#    the wall clock for 3 checks in a row (the relayers' STATUS heartbeat is 60 s, REGULAR 10 s) → ABORTED;
+#  - the wall clock jumped > 60 s between two checks (the host slept despite systemd-inhibit) → ABORTED;
+#  - every started service is alive; the keeper by name, with 60 s of grace for the kill-watch restart → ABORTED;
+#  - Postgres answers.
+# It writes "ABORTED: <reason>" to check.log and TERMs the runner (exit non-zero, the EXIT trap stops the rest).
+watchdog() {
+  local main=$1 last=$(date +%s) rpc_bad=0 lag_bad=0 keeper_gone=0
+  while [ ! -f "$OUT/.finished" ]; do
+    sleep 10; local t=$(date +%s) why=""
+    [ $(( t - last )) -gt 70 ] && why="the wall clock jumped $(( t - last )) s between two checks (host suspended?)"
+    last=$t
+    local head; head=$(cast block latest --field timestamp --rpc-url "$RPC_URL" 2>/dev/null) || head=""
+    if [ -z "$head" ]; then rpc_bad=$(( rpc_bad + 10 )); [ $rpc_bad -gt 60 ] && why=${why:-"the devnode RPC $RPC_URL has not answered for $rpc_bad s"}
+    else rpc_bad=0
+      if [ $(( t - head )) -gt 60 ]; then lag_bad=$(( lag_bad + 1 )); else lag_bad=0; fi
+      [ $lag_bad -ge 3 ] && why=${why:-"the devnode's block time stopped advancing: head block time $head is $(( t - head )) s behind the wall clock"}
+    fi
+    docker exec credence-postgres-1 pg_isready -q -U credence -d credence 2>/dev/null || why=${why:-"Postgres does not answer"}
+    local name pid
+    while read -r name pid; do
+      [ "$name" = keeper ] && continue   # watched by name below (kill-watch replaces its process)
+      kill -0 "$pid" 2>/dev/null || why=${why:-"service $name died (see $SCENARIO_DIR/$name.log: $(tail -1 "$OUT/$name.log" 2>/dev/null | cut -c1-200))"}
+    done < "$OUT/.services"
+    if ! pgrep -x credence-keeper >/dev/null; then keeper_gone=$(( keeper_gone + 10 ))
+      [ $keeper_gone -gt 60 ] && why=${why:-"the keeper process is gone for $keeper_gone s (see $SCENARIO_DIR/keeper.log)"}
+    else keeper_gone=0; fi
+    [ -f "$OUT/.finished" ] && return 0
+    if [ -n "$why" ]; then echo "ABORTED: $why ($(date -u +%FT%TZ))" | tee -a "$OUT/check.log" >&2; kill -TERM "$main"; return 1; fi
+  done
+}
 
 echo "── 0. the chain's calendar and the replay recording"
 node_api scripts/scenario-a/calendar.ts
@@ -68,6 +106,9 @@ start kill-watch bash services/api/scripts/scenario-a/kill-watch.sh "$OUT" env C
   KEEPER_GAS_MULTIPLIER_X10=${KEEPER_GAS_MULTIPLIER_X10:-13} KEEPER_J3_BATCH=${KEEPER_J3_BATCH:-10} METRICS_ADDR=127.0.0.1:9192 \
   SIGMA_COMMITTEE_KEYS= "$BIN/credence-keeper" run
 
+WATCH_KEEPER=1 watchdog $$ & WD=$!
+echo "watchdog running (pid $WD): devnode clock, RPC, Postgres, every service, host suspend"
+
 echo "── 4. seeding once the assets trade REGULAR (the last manual transactions)"
 (cd services/api && node scripts/scenario-a/seed.ts)
 SEED_END_BLOCK=$(cast block-number --rpc-url "$RPC_URL")
@@ -76,5 +117,8 @@ start bidder env RPC_URL=$RPC_URL BIDDER_CONFIG="$OUT/bidders.json" BIDDER_STATE
 
 echo "── 5. the closure cycle (waits for the Friday close and the Monday reopen)"
 (cd services/api && API=http://127.0.0.1:$P_API SEED_END_BLOCK=$SEED_END_BLOCK KEEPER_ADDRESS=$KEEPER_ADDRESS RELAYER_ADDRESS=$RELAYER_ADDRESS RELAYER_B_ADDRESS=$RELAYER_B_ADDRESS \
-  node scripts/scenario-a/check.ts) || { tail -30 "$OUT/keeper.log"; exit 1; }
+  exec node scripts/scenario-a/check.ts) & CHECK=$!; PIDS+=($CHECK)
+wait $CHECK || { tail -30 "$OUT/keeper.log"; exit 1; }
 curl -s localhost:9192/metrics | grep -E '^keeper_failed_txs_total' || echo "keeper_failed_txs_total: none recorded"
+node_api scripts/scenario-a/tx-summary.ts || true
+echo "PASSED: scenario A at $(date -u +%FT%TZ)"

@@ -5,7 +5,7 @@
 //   2. the indexer / API figures equal the chain at the same block (auctions, settlements, pool, epochs);
 //   3. every expected notification was sent (email + Telegram, notification_log ok) with amounts equal to
 //      the chain's own event values.
-// Env: API, DATABASE_URL, INDEXER_SCHEMA, SEED_END_BLOCK, KEEPER_ADDRESS, RELAYER_ADDRESS.
+// Env: API, DATABASE_URL, INDEXER_SCHEMA, SEED_END_BLOCK, KEEPER_ADDRESS, RELAYER_ADDRESS, RELAYER_B_ADDRESS.
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import postgres from "postgres";
@@ -174,6 +174,7 @@ await sleep(90_000); // the indexer, the notifier scan and delivery catch up
     [
       process.env.KEEPER_ADDRESS,
       process.env.RELAYER_ADDRESS,
+      process.env.RELAYER_B_ADDRESS,
       actors.honest1,
       actors.honest2,
       actors.lowball,
