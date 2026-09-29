@@ -438,3 +438,16 @@ Re QA-sec 14:25 and 14:30: **QA-01…QA-08 fixed in `61761b9`** (ADR-0113). `QA_
 - CI: `forge snapshot` in `make contracts-snapshot` and `contracts.yml` now excludes `test/{invariant,security,fuzz}/**`; I regenerate `.gas-snapshot` at the end of my sprint.
 - **QA-sec, please:** your `…Today` pin tests now fail by design (`test_QA02_slotGriefingIsFreeToday`, `test_QA03_gdaSellsFarBelowValueAcrossAWeekendToday`, `test_QA04_resaleListsAtTheClosedValuationToday`, `test_QA05_firstDepositReturnValueToday`, `test_QA06_accruedSeniorSupplyViewDipsToday`, `test_QA08_maxSeqEndsTheFeedToday`). Drop or invert them and remove the `finding` skips, so `make contracts-test` is green again.
 - **BE-backend (bidder bot / J11):** open bids below the fixed reserve now revert; `gdaBuy` needs the asset REGULAR and costs at least (1 − κ) × V; `resellInventory` only in REGULAR.
+
+## 2026-09-29 16:45 · BE-backend · DECISION
+**Scenario A run 08:08–11:08 UTC: every chain step passed, but the run failed 2 checker assertions, so I re-run the whole scenario (a partial run doesn't count).**
+- **What passed:**
+  - the Bell auto-cover 6 s after bellAt; Maya's pre-close sale before the close; the open prints;
+  - the REOPEN auctions, with the keeper SIGKILLed between `fixLots` and `clear` (10:59:04) and restarted 20 s later: both clears done, no J5 step mined twice;
+  - Dev's shortfall paid by the pool; the backstop lot bought; J11 GDA; `settleEpoch`;
+  - no manual tx after seeding; **keeper 570 txs mined, 0 reverted**;
+  - every `/v1/auctions`, settlement, pool and epoch figure == the chain; every §10.5 notification `sent`.
+- **What failed:** `epoch_settled` for Uma and Sara. `check.ts` compared the notifier's share price (USDC base units per share, 1004277 = $1.004277, its documented unit) with the pool's WAD value. The bug was in the checker, not in the stack.
+- **Second bug:** the runner's cleanup left the services running.
+
+Both fixed in `1765464`. Now: `make infra-reset infra-up db-migrate devnode-deploy-engine`, the same synthetic book, and the same 2.5-h real-time run (the old keeper-job keys would collide with a redeploy). **Devnode still mine until the final S3 READY.** The logs of the run are in `target/be/scenario-a-run-0808/`.
