@@ -17,6 +17,12 @@ pub struct Metrics {
     /// Mined-but-reverted txs (every job pre-checks natively, so any is a bug) and sends refused by
     /// the node's gas estimate.
     pub failed_txs: IntCounterVec,
+    /// Core markets whose reads revert `NoReferencePrice` (no price yet: not live, S4 A).
+    pub markets_unpriced: IntGauge,
+    /// Core market reads that failed for any other reason, by market.
+    pub market_read_errors: IntCounterVec,
+    /// Bell offsets the keeper uses, read from the AssetClock (S4 A): window / deadline lead in seconds.
+    pub bell_lead_seconds: IntGaugeVec,
 }
 
 impl Metrics {
@@ -78,9 +84,30 @@ impl Metrics {
                 ),
                 &["job", "reason"],
             )?,
+            markets_unpriced: IntGauge::new(
+                "keeper_markets_unpriced",
+                "core markets with no reference price yet (NoReferencePrice): not live, skipped",
+            )?,
+            market_read_errors: IntCounterVec::new(
+                Opts::new(
+                    "keeper_market_read_errors_total",
+                    "core market reads that failed for a reason other than NoReferencePrice",
+                ),
+                &["market"],
+            )?,
+            bell_lead_seconds: IntGaugeVec::new(
+                Opts::new(
+                    "keeper_bell_lead_seconds",
+                    "Bell offsets before the close, read from AssetClock (kind=window|deadline)",
+                ),
+                &["kind"],
+            )?,
         };
         r.register(Box::new(m.is_leader.clone()))?;
         r.register(Box::new(m.failed_txs.clone()))?;
+        r.register(Box::new(m.markets_unpriced.clone()))?;
+        r.register(Box::new(m.market_read_errors.clone()))?;
+        r.register(Box::new(m.bell_lead_seconds.clone()))?;
         r.register(Box::new(m.jobs.clone()))?;
         r.register(Box::new(m.pokes.clone()))?;
         r.register(Box::new(m.txs.clone()))?;

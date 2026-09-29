@@ -11,6 +11,16 @@ sol! {
         function state(bytes32 assetId) external view returns (uint8);
         function previewState(bytes32 assetId) external view returns (uint8);
         function calendar() external view returns (address);
+        /// AssetClock's public constants (§8.2.2): bellWindowAt = close − BELL_WINDOW, bellAt = close − BELL_DEADLINE.
+        function BELL_WINDOW() external view returns (uint40);
+        function BELL_DEADLINE() external view returns (uint40);
+    }
+
+    /// RiskEngineRouter (R-24, ADR-0108): the Solidity `shared.riskEngine` in front of the two Stylus programs.
+    #[sol(rpc)]
+    interface IRiskEngineRouter {
+        function pricing() external view returns (address);
+        function auction() external view returns (address);
     }
 
     /// Arbitrum's ArbWasm precompile (0x…71): Stylus program lifecycle.

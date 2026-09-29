@@ -111,7 +111,7 @@ pub struct RiskCtx {
     pub pending_fees: bool,
 }
 
-/// One scheduled close ahead, from the venue calendar (R-07 days, bellAt = close − 15 min).
+/// One scheduled close ahead, from the venue calendar (R-07 days, bellAt = close − the clock's BELL_DEADLINE).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Target {
     pub close_at: u64,
@@ -123,10 +123,12 @@ pub struct Target {
     pub offset: u64,
 }
 
-pub const BELL_BEFORE_CLOSE_S: u64 = 15 * 60;
-
-/// The next two scheduled closes after `now`.
-pub fn targets(cal: &credence_common::calendar::Calendar, now: u64) -> Vec<Target> {
+/// The next two scheduled closes after `now`; `bell` holds the AssetClock's Bell offsets (S4 A).
+pub fn targets(
+    cal: &credence_common::calendar::Calendar,
+    now: u64,
+    bell: crate::schedule::BellLeads,
+) -> Vec<Target> {
     let i = cal.sessions.partition_point(|s| s.close <= now);
     (0..2usize)
         .filter_map(|k| {
@@ -135,7 +137,7 @@ pub fn targets(cal: &credence_common::calendar::Calendar, now: u64) -> Vec<Targe
             Some(Target {
                 close_at: s.close,
                 reopen_at: next.open,
-                bell_at: s.close - BELL_BEFORE_CLOSE_S,
+                bell_at: bell.bell_at(s.close),
                 closure_type: s.closure_type_after as u8,
                 days: (next.open - s.close).div_ceil(86_400),
                 offset: k as u64,
@@ -607,15 +609,24 @@ mod tests {
         ))
         .unwrap();
         // Thu 2026-10-08 14:05 ET (18:05Z): T-26h before Friday's close
-        let t = targets(&cal, 1_791_482_700);
+        let t = targets(&cal, 1_791_482_700, Default::default());
         assert_eq!(t.len(), 2);
         assert_eq!((t[0].closure_type, t[0].days, t[0].offset), (1, 1, 0)); // Thursday night
         assert_eq!((t[1].closure_type, t[1].days, t[1].offset), (2, 3, 1)); // the weekend (R-07: 3 days)
         assert_eq!(t[1].close_at, 1_791_576_000); // Fri 16:00 ET
         assert_eq!(t[1].bell_at, t[1].close_at - 900);
         // Wed 2026-11-25 14:00Z (Thanksgiving next day): the next close opens a holiday closure
-        let w = targets(&cal, 1_795_615_200);
+        let w = targets(&cal, 1_795_615_200, Default::default());
         assert_eq!(w[0].closure_type, 3);
+        // the Bell deadline follows the clock's BELL_DEADLINE
+        let chain = crate::schedule::BellLeads {
+            window_s: 7200,
+            deadline_s: 1200,
+        };
+        assert_eq!(
+            targets(&cal, 1_791_482_700, chain)[1].bell_at,
+            1_791_576_000 - 1200
+        );
     }
 
     #[test]

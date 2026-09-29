@@ -79,6 +79,69 @@ pub struct CoreJobs {
     /// First block to scan for auctions (the address book's startBlock).
     pub from_block: u64,
     last_j4: Mutex<HashMap<B256, u64>>,
+    /// Last read outcome per market, so a market is logged once per change, not every tick (S4 A).
+    read_state: Mutex<HashMap<B256, ReadState>>,
+    /// J10: the NAV stack's settlement adapter (`nav.settlement`), if deployed. Its markets are settled by
+    /// J10, not flagged by J4 (a direct `flagForAuction` on a NAV market reverts in v3).
+    pub nav: Option<crate::nav_jobs::NavStack>,
+}
+
+/// `NoReferencePrice(bytes32)`: the oracle has never priced the asset (S4 A: "not live").
+pub const NO_REFERENCE_PRICE_SELECTOR: &str = "2da33f4c";
+
+/// Outcome of a core market read.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum ReadState {
+    Live,
+    /// No reference price yet: skipped, counted in `keeper_markets_unpriced`.
+    Unpriced,
+    /// Any other failure (message kept to log only when it changes).
+    Failed(String),
+}
+
+impl ReadState {
+    pub fn of_error(e: &anyhow::Error) -> Self {
+        let msg = format!("{e:#}");
+        if msg.contains(NO_REFERENCE_PRICE_SELECTOR) || msg.contains("NoReferencePrice") {
+            Self::Unpriced
+        } else {
+            Self::Failed(msg)
+        }
+    }
+}
+
+impl CoreJobs {
+    /// Record a market's read outcome; returns the previous one if it changed (the caller logs it).
+    pub fn note_read(&self, id: B256, now: ReadState) -> Option<Option<ReadState>> {
+        let mut m = self.read_state.lock().expect("read_state");
+        let prev = m.insert(id, now.clone());
+        (prev.as_ref() != Some(&now)).then_some(prev)
+    }
+
+    /// Health scans (J4, J10 open) run at most every `j4_every_s` per market; true when one is due now.
+    pub fn j4_due(&self, id: B256, now: u64) -> bool {
+        let mut last = self.last_j4.lock().expect("j4 lock");
+        if last.get(&id).is_some_and(|t| now < t + self.j4_every_s) {
+            return false;
+        }
+        last.insert(id, now);
+        true
+    }
+
+    /// True for a market J10 settles (the NAV stack's market, once its adapter is deployed).
+    pub fn is_nav_settled(&self, m: &CoreMarket) -> bool {
+        self.nav.as_ref().is_some_and(|n| n.market == m.market)
+    }
+
+    /// Markets whose last read had no reference price.
+    pub fn unpriced(&self) -> usize {
+        self.read_state
+            .lock()
+            .expect("read_state")
+            .values()
+            .filter(|s| **s == ReadState::Unpriced)
+            .count()
+    }
 }
 
 impl CoreJobs {
@@ -109,6 +172,8 @@ impl CoreJobs {
             auctions: Mutex::new(Default::default()),
             from_block: 0,
             last_j4: Mutex::new(HashMap::new()),
+            read_state: Mutex::new(HashMap::new()),
+            nav: None,
         }
     }
 }
@@ -147,12 +212,36 @@ impl Keeper {
         };
         let now = self.clock.now();
         for m in &core.markets {
-            let ctx = match read_ctx(self.rpc.primary(), m.market, m.id, None).await {
-                Ok(c) => c,
-                Err(e) => {
-                    tracing::warn!(market = %m.id, error = %e, "core: market read failed");
-                    continue;
+            let read = read_ctx(self.rpc.primary(), m.market, m.id, None).await;
+            let state = match &read {
+                Ok(_) => ReadState::Live,
+                Err(e) => ReadState::of_error(e),
+            };
+            if let ReadState::Failed(_) = state {
+                self.metrics
+                    .market_read_errors
+                    .with_label_values(&[&m.asset])
+                    .inc();
+            }
+            // log once per change of state, not every tick (the S3 run logged 28,979 of these)
+            if let Some(prev) = core.note_read(m.id, state.clone()) {
+                match &state {
+                    ReadState::Live if prev.is_some() => {
+                        tracing::info!(asset = %m.asset, market = %m.id, "core: market is live again")
+                    }
+                    ReadState::Live => {}
+                    ReadState::Unpriced => tracing::info!(
+                        asset = %m.asset, market = %m.id,
+                        "core: market has no reference price (NoReferencePrice): not live, skipped until priced"
+                    ),
+                    ReadState::Failed(e) => {
+                        tracing::warn!(asset = %m.asset, market = %m.id, error = %e, "core: market read failed")
+                    }
                 }
+            }
+            self.metrics.markets_unpriced.set(core.unpriced() as i64);
+            let Ok(ctx) = read else {
+                continue;
             };
             for (name, r) in [
                 ("J2", self.j2(conn, &core, m, &ctx, now).await),
@@ -176,6 +265,9 @@ impl Keeper {
         }
         if let Err(e) = self.pools_tick(conn, &core, rep).await {
             tracing::warn!(error = %e, "pool lifecycle failed");
+        }
+        if let Err(e) = self.nav_tick(conn, &core, rep).await {
+            tracing::warn!(error = %e, "J10 NAV settlement failed");
         }
         if let Err(e) = self.j8(conn, &core, now).await {
             tracing::warn!(error = %e, "J8 failed");
@@ -229,7 +321,7 @@ impl Keeper {
         else {
             return Ok(());
         };
-        for t in targets(&cal, now) {
+        for t in targets(&cal, now, self.bell) {
             let Some(stage) = headsup_stage(now, t.close_at, t.bell_at) else {
                 continue;
             };
@@ -528,15 +620,14 @@ impl Keeper {
         now: u64,
         rep: &mut TickReport,
     ) -> Result<()> {
+        if core.is_nav_settled(m) {
+            return Ok(()); // J10 settles the NAV market (openSettlement), not flagForAuction
+        }
         if ctx.clock_state != REGULAR && ctx.clock_state != EXTENDED {
             return Ok(());
         }
-        {
-            let mut last = core.last_j4.lock().expect("j4 lock");
-            if last.get(&m.id).is_some_and(|t| now < t + core.j4_every_s) {
-                return Ok(());
-            }
-            last.insert(m.id, now);
+        if !core.j4_due(m.id, now) {
+            return Ok(());
         }
         for owner in self.borrowers(conn, core, m.id).await? {
             let (p, debt) = read_position(self.rpc.primary(), ctx, owner).await?;
@@ -783,6 +874,35 @@ pub type SharedCore = Arc<CoreJobs>;
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn unpriced_markets_are_logged_once_per_change() {
+        let core = CoreJobs::new(vec![], vec![], "indexer".into());
+        let (a, b) = (B256::repeat_byte(1), B256::repeat_byte(2));
+        // the revert as alloy renders it for a market with no price (selector 0x2da33f4c)
+        let e = anyhow::anyhow!("server returned an error response: error code 3: execution reverted, data: \"0x2da33f4c0000000000000000000000000000000000000000000000000000000000000001\"");
+        assert_eq!(ReadState::of_error(&e), ReadState::Unpriced);
+        assert_eq!(core.note_read(a, ReadState::Unpriced), Some(None));
+        assert_eq!(
+            core.note_read(a, ReadState::Unpriced),
+            None,
+            "no log on the next tick"
+        );
+        assert_eq!(core.note_read(b, ReadState::Live), Some(None));
+        assert_eq!(core.unpriced(), 1);
+        assert_eq!(
+            core.note_read(a, ReadState::Live),
+            Some(Some(ReadState::Unpriced))
+        );
+        assert_eq!(core.unpriced(), 0);
+        let other = ReadState::of_error(&anyhow::anyhow!("connection refused"));
+        assert!(matches!(other, ReadState::Failed(_)));
+        assert_eq!(
+            core.note_read(b, other.clone()),
+            Some(Some(ReadState::Live))
+        );
+        assert_eq!(core.note_read(b, other), None);
+    }
 
     #[test]
     fn headsup_windows() {

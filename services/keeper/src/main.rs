@@ -50,7 +50,10 @@ async fn main() -> Result<()> {
     if let Some(Cmd::Schedule { hours }) = cli.cmd {
         let now = credence_keeper::clock::Clock::now(&SystemClock);
         for a in &cfg.assets {
-            for b in credence_keeper::schedule::boundaries(&a.calendar, now, now + hours * 3600) {
+            let bell = credence_keeper::schedule::BellLeads::default();
+            for b in
+                credence_keeper::schedule::boundaries(&a.calendar, now, now + hours * 3600, bell)
+            {
                 let t = chrono::DateTime::from_timestamp(b as i64, 0)
                     .map(|d| d.to_rfc3339())
                     .unwrap_or_default();
@@ -108,6 +111,36 @@ async fn main() -> Result<()> {
         Arc::new(SystemClock),
         metrics.clone(),
         cfg.lookback_s,
+    );
+    // S4 A: the Bell offsets come from the AssetClock; the constants are only a self-check
+    match rpc
+        .with_failover("clock.bellLeads", |p| async move {
+            credence_keeper::schedule::BellLeads::read(&p, cfg.clock).await
+        })
+        .await
+    {
+        Ok(b) => {
+            if let Some(w) = b.self_check() {
+                tracing::warn!("{w}");
+            }
+            keeper.bell = b;
+        }
+        Err(e) => {
+            tracing::warn!(error = %e, "could not read the AssetClock's Bell offsets: using the §8.2.2 constants")
+        }
+    }
+    metrics
+        .bell_lead_seconds
+        .with_label_values(&["window"])
+        .set(keeper.bell.window_s as i64);
+    metrics
+        .bell_lead_seconds
+        .with_label_values(&["deadline"])
+        .set(keeper.bell.deadline_s as i64);
+    tracing::info!(
+        window_s = keeper.bell.window_s,
+        deadline_s = keeper.bell.deadline_s,
+        "Bell offsets"
     );
     keeper.alert_webhook = cfg.alert_webhook.clone();
     keeper.watch_wallets = cfg.watch_wallets.clone();

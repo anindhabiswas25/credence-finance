@@ -10,7 +10,7 @@
 //! `ALERT_WEBHOOK_URL` (PagerDuty / Opsgenie-style JSON) and the `keeper_alerts_total` metric.
 
 use crate::{
-    bindings::{venue_id, IArbWasm, IAssetClock, ICalendarStore, ARB_WASM},
+    bindings::{venue_id, IArbWasm, IAssetClock, ICalendarStore, IRiskEngineRouter, ARB_WASM},
     clock::Clock,
     jobs::{self, Claim},
     metrics::Metrics,
@@ -48,6 +48,8 @@ pub struct Keeper {
     pub core: Option<crate::core_jobs::SharedCore>,
     /// J7 σ updates (snapshot, committee, SigmaOracle), once the oracle is in the address book.
     pub sigma: Option<Arc<crate::sigma_runner::SigmaRunner>>,
+    /// The AssetClock's Bell offsets (read at startup; the §8.2.2 defaults until then).
+    pub bell: schedule::BellLeads,
     http: reqwest::Client,
 }
 
@@ -92,6 +94,7 @@ impl Keeper {
             stylus_programs: Vec::new(),
             core: None,
             sigma: None,
+            bell: schedule::BellLeads::default(),
             http: reqwest::Client::builder()
                 .timeout(std::time::Duration::from_secs(5))
                 .build()
@@ -121,7 +124,7 @@ impl Keeper {
     async fn j1(&self, conn: &mut PgConnection, rep: &mut TickReport) -> Result<()> {
         let now = self.clock.now();
         for a in &self.assets {
-            let due = schedule::due(&a.calendar, now, self.lookback_s);
+            let due = schedule::due(&a.calendar, now, self.lookback_s, self.bell);
             let mut keys: BTreeSet<(u64, String, &'static str)> = due
                 .iter()
                 .map(|b| (*b, schedule::j1_key(&a.id, *b), "boundary"))
@@ -382,8 +385,7 @@ impl Keeper {
                 )
                 .await?;
             } else {
-                for (label, program) in &self.stylus_programs {
-                    let program = *program;
+                for (label, program) in self.stylus_targets().await {
                     let left = self
                         .rpc
                         .with_failover("programTimeLeft", |p| async move {
@@ -403,7 +405,7 @@ impl Keeper {
                     };
                     self.metrics
                         .program_time_left
-                        .with_label_values(&[label])
+                        .with_label_values(&[&label])
                         .set(secs.min(i64::MAX as u64) as i64);
                     let days = secs / 86_400;
                     if days < STYLUS_ALERT_DAYS {
@@ -420,5 +422,46 @@ impl Keeper {
             }
         }
         Ok(())
+    }
+
+    /// The Stylus programs J12 watches. `shared.riskEngine` is the Solidity RiskEngineRouter (R-24, ADR-0108),
+    /// not a program: ArbWasm answers `ProgramNotActivated` for it, which raised a false RB-10 alert
+    /// ("programTimeLeft 0 days") in the S3 run. A configured address that is not a program but answers the
+    /// router's `pricing()` / `auction()` is replaced by those two programs; anything else is checked as is.
+    pub(crate) async fn stylus_targets(&self) -> Vec<(String, Address)> {
+        let mut out = Vec::new();
+        for (label, addr) in &self.stylus_programs {
+            let addr = *addr;
+            let is_program = self
+                .rpc
+                .with_failover("programVersion", |p| async move {
+                    Ok(IArbWasm::new(ARB_WASM, p)
+                        .programVersion(addr)
+                        .call()
+                        .await?)
+                })
+                .await
+                .is_ok();
+            let routed = if is_program {
+                None
+            } else {
+                self.rpc
+                    .with_failover("router.programs", |p| async move {
+                        let r = IRiskEngineRouter::new(addr, &p);
+                        Ok((r.pricing().call().await?, r.auction().call().await?))
+                    })
+                    .await
+                    .ok()
+                    .filter(|(a, b)| !a.is_zero() && !b.is_zero())
+            };
+            match routed {
+                Some((pricing, auction)) => {
+                    out.push((format!("{label}.pricing"), pricing));
+                    out.push((format!("{label}.auctionMath"), auction));
+                }
+                None => out.push((label.clone(), addr)),
+            }
+        }
+        out
     }
 }

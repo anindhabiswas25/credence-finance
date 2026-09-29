@@ -16,6 +16,7 @@ pub mod core_jobs;
 pub mod jobs;
 pub mod leader;
 pub mod metrics;
+pub mod nav_jobs;
 pub mod pool_jobs;
 pub mod rpc;
 pub mod schedule;

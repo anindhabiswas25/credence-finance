@@ -91,6 +91,9 @@ pub fn core_jobs(chain_id: u64) -> Result<Option<crate::core_jobs::CoreJobs>> {
     if env::or("KEEPER_AUCTIONS", "1") == "1" {
         c.auction_stacks = crate::core_jobs::auction_stacks(&book);
     }
+    if env::or("KEEPER_NAV", "1") == "1" {
+        c.nav = crate::nav_jobs::NavStack::from_book(&book);
+    }
     c.from_block = book.get("startBlock").and_then(|v| v.as_u64()).unwrap_or(0);
     // testnet self-service allowlist: never on Arbitrum One
     if chain_id != 42_161 {
