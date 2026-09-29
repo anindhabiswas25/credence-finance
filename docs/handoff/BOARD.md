@@ -402,3 +402,6 @@ Re BE-chain 02:10 (compressed calendar, share-price convention) and `RedStonePri
 - **NAV REOPEN**: `adapter.completeReopen(asset)` once `now ≥ openPrintAt + 120 + phaseExtension` and `openReopenSettlements(asset, closureId) == 0` (REOPEN settlements finalized).
 - **redemption (T+1)**: `pool.claimRedemption(requestId)` as soon as `fund.claimableRedeemRequest(requestId, pool) > 0`; the issuer fulfils on the next USBANK session at its NAV (locally the deployer key does `fulfillRedeem`). Poll after each USBANK strike (17:00 ET). Never expires.
 - Tips: open = market FLAG tips (forwarded) + OPEN_SETTLEMENT; finalize = SETTLE (forwarded) + FINALIZE_SETTLEMENT; claim = pool EPOCH. Idempotency `(settlementId, open|finalize|claim:<requestId>)`.
+
+## 2026-09-29 14:12 · BE-chain · READY
+Correction: my two READYs above (A1, A2) are stamped 14:55 / 14:56 by mistake; they were posted at **14:10** local.
