@@ -313,3 +313,32 @@ async fn edge_r08_rpc_outage_at_submission_does_not_stall_the_feed() {
         "a small gap at most (OFF-01 window, QA-08 step)"
     );
 }
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn edge_r09_open_print_missing_live_and_status_keep_going_no_open_report() {
+    // the session opened an hour ago and the vendor never serves an official open print: the relayer keeps
+    // publishing LIVE and STATUS and never invents an OPEN; the chain falls back to the TWAP after 15 min (E-C-09)
+    let chain = Arc::new(Chain::default());
+    let mut a = feed("A", Vendor::new(Some(180 * WAD)), chain.clone());
+    run(&mut [&mut a], 1_600).await;
+    let acc = chain.accepted.lock().unwrap();
+    assert!(acc.iter().any(|r| r.kind == Kind::Live as u8));
+    assert!(acc.iter().any(|r| r.kind == Kind::Status as u8));
+    assert!(
+        !acc.iter().any(|r| r.kind == Kind::Open as u8),
+        "no OPEN without an official print"
+    );
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn edge_r11_a_two_for_one_split_publishes_the_new_per_share_price_at_once() {
+    // reports are per SHARE (the adapter applies sharesPerToken after the timelock's confirmCorporateAction):
+    // the relayer publishes the halved vendor price as it is, immediately (a ≥ 0.10 % move), on every node's quorum
+    let vendor = Vendor::new(Some(180 * WAD));
+    let chain = Arc::new(Chain::default());
+    let mut a = feed("A", vendor.clone(), chain.clone());
+    run(&mut [&mut a], 1_000).await;
+    *vendor.price_wad.lock().unwrap() = Some(90 * WAD);
+    run(&mut [&mut a], 1_000).await;
+    assert_eq!(lives(&chain), vec![180 * WAD, 90 * WAD]);
+}

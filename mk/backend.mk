@@ -198,6 +198,7 @@ EDGE_RUST_UNIT := edge_ off01_seq_window off02_node_token off09_replacement_fees
 backend-edge-unit: ## S4 H edge cases, unit half (no infra)
 	$(CARGO) test --locked -p credence-relayer -p credence-keeper -p credence-bidder --lib --bins -- $(EDGE_RUST_UNIT)
 	$(CARGO) test --locked -q -p credence-keeper --test alert_names
+	$(CARGO) test --locked -q -p credence-relayer --test edge_aggregator --test edge_calendar_days
 	$(PNPM) --filter @credence/api exec vitest run test/edge.edge.test.ts test/ratelimit.test.ts test/stream-origin.test.ts test/settlement.test.ts
 	$(PNPM) --filter @credence/notifier exec vitest run test/edge.edge.test.ts test/navsold.test.ts
 	$(PNPM) --filter @credence/indexer exec vitest run
