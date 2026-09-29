@@ -346,10 +346,21 @@ async function marketOfAuction(
 }
 ponder.on("Market:LotReleased", async ({ event, context }) => {
   const { auctionId, owner, qty } = event.args;
-  const id = await marketOfAuction(context, auctionId);
+  const market = event.log.address.toLowerCase() as Hex;
+  // an equity lot is an AuctionHouse auction; a NAV lot is a settlement, whose market id PositionSettled fills in
+  const id =
+    marketStack(event.log.address) === "equity"
+      ? await marketOfAuction(context, auctionId)
+      : null;
   await context.db
     .insert(lotPosition)
-    .values({ auctionId, owner: owner.toLowerCase() as Hex, marketId: id, qty })
+    .values({
+      market,
+      auctionId,
+      owner: owner.toLowerCase() as Hex,
+      marketId: id,
+      qty,
+    })
     .onConflictDoUpdate({ qty });
   if (id) {
     await refreshMarket(context, event, id);
@@ -393,7 +404,13 @@ ponder.on("Market:PositionSettled", async ({ event, context }) => {
   };
   await context.db
     .insert(lotPosition)
-    .values({ auctionId, owner, qty: collateralSold, ...fields })
+    .values({
+      market: event.log.address.toLowerCase() as Hex,
+      auctionId,
+      owner,
+      qty: collateralSold,
+      ...fields,
+    })
     .onConflictDoUpdate(fields);
   await refreshMarket(context, event, marketId);
   await refreshPosition(context, event, marketId, borrower);
@@ -420,7 +437,11 @@ ponder.on("Market:Shortfall", async ({ event, context }) => {
     });
   else
     await context.db
-      .update(lotPosition, { auctionId, owner: owner.toLowerCase() as Hex })
+      .update(lotPosition, {
+        market: event.log.address.toLowerCase() as Hex,
+        auctionId,
+        owner: owner.toLowerCase() as Hex,
+      })
       .set({ paidByPool: paidPool, paidByReserve: paidReserve, seniorLoss });
   await onPosition(context, event, id, owner, "shortfall", event.args);
 });

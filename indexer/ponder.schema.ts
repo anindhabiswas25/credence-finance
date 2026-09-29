@@ -373,6 +373,9 @@ export const bid = onchainTable(
 export const lotPosition = onchainTable(
   "lot_position",
   (t) => ({
+    // S4: the market contract that released the lot. Equity auction ids (AuctionHouse) and NAV settlement ids
+    // (the NAV market's lot ids) both start at 1, so the id alone is not a key.
+    market: t.hex().notNull(),
     auctionId: t.bigint().notNull(),
     owner: t.hex().notNull(),
     marketId: t.hex(),
@@ -389,7 +392,7 @@ export const lotPosition = onchainTable(
     settledAt: t.bigint(),
   }),
   (table) => ({
-    pk: primaryKey({ columns: [table.auctionId, table.owner] }),
+    pk: primaryKey({ columns: [table.market, table.auctionId, table.owner] }),
     byOwner: index().on(table.owner),
   }),
 );

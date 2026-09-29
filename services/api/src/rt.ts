@@ -253,7 +253,10 @@ export function pgRiskTransferRepo(
     },
     async lotPositions(id) {
       const rows =
-        await sql`select * from ${ix("lot_position")} where auction_id = ${id.toString()} order by owner`;
+        // the auction house's lots only: a NAV settlement with the same id is another market's lot (S4)
+        await sql`select lp.* from ${ix("lot_position")} lp
+                    join ${ix("auction")} a on a.auction_id = lp.auction_id and a.market_id = lp.market_id
+                   where lp.auction_id = ${id.toString()} order by lp.owner`;
       return rows.map((r) => ({
         owner: hx(r.owner) as Address,
         qty: BigInt(r.qty),
@@ -302,8 +305,8 @@ export function pgRiskTransferRepo(
           from ${ix("market")} m
           left join (select market_id, sum(premium) as premiums, count(*) as policies from ${ix("cover_policy")} group by market_id) c
             on c.market_id = m.market_id
-          left join (select a.market_id, sum(lp.paid_by_pool) as pool, sum(lp.paid_by_reserve) as reserve, sum(lp.senior_loss) as senior
-                       from ${ix("lot_position")} lp join ${ix("auction")} a on a.auction_id = lp.auction_id group by a.market_id) l
+          left join (select lp.market_id, sum(lp.paid_by_pool) as pool, sum(lp.paid_by_reserve) as reserve, sum(lp.senior_loss) as senior
+                       from ${ix("lot_position")} lp where lp.market_id is not null group by lp.market_id) l
             on l.market_id = m.market_id
          order by m.market_id`;
       return rows.map((r) => ({
