@@ -30,6 +30,8 @@ contract Reenterer is ITokenHook {
     Action[] internal _plan;
     Outcome[] internal _out;
     uint256 public next;
+    /// @notice While set, every incoming transfer reverts (a blocklisted or hostile recipient).
+    bool public rejecting;
 
     /// @notice Run any call as the attacker (approve, borrow, bid, register the hook …). Bubbles a revert.
     function exec(address target, bytes calldata data) external returns (bytes memory ret) {
@@ -49,6 +51,10 @@ contract Reenterer is ITokenHook {
         _out.push();
     }
 
+    function setRejecting(bool r) external {
+        rejecting = r;
+    }
+
     function outcome(uint256 i) external view returns (bool fired, bool ok, bytes memory ret) {
         Outcome storage o = _out[i];
         return (o.fired, o.ok, o.ret);
@@ -59,6 +65,7 @@ contract Reenterer is ITokenHook {
     }
 
     function tokensReceived(address, address, uint256) external {
+        if (rejecting) revert("rejecting");
         _fire(Side.RECEIVE);
     }
 
