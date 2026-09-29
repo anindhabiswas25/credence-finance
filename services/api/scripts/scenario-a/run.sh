@@ -120,6 +120,6 @@ echo "── 5. the closure cycle (waits for the Friday close and the Monday reo
 (cd services/api && API=http://127.0.0.1:$P_API SEED_END_BLOCK=$SEED_END_BLOCK KEEPER_ADDRESS=$KEEPER_ADDRESS RELAYER_ADDRESS=$RELAYER_ADDRESS RELAYER_B_ADDRESS=$RELAYER_B_ADDRESS \
   exec node scripts/scenario-a/check.ts) & CHECK=$!; PIDS+=($CHECK)
 wait $CHECK || { tail -30 "$OUT/keeper.log"; exit 1; }
-curl -s localhost:9192/metrics | grep -E '^keeper_failed_txs_total' || echo "keeper_failed_txs_total: none recorded"
+curl -s localhost:9192/metrics | grep -E '^credence_keeper_failed_txs_total' || echo "credence_keeper_failed_txs_total: none recorded (no keeper tx failed)"
 node_api scripts/scenario-a/tx-summary.ts || true
 echo "PASSED: scenario A at $(date -u +%FT%TZ)"
