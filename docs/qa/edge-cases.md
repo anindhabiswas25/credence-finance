@@ -175,13 +175,13 @@ Last run (2026-09-29, `3c82b87` + this commit): `forge test --match-path 'test/s
 | R-02 | 2 of 3 nodes down | No report → the feed goes stale → HALT (fail closed) | `edge_two_of_three_nodes_down_publish_nothing_fail_closed`; on-chain E-O-02/03 | proven (reviewed) |
 | R-03 | Outlier node / vendor price | Median used; the outlier node refuses | `edge_an_outlier_node_is_outvoted_and_refuses_the_median` | proven (reviewed) |
 | R-04 | Zero or stale price | Never signed | `edge_zero_and_stale_prices_are_never_signed` | proven (reviewed) |
-| R-05 | One vendor down (for the whole feed, not one node) | That feed stops; on-chain borrowing paused (E-O-03) | `edge_one_vendor_down_on_one_node_…` covers a single node only | **partly → gap**: a test where vendor B is down for every node, so feed B publishes nothing and feed A keeps going |
-| R-06 | Both vendors down | Nothing published → HALT | — | **gap** |
-| R-07 | Feed disagreement > 1.5 % and > 5 % seen by the relayer | Both published as-is (the chain decides) | — | **gap** (the chain side is E-O-01) |
-| R-08 | A submission not mined; an RPC outage | Retried with the same seq (node re-signs the same seq, OFF-01); no seq gap | `off01_seq_window` (seq rule only) | **gap** (the retry path itself) |
-| R-09 | Open print missing, then the TWAP fallback after 15 min | The relayer keeps LIVE; the chain falls back (E-C-09) | — | **gap** (relayer side) |
-| R-10 | Holiday, early close and DST days | Status and session dates right on those days | `halt_merge_fails_closed`, `status_fails_closed`, `unknown_codes_fail_closed` (status mapping) | **partly** (no calendar-day test in the relayer; the keeper side is K-01) |
-| R-11 | Stock split (`sharesPerToken`) | Price per token, not per share, after the ratio change | — | **gap** |
+| R-05 | One vendor down (for the whole feed, not one node) | That feed stops; the other keeps going; on-chain borrowing paused (E-O-03) | `relayer/tests/edge_aggregator.rs: edge_r05_one_vendor_down_for_every_node_silences_that_feed_only` | proven (reviewed, `fa1fce5`) |
+| R-06 | Both vendors down | Nothing published → HALT | `edge_aggregator.rs: edge_r06_both_vendors_down_nothing_is_published` (not even a submission attempt) | proven (reviewed) |
+| R-07 | Feed disagreement > 1.5 % and > 5 % seen by the relayer | Both published as-is (the chain decides, E-O-01) | `edge_aggregator.rs: edge_r07_feeds_six_percent_apart_are_each_published_as_is` | proven (reviewed; > 5 % case, the 1.5 % band is the same code path) |
+| R-08 | A submission not mined; an RPC outage | The feed does not stall; after the outage the move lands with a higher seq inside the OFF-01 window (≤ 64 gap) | `edge_aggregator.rs: edge_r08_rpc_outage_at_submission_does_not_stall_the_feed` | proven (reviewed) |
+| R-09 | Open print missing, then the TWAP fallback after 15 min | The relayer keeps LIVE and STATUS and never invents an OPEN; the chain falls back (E-C-09) | `edge_aggregator.rs: edge_r09_open_print_missing_live_and_status_keep_going_no_open_report` | proven (reviewed) |
+| R-10 | Holiday, early close and DST days | Status and session dates right on those days | `relayer/tests/edge_calendar_days.rs: edge_r10_dst_switch_…`, `edge_r10_thanksgiving_is_not_regular_whatever_the_vendor_says`, `edge_r10_early_close_ends_regular_at_13_00_et` | proven (reviewed, `5260227`) |
+| R-11 | Stock split (`sharesPerToken`) | Reports stay per share; the halved price is published at once; the adapter applies the ratio after `confirmCorporateAction` | `edge_aggregator.rs: edge_r11_a_two_for_one_split_publishes_the_new_per_share_price_at_once` | proven (reviewed) |
 | R-12 | seq window, node token (OFF-01/02) | As fixed | `off01_seq_window`, `off02_node_token_required_off_dev_chains` | proven (reviewed) |
 
 ### 2.2 Keeper
