@@ -71,6 +71,7 @@ export async function processJob(
 ): Promise<q.Final | "retry"> {
   const now = d.now?.() ?? new Date();
   const f = d.fetch ?? fetch;
+  let retryAfter = 0; // s, the largest provider "retry after" seen for this job
   const done = async (
     status: q.Final | "retry",
     delivered: Channel[],
@@ -81,8 +82,10 @@ export async function processJob(
       status === "retry"
         ? {
             status: "retry" as const,
+            // a provider's rate limit (Telegram 429 retry_after) wins over our own back-off
             runAt: new Date(
-              now.getTime() + backoffS(d.cfg, job.attempts) * 1000,
+              now.getTime() +
+                Math.max(backoffS(d.cfg, job.attempts), retryAfter) * 1000,
             ),
           }
         : { status };
@@ -202,6 +205,7 @@ export async function processJob(
         e instanceof ChannelError ? e : new ChannelError(String(e), false);
       if (err.permanent) failed.push(c);
       else transient = true;
+      if (err.retryAfterS) retryAfter = Math.max(retryAfter, err.retryAfterS);
       errors.push(err.message);
       await q.log(d.sql, job.id, c, job.attempts, false, null, err.message);
       d.metrics?.deliveries.inc({

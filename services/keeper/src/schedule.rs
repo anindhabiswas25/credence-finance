@@ -191,4 +191,55 @@ mod tests {
             "J12:coverage:2026-10-07"
         );
     }
+
+    // ── S4 H edge cases (make backend-edge): the real XNYS calendar's odd days ──
+
+    #[test]
+    fn edge_dst_switch_moves_every_boundary_by_one_hour() {
+        let c = cal();
+        let d = BellLeads::default();
+        // Fri 2026-10-30 (EDT) closes 20:00Z; Mon 2026-11-02 (EST) opens 14:30Z and closes 21:00Z
+        let fri_close = 1_793_390_400;
+        let mon_open = 1_793_629_800;
+        let mon_close = 1_793_653_200;
+        let b = boundaries(&c, fri_close - 3 * 3600, mon_close + 60, d);
+        assert!(b.contains(&(fri_close - 7_200)) && b.contains(&(fri_close - 900)));
+        assert!(b.contains(&mon_open), "the EST open (14:30Z)");
+        assert!(
+            b.contains(&(mon_close - 7_200)) && b.contains(&(mon_close - 900)),
+            "Bell times follow the EST close"
+        );
+        assert!(
+            !b.contains(&(mon_open - 3_600)),
+            "no boundary at the EDT open time"
+        );
+    }
+
+    #[test]
+    fn edge_holiday_has_no_session_and_the_early_close_moves_the_bell() {
+        let c = cal();
+        let d = BellLeads::default();
+        // Thanksgiving Thu 2026-11-26: no regular session; the first boundary after Wednesday's extended close is
+        // Friday's extended open, the evening before (Thu 20:00 ET = Fri 01:00Z)
+        let wed_close = 1_795_640_400;
+        let fri_open = 1_795_789_800;
+        let fri_ext_open = 1_795_741_200;
+        let early_close = 1_795_802_400; // Fri 13:00 ET = 18:00Z
+        let b = boundaries(&c, wed_close + 4 * 3600, fri_open, d);
+        assert_eq!(
+            b,
+            vec![fri_ext_open, fri_open],
+            "Thanksgiving has no open, close or Bell"
+        );
+        let b = boundaries(&c, fri_open, early_close + 60, d);
+        assert!(
+            b.contains(&(early_close - 900)),
+            "bellAt = the early close − 15 min (17:45Z)"
+        );
+        assert!(b.contains(&(early_close - 7_200)));
+        assert!(
+            !b.contains(&(1_795_813_200 - 900)),
+            "not the regular 21:00Z close's Bell"
+        );
+    }
 }

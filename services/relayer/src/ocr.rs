@@ -501,4 +501,111 @@ mod tests {
         assert!(verify_seq(41 + SEQ_WINDOW + 1, Some(41)).is_err());
         assert!(verify_seq(u64::MAX, Some(41)).is_err());
     }
+
+    // ── S4 H edge cases (make backend-edge) ──
+
+    #[test]
+    fn edge_one_of_three_nodes_down_still_reports() {
+        // node 3 is down (no snapshot): 2 of 3 still meet the threshold of 2
+        let snaps = vec![
+            snap("n1", obs(100 * WAD, MarketStatus::Regular)),
+            snap("n2", obs(101 * WAD, MarketStatus::Regular)),
+        ];
+        let d = propose_asset(B256::repeat_byte(1), &snaps, 2);
+        assert!(d.iter().any(|d| d.kind == Kind::Live));
+        // and the signing quorum: node 3 accepts nothing, nodes 1–2 accept every draft
+        let q =
+            choose_quorum(&[vec![true, true], vec![true, true], vec![false, false]], 2).unwrap();
+        assert_eq!(q, (vec![0, 1], vec![0, 1]));
+    }
+
+    #[test]
+    fn edge_two_of_three_nodes_down_publish_nothing_fail_closed() {
+        // one node alone: no status quorum, no report, so the feed goes stale and the clock HALTs (INV-FAIL-01)
+        let snaps = vec![snap("n1", obs(100 * WAD, MarketStatus::Regular))];
+        assert!(propose_asset(B256::repeat_byte(1), &snaps, 2).is_empty());
+        assert!(choose_quorum(&[vec![true], vec![false], vec![false]], 2).is_none());
+    }
+
+    #[test]
+    fn edge_one_vendor_down_on_one_node_that_node_refuses_the_others_sign() {
+        let own_down = AssetObservation {
+            live: None,
+            live_session_date: None,
+            ..obs(100 * WAD, MarketStatus::Regular)
+        };
+        let draft = Draft {
+            asset_id: own_down.asset_id,
+            kind: Kind::Live,
+            price_wad: 100 * WAD,
+            observed_at: 99,
+            session_date: SD,
+            status: MarketStatus::Regular,
+        };
+        assert_eq!(
+            verify(&draft, Some(&own_down), 100),
+            Err(Refusal::NoObservation)
+        );
+        assert_eq!(
+            verify(&draft, None, 100),
+            Err(Refusal::NoObservation),
+            "no data at all"
+        );
+        assert!(verify(&draft, Some(&obs(100 * WAD, MarketStatus::Regular)), 100).is_ok());
+    }
+
+    #[test]
+    fn edge_an_outlier_node_is_outvoted_and_refuses_the_median() {
+        let snaps = vec![
+            snap("n1", obs(100 * WAD, MarketStatus::Regular)),
+            snap("n2", obs(100 * WAD + WAD / 20, MarketStatus::Regular)),
+            snap("n3", obs(500 * WAD, MarketStatus::Regular)),
+        ];
+        let d = propose_asset(B256::repeat_byte(1), &snaps, 2);
+        let live = d.iter().find(|d| d.kind == Kind::Live).unwrap();
+        assert_eq!(
+            live.price_wad,
+            100 * WAD + WAD / 20,
+            "the median, not the outlier"
+        );
+        let outlier = obs(500 * WAD, MarketStatus::Regular);
+        assert!(matches!(
+            verify(live, Some(&outlier), 100),
+            Err(Refusal::OutOfTolerance { .. })
+        ));
+    }
+
+    #[test]
+    fn edge_zero_and_stale_prices_are_never_signed() {
+        let own = obs(100 * WAD, MarketStatus::Regular);
+        let mut d = Draft {
+            asset_id: own.asset_id,
+            kind: Kind::Live,
+            price_wad: 0,
+            observed_at: 99,
+            session_date: SD,
+            status: MarketStatus::Regular,
+        };
+        assert!(
+            matches!(
+                verify(&d, Some(&own), 100),
+                Err(Refusal::OutOfTolerance { .. })
+            ),
+            "a zero price"
+        );
+        d.price_wad = 100 * WAD;
+        // the node saw a print at t = 1,000; the draft carries one more than 5 min older
+        let mut fresh = own.clone();
+        fresh.live.as_mut().unwrap().observed_at = 1_000;
+        d.observed_at = 1_000 - OBSERVED_AT_TOLERANCE_S - 1;
+        assert!(
+            matches!(
+                verify(&d, Some(&fresh), 1_000),
+                Err(Refusal::ObservedAtMismatch { .. })
+            ),
+            "a stale print"
+        );
+        d.observed_at = 200;
+        assert_eq!(verify(&d, Some(&own), 100), Err(Refusal::FromFuture));
+    }
 }

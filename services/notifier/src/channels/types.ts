@@ -3,9 +3,12 @@
 
 export class ChannelError extends Error {
   readonly permanent: boolean;
-  constructor(message: string, permanent: boolean) {
+  /** A provider's own "retry after" (s), e.g. Telegram's 429 `parameters.retry_after`. */
+  readonly retryAfterS?: number;
+  constructor(message: string, permanent: boolean, retryAfterS?: number) {
     super(message);
     this.permanent = permanent;
+    this.retryAfterS = retryAfterS;
   }
 }
 
@@ -20,7 +23,19 @@ export function httpError(
   return new ChannelError(
     `${provider} ${status}: ${body.slice(0, 300)}`,
     !transient,
+    status === 429 ? retryAfterOf(body) : undefined,
   );
+}
+
+/** Telegram's 429 body carries `parameters.retry_after` (s); other providers' bodies give nothing here. */
+export function retryAfterOf(body: string): number | undefined {
+  try {
+    const v = (JSON.parse(body) as { parameters?: { retry_after?: unknown } })
+      .parameters?.retry_after;
+    return typeof v === "number" && v > 0 ? v : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 export type Fetch = typeof fetch;

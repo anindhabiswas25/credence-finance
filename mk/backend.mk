@@ -19,7 +19,7 @@ export PATH := $(NVM_NODE24):$(PATH)
 endif
 PNPM := pnpm
 
-.PHONY: backend-install backend-build backend-test backend-lint backend-fmt \
+.PHONY: backend-install backend-build backend-test backend-lint backend-fmt backend-edge backend-edge-unit backend-edge-infra \
         infra-up infra-down infra-reset infra-ps db-migrate db-rollback calendar-gen calendar-test \
         relayer-dev relayer-smoke keeper-dev indexer-dev api-dev relayer-e2e keeper-e2e indexer-e2e services-up \
         notifier-dev notifier-e2e r26-probe keeper-sigma-test keeper-j12-e2e keeper-j7-e2e keeper-core-e2e obs-up obs-down obs-check api-db-test api-engine-e2e indexer-core-e2e api-bell-e2e scenario-a-e2e relayer-redstone-e2e
@@ -187,3 +187,24 @@ obs-check: ## promtool config/rules check + alert unit tests; if obs is up: ever
 	  echo "grafana: $$d"; [ "$$d" = "credence-api credence-indexer credence-keeper credence-relayer" ]; \
 	  curl -sf "localhost:$${GRAFANA_PORT:-3001}/api/datasources/uid/credence-prom/health" -u admin:credence | jq -e '.status == "OK"' >/dev/null && echo "grafana → prometheus: OK"; \
 	else echo "(obs stack not running: static checks only)"; fi
+
+# ── S4 H: the off-chain edge-case suite (docs/qa/edge-cases.md, QA-sec) ──
+# Unit half: every test named edge_* plus the older tests that already prove an edge (listed); no infra.
+# Infra half: Postgres + anvil (spawned by the tests), never the devnode: keeper restarts, failover, stuck txs,
+# notifier retry / dead-letter. Whole suite ≤ 30 min.
+EDGE_RUST_UNIT := edge_ off01_seq_window off02_node_token off09_replacement_fees unpriced_markets \
+  a_solver_fill_is_finished finalize_only_after_the_window open_takes_hf_below_one no_quorum_no_report \
+  halt_merge_fails_closed status_fails_closed unknown_codes_fail_closed no_bid_profile_and_closed_windows_never_bid
+backend-edge-unit: ## S4 H edge cases, unit half (no infra)
+	$(CARGO) test --locked -p credence-relayer -p credence-keeper -p credence-bidder --lib --bins -- $(EDGE_RUST_UNIT)
+	$(CARGO) test --locked -q -p credence-keeper --test alert_names
+	$(PNPM) --filter @credence/api exec vitest run test/edge.edge.test.ts test/ratelimit.test.ts test/stream-origin.test.ts test/settlement.test.ts
+	$(PNPM) --filter @credence/notifier exec vitest run test/edge.edge.test.ts test/navsold.test.ts
+	$(PNPM) --filter @credence/indexer exec vitest run
+	$(PROMTOOL) test rules alerts.test.yml
+
+backend-edge-infra: contracts-build ## S4 H edge cases, infra half (needs infra-up db-migrate; anvil, not the devnode)
+	TEST_DATABASE_URL=$(TEST_DATABASE_URL) $(CARGO) test --locked -p credence-keeper --test keeper_e2e -- --ignored --test-threads=1
+	TEST_DATABASE_URL=$(TEST_DATABASE_URL) RISK_CLI=$(abspath $(BACKEND_TARGET_DIR))/debug/risk-cli $(PNPM) --filter @credence/notifier e2e
+
+backend-edge: backend-edge-unit backend-edge-infra ## S4 H: every off-chain edge case (unit + anvil/Postgres), ≤ 30 min
