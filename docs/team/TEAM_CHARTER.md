@@ -22,7 +22,7 @@ Engineers run **at the same time, in the same working tree**. Never create, edit
 | --- | --- |
 | `contracts/**` (except the two QA-sec paths below) | BE-chain |
 | `contracts/test/security/**`, `contracts/test/fuzz/**` | **QA-sec from S4** |
-| `docs/security/**`, `mk/security.mk`, `.github/workflows/security.yml`, `.tools/` (project-local tool installs, git-ignored) | **QA-sec from S4** |
+| `docs/security/**`, `docs/qa/**`, `mk/security.mk`, `.github/workflows/security.yml`, `.tools/` (project-local tool installs, git-ignored) | **QA-sec from S4** |
 | `crates/risk-core/**`, `crates/risk-cli/**`, `crates/risk-py/**`, `crates/risk-wasm/**`, `stylus/**`, root `Stylus.toml` | BE-chain |
 | `crates/credence-bindings/**` | BE-chain (generated from contract ABIs) |
 | `deployments/abis/**` | BE-chain (frozen ABIs) |

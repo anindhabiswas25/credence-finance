@@ -80,23 +80,32 @@ Write the results in `docs/security/offchain-review.md`.
 ### G. Independent devnode re-check (after BE-backend's final S3 READY)
 Re-run `make devnode-integration` and `make devnode-gas` on the devnode. These are BE-chain's S3 acceptance 3–6, which the PM accepted on evidence only. Post the result as an `ANSWER` on the board. Coordinate with BE-chain first: they also redeploy the book in their item E.
 
+### H. Edge-case matrix (user decision 2026-09-29 18:30, added mid-sprint; now your main job)
+**The deep audit is moved to pre-mainnet.** It will be done then with external auditors, the 256 × 512 nightlies and the long soaks. For now, QA means **edge cases on every probable path**.
+1. Write `docs/qa/edge-cases.md`: one row per case, with component, trigger, expected behaviour (Guide section), the test that proves it, and its status.
+   - Cover the contracts and the off-chain stack.
+   - Start from the list in `sprint-4-backend.md` item H, then add what your reading of the code finds: boundaries (0, 1 unit, max, exactly at a deadline, one second late), races (two actors in one block), state changes mid-flow, holidays and DST, and dust.
+2. **Contract edge cases:** write the missing ones yourself under `contracts/test/security/`. File each defect to BE-chain as a REQUEST with its failing test, as before.
+3. **Off-chain edge cases:** BE-backend writes those tests (`make backend-edge`). You review that each row's test really triggers the case, and you file the gaps.
+4. Re-rank anything left from items D–F: what an external audit would catch goes into a **pre-mainnet backlog** (`docs/security/pre-mainnet.md`), not into this sprint.
+
 ## Out of scope
 - Editing `contracts/src/**` or `services/**` (you file requests).
 - External audits and the bug bounty.
 - Playwright e2e: the web app is not in this repo yet, so it moves to the sprint the Frontend role joins.
-- The 7 consecutive nightlies (the CI job starts the count; the gate closes in S5/S6).
+- **Deep audit work, moved to pre-mainnet (user decision 2026-09-29):** the external audits, the 7 consecutive nightlies, the local 256 × 512 run (the `nightly-invariants` CI job may stay; don't spend sprint time on it), the differential at 10M, the remaining Low/Info findings, and the "partly" rows of the threat model. List them in `docs/security/pre-mainnet.md`.
 
 ## Acceptance criteria
 1. `make security-slither security-aderyn` run from a clean clone. `docs/security/triage.md` covers every high and medium finding, with no unexplained ones.
 2. The reentrancy suite covers every money function listed in B (settlement once it lands), and every guard is proven or a REQUEST is open.
 3. The inflation and rounding fuzz suites pass at 10,000 runs (or fail with a REQUEST open).
-4. `docs/security/invariant-map.md` maps all of §14.2. The full catalogue plus your invariants pass at 256 × 512 locally, and `nightly-invariants` exists.
+4. `docs/security/invariant-map.md` maps all of §14.2 (done). **`docs/qa/edge-cases.md` exists and covers every probable case**: every contract row has a passing test or an open REQUEST, and every off-chain row names BE-backend's test or a gap REQUEST. `docs/security/pre-mainnet.md` lists everything deferred.
 5. `docs/security/threat-model.md` and `docs/security/offchain-review.md` exist, with every §15.1 row given a status.
 6. G is done and answered on the board, if the devnode was released in time; otherwise carried over with the reason.
 7. The report is at `docs/handoff/sprint-4-security-report.md` (template). **Findings are ranked by severity, with the owner and the status of each.**
 
 ## Rules
-- The charter applies in full: **your paths only** (charter §2: `contracts/test/security/**`, `contracts/test/fuzz/**`, `docs/security/**`, `mk/security.mk`, `.github/workflows/security.yml`, `.tools/`), and stage only your paths.
+- The charter applies in full: **your paths only** (charter §2: `contracts/test/security/**`, `contracts/test/fuzz/**`, `docs/security/**`, `docs/qa/**`, `mk/security.mk`, `.github/workflows/security.yml`, `.tools/`), and stage only your paths.
 - Use `CARGO_TARGET_DIR=target/qa`, and `FOUNDRY_OUT=target/qa/forge-out FOUNDRY_CACHE_PATH=target/qa/forge-cache` for your forge runs, so you never fight BE-chain's `contracts/out`.
 - **While BE-backend's scenario run is live** (from their DECISION until their final S3 READY), run heavy jobs with `nice -n 19` and `forge … --threads 4`. Do not start the 256 × 512 run.
 - The devnode is off-limits until the final S3 READY.

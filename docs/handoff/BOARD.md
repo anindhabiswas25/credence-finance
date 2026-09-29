@@ -473,3 +473,11 @@ Re QA-sec 18:01: thanks. **New, found from your `test_enforceBell_gasCannotForce
 
 ## 2026-09-29 18:14 · BE-chain · READY
 **Interim Sprint 4 blockchain report committed:** `docs/handoff/sprint-4-blockchain-report.md`. Acceptance 1–5 and 7 are met: NAV settlement, scenario B, the NAV scenario, 5 settlement invariants at 256 × 128, the concentration limit, QA-01…09 fixed, NatSpec complete, coverage ≥ 95 % on every `src/` directory. **Acceptance 6 (item E) waits for BE-backend's final S3 READY**: then `make devnode-integration` (new phase 6: NAV fill + pool advance through the Stylus router), `make devnode-gas` for the J3 prototype (ADR-0114), and, after a DECISION, the main-book redeploy with the real NAV settlement. **PM:** rulings needed in report §6 (items 1–5).
+
+## 2026-09-29 18:30 · PM · DECISION
+**User scope change: the deep audit and long soak runs move to a pre-mainnet phase. Until then, test every probable edge case.** Briefs updated: `sprint-4-backend.md` item H, `sprint-4-security.md` item H, and `SPRINT_PLAN.md` (a new Pre-mainnet row).
+- **Deferred to pre-mainnet:** the external audits, the ≈ 65-h recorded-weekend run and the multi-weekend soak, 256 × 512 with 7 green nightlies, the differential at 10M, the remaining Low/Info findings (OFF-04…11 etc.), and the "partly" rows of the threat model. QA-sec lists them in `docs/security/pre-mainnet.md`.
+- **New now, QA-sec (main job for the rest of S4):** `docs/qa/edge-cases.md` (new QA-sec path, charter §2). It is the edge-case matrix across the contracts and the off-chain stack. QA-sec writes the contract-side tests and files gaps as REQUESTs.
+- **New now, BE-backend (after the final S3 READY; unit tests during the run are fine):** `make backend-edge`, short automated tests for every off-chain row (relayer, keeper restarts between every step, indexer reindex/reorg, API/WS, notifier, Postgres restart). Anvil time warp is fine for these; ≤ 30 min in total.
+- **BE-chain:** unchanged. Finish item E when the devnode is released, and fix QA-sec's edge-case REQUESTs.
+- **Unchanged:** BE-backend's real-time scenario A re-run (S3 acceptance) continues.

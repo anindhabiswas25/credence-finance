@@ -97,15 +97,62 @@ The run uses the binaries in `target/be/debug`, and kill-watch restarts the keep
 - `make nav-settlement-e2e`: a solver fill and a no-bid fallback, keeper-only after seeding.
 - Indexer, API and notifier == the chain.
 
+### H. Edge-case suite (user decision 2026-09-29 18:30, added mid-sprint)
+**No 65-hour runs before mainnet.** Instead, prove the off-chain stack on **every probable edge case**, each as a short automated test.
+- Use unit tests with mocks, anvil with time warp (`MockRiskEngine`), or the devnode only where the Stylus engine matters.
+- Target `make backend-edge`, whole suite ≤ 30 min.
+- QA-sec owns the case list (`docs/qa/edge-cases.md`) and files each gap as a REQUEST. Build your tests against it, and mark each row with the test that proves it.
+
+Cover at least:
+- **Relayer:**
+  - one vendor down, both down;
+  - stale, zero or outlier prices;
+  - feed disagreement over 1.5 % and over 5 %;
+  - 1 of 3 signer nodes down (still signs); 2 of 3 down (no quorum, so the feed goes stale and the asset HALTs, fail closed);
+  - a submission not mined; an RPC outage;
+  - the open print missing, then the TWAP fallback after 15 min;
+  - holiday, early close and DST switch days;
+  - a stock split (`sharesPerToken`).
+- **Keeper:**
+  - killed and restarted **between every pair of steps** of J3, J5, J9, J10 and J11, not only `fixLots`/`clear`;
+  - two instances with leader failover;
+  - a stuck tx; a gas spike; an RPC error mid-batch;
+  - a position repaid or closed between the pre-check and the tx;
+  - a Bell with 0 positions;
+  - a Bell with 35+ NEEDS_ACTION positions (4+ J3 txs, all inside the 15-min deadline);
+  - a lot over 128 positions (tranches);
+  - an auction with no bids, every bidder failing to reveal, and partial fills;
+  - pool capacity exhausted (cover fails closed);
+  - a withdraw queue with a cash shortage;
+  - a GDA still unsold at the next closure;
+  - NAV: a solver fill, no bid (fallback), `RedemptionsGated` (retry), a solver voided, the T+1 claim delayed by a holiday;
+  - a sequencer gap (R-20 phase extension);
+  - HALTED mid-cycle;
+  - calendar coverage running out.
+- **Indexer:**
+  - a restart and a full reindex give identical tables;
+  - an anvil reorg;
+  - several contracts' events in one block.
+- **API and WS:**
+  - pagination edges; unknown ids (404); invalid inputs (400); uint256-max values;
+  - WS disconnect and reconnect; session expiry.
+- **Notifier:**
+  - a channel down, then retry, then dead-letter;
+  - a duplicate event gives one message;
+  - a user with no channel;
+  - Telegram rate limits;
+  - amounts of 1 base unit and at the maximum.
+- **Postgres restart** mid-cycle.
+
 ## Out of scope
-- **The full recorded-weekend run:** it needs about 65 h of real time on the devnode, so it moves to S5/S6 on a server, not this laptop.
+- **Long soak runs** (the ≈ 65-h recorded weekend, multi-weekend soaks): moved to the **pre-mainnet** phase by the user. Not in S4, S5 or S6.
 - Production deploy, KMS, RPC failover (S5).
 - The web app.
 
 ## Acceptance criteria
 1. **S3 is closed.** `make scenario-a-e2e` passes on the devnode at real time, end to end, with 0 failed keeper txs and the kill-watch restart proven. The S3 report is final, and the final S3 READY is posted.
 2. `make backend-install backend-build backend-test backend-lint` passes from a clean clone.
-3. A (log noise, Bell times from the chain, `programTimeLeft`) is done, with tests.
+3. A (log noise, Bell times from the chain, `programTimeLeft`) is done, with tests. `make backend-edge` passes, and every off-chain row of `docs/qa/edge-cases.md` names its test (or is marked deferred to pre-mainnet with the PM's agreement).
 4. J10, the solver bot, the settlement indexer/API and the notifier messages are built, with unit tests. `make nav-settlement-e2e` passes on the devnode if BE-chain's item E lands this sprint; otherwise mark it carried over with the reason.
 5. Every §16.1 alert has a rule and a promtool test, and the dashboards are provisioned.
 6. The report is at `docs/handoff/sprint-4-backend-report.md` (template), with ADRs for every deviation.
