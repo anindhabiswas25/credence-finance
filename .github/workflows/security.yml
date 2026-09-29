@@ -1,0 +1,86 @@
+# Security CI (owner: QA-sec). Build Guide §15.2 pre-audit gates:
+#   static      — Slither + Aderyn (pinned), no untriaged high / medium (docs/security/triage.md)
+#   suites      — reentrancy, inflation / rounding fuzz (10,000 runs), QA-sec invariants
+#   nightly-invariants — the whole §14.2 catalogue at 512 runs × depth 256, plus the fuzz and reentrancy suites.
+#                  The gate needs 7 consecutive green nightlies (count starts with this job, S4).
+name: security
+
+on:
+  push:
+    branches: [main]
+    paths: ["contracts/**", "docs/security/**", "mk/security.mk", ".github/workflows/security.yml"]
+  pull_request:
+    paths: ["contracts/**", "docs/security/**", "mk/security.mk", ".github/workflows/security.yml"]
+  schedule:
+    - cron: "0 3 * * *" # 03:00 UTC, after the US close and before the Asian open
+  workflow_dispatch:
+
+concurrency:
+  group: security-${{ github.ref }}-${{ github.event_name }}
+  cancel-in-progress: true
+
+env:
+  FOUNDRY_VERSION: v1.8.3
+  SLITHER_VERSION: 0.11.3
+  ADERYN_TAG: aderyn-v0.6.8
+
+jobs:
+  static:
+    if: github.event_name != 'schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: ${{ env.FOUNDRY_VERSION }}
+      - uses: astral-sh/setup-uv@v5
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: nightly-2025-08-01
+      - uses: actions/cache@v4
+        with:
+          path: .tools
+          key: tools-${{ env.SLITHER_VERSION }}-${{ env.ADERYN_TAG }}
+      - name: Pinned tools (project-local)
+        run: make security-tools SEC_NICE=
+      - name: Slither — every high / medium triaged
+        run: make security-slither SEC_NICE=
+      - name: Aderyn — every high triaged
+        run: make security-aderyn SEC_NICE=
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: static-analysis
+          path: target/qa/*.json
+
+  suites:
+    if: github.event_name != 'schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: ${{ env.FOUNDRY_VERSION }}
+      - name: Reentrancy, inflation / rounding fuzz (10k), QA-sec invariants
+        run: make security-test SEC_NICE= SEC_THREADS=0
+
+  nightly-invariants:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    steps:
+      - uses: actions/checkout@v4
+      - uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: ${{ env.FOUNDRY_VERSION }}
+      - name: Full invariant catalogue at 512 runs × depth 256 (§14.2 + QA-sec)
+        run: /usr/bin/time -v make security-invariants SEC_NICE= SEC_THREADS=0 2>&1 | tee invariants.log
+      - name: Fuzz and reentrancy suites (profile.ci)
+        run: make security-test SEC_NICE= SEC_THREADS=0 2>&1 | tee suites.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: nightly-invariants
+          path: "*.log"
