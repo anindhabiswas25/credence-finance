@@ -7,7 +7,15 @@ import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {ReentrancyGuardTransient} from "@openzeppelin/contracts/utils/ReentrancyGuardTransient.sol";
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
-import {CoverRequest, Epoch, EpochPhase, Inventory, ClockData, KeeperJob} from "../libraries/Types.sol";
+import {
+    CoverRequest,
+    Epoch,
+    EpochPhase,
+    Inventory,
+    ClockData,
+    KeeperJob,
+    RedemptionClaim
+} from "../libraries/Types.sol";
 import {PackedInt} from "../libraries/PackedInt.sol";
 import {PoolLib} from "./PoolLib.sol";
 import {GasGuard} from "../libraries/GasGuard.sol";
@@ -17,7 +25,6 @@ import {IRiskEngine} from "../interfaces/IRiskEngine.sol";
 import {IAuctionHouse} from "../interfaces/IAuctionHouse.sol";
 import {IAssetClock} from "../interfaces/IAssetClock.sol";
 import {ICalendarStore} from "../interfaces/ICalendarStore.sol";
-import {IOracleAdapter} from "../interfaces/IOracleAdapter.sol";
 import {IKeeperTips} from "../interfaces/IKeeperTips.sol";
 
 /// @title UnderwriterPool: junior first-loss capital of one lending stack (Build Guide §8.6, R-09..R-13).
@@ -33,8 +40,6 @@ contract UnderwriterPool is ERC20, ReentrancyGuardTransient, IUnderwriterPool {
     using Math for uint256;
 
     uint256 internal constant WAD = 1e18;
-    uint256 internal constant GDA_START_MARKUP = 1.02e18; // F-4.5e: k = 1.02 × V
-    uint256 internal constant GDA_DECAY = 8_022_536_812_036; // ln 2 / 86,400 s (WAD per second): half-life 24 h
     uint256 internal constant GDA_EMISSION_PERIOD = 3 days; // r_e = inventory / 3 days
     uint256 internal constant MAX_WITHDRAW_EPOCHS = 64; // scanned for FIFO priority
 
@@ -87,6 +92,12 @@ contract UnderwriterPool is ERC20, ReentrancyGuardTransient, IUnderwriterPool {
     mapping(bytes32 assetId => Inventory) internal _inventory;
     bytes32[] internal _inventoryAssets;
 
+    // ───────────── v3 (S4): NAV-stack redemption claims, concentration limit ─────────────
+    mapping(uint256 requestId => RedemptionClaim) internal _claims;
+    uint256 internal _claimsCost; // Σ cost of unclaimed redemption claims, in NAV (§8.6.1)
+    /// @inheritdoc IUnderwriterPool
+    uint64 public maxAssetShare = 0.35e18;
+
     event WiringInitialized(
         address market, address auctionHouse, address settlement, address clock, address tips
     );
@@ -104,6 +115,11 @@ contract UnderwriterPool is ERC20, ReentrancyGuardTransient, IUnderwriterPool {
 
     modifier onlyAuctionHouse() {
         if (msg.sender != auctionHouse || auctionHouse == address(0)) revert Unauthorized();
+        _;
+    }
+
+    modifier onlySettlement() {
+        if (msg.sender != settlement || settlement == address(0)) revert Unauthorized();
         _;
     }
 
@@ -144,6 +160,13 @@ contract UnderwriterPool is ERC20, ReentrancyGuardTransient, IUnderwriterPool {
         if (d > 1 days) revert InvalidParam();
         settleDelay = d;
         emit SettleDelaySet(d);
+    }
+
+    /// @inheritdoc IUnderwriterPool
+    function setMaxAssetShare(uint64 share) external onlyTimelock {
+        if (share == 0 || share > WAD) revert InvalidParam();
+        maxAssetShare = share;
+        emit ConcentrationLimitSet(share);
     }
 
     function asset() external view returns (address) {
@@ -248,15 +271,21 @@ contract UnderwriterPool is ERC20, ReentrancyGuardTransient, IUnderwriterPool {
         uint256 uAfter;
         uint256 worst;
         uint256[] memory add;
-        (premium, uAfter, worst, add) = _quote(r, current, _equity(e));
+        uint256 j = _equity(e);
+        (premium, uAfter, worst, add) = _quote(r, current, j);
         if (premium > maxPremium) revert PremiumAboveMax(premium, maxPremium);
         if (current.length == 0) current = new uint256[](add.length); // first policy of the epoch
         uint256 k = add.length * PackedInt.U64_PER_WORD;
         uint256[] memory sum = PackedInt.addU64(current, add, k);
         _storeVector(e, sum);
         uint256 w = PackedInt.maxU64(add, k);
-        if (_worstCovered[e][r.assetId] == 0) _epochAssets[e].push(r.assetId);
-        _worstCovered[e][r.assetId] += w == 0 ? 1 : w; // ≥ 1 marks the asset as covered in this epoch
+        uint256 prior = _worstCovered[e][r.assetId];
+        // §15.1 concentration (ADR-0112): one asset's worst covered loss ≤ maxAssetShare × u_max × J. Exact: an asset's
+        // policies all lose most in the same weekend (its lowest g), so Σ_p max_j L_{p,j} = max_j Σ_p L_{p,j}.
+        uint256 cap = j.mulDiv(uint256(_engine().params().uMax) * maxAssetShare, WAD * WAD);
+        if (prior + w > cap) revert ConcentrationExceeded(r.assetId, prior + w, cap);
+        if (prior == 0) _epochAssets[e].push(r.assetId);
+        _worstCovered[e][r.assetId] = prior + (w == 0 ? 1 : w); // ≥ 1 marks the asset as covered in this epoch
         ep.premiums += uint128(premium);
         ++ep.policies;
         policyId = nextPolicyId++;
@@ -322,19 +351,7 @@ contract UnderwriterPool is ERC20, ReentrancyGuardTransient, IUnderwriterPool {
 
     /// @inheritdoc IUnderwriterPool
     function resellInventory(bytes32 assetId) external nonReentrant returns (uint64 gdaId) {
-        Inventory storage inv = _inventory[assetId];
-        if (inv.gdaId != 0) revert GdaRunning(inv.gdaId);
-        uint256 free = inv.qty - inv.inGda;
-        if (free == 0) revert NoInventory(assetId);
-        uint256 v = _oracle().valuationPrice(assetId);
-        uint256 k = v.mulDiv(GDA_START_MARKUP, WAD);
-        uint256 emission = free / GDA_EMISSION_PERIOD;
-        if (emission == 0) emission = 1;
-        inv.inGda = uint128(inv.qty);
-        IERC20(inv.token).safeTransfer(auctionHouse, free);
-        gdaId = IAuctionHouse(auctionHouse).startGda(assetId, inv.token, free, k, GDA_DECAY, emission);
-        inv.gdaId = gdaId;
-        emit InventoryListed(assetId, gdaId, free);
+        gdaId = PoolLib.listInventory(_inventory[assetId], assetId, market, auctionHouse);
         _tip();
     }
 
@@ -373,8 +390,30 @@ contract UnderwriterPool is ERC20, ReentrancyGuardTransient, IUnderwriterPool {
     }
 
     /// @inheritdoc IUnderwriterPool
-    function fallbackAdvance(bytes32, uint256, uint256) external pure returns (uint256) {
-        revert NotImplemented(); // S4 (NAV settlement)
+    function fallbackAdvance(bytes32 marketId, uint256 qty, uint256 price)
+        external
+        onlySettlement
+        nonReentrant
+        returns (uint256 requestId)
+    {
+        uint256 cost;
+        (requestId, cost) = PoolLib.advance(
+            _claims, market, marketId, qty, price, _scale, freeCash(), _hasActive ? _active : 0
+        );
+        _claimsCost += cost;
+        if (cost != 0) _asset.safeTransfer(msg.sender, cost);
+    }
+
+    /// @inheritdoc IUnderwriterPool
+    function claimRedemption(uint256 requestId) external nonReentrant returns (uint256 assets) {
+        uint256 cost;
+        (assets, cost) = PoolLib.claim(_claims, requestId, _asset);
+        _claimsCost -= cost;
+        int256 pnl = int256(assets) - int256(cost);
+        (uint64 e, bool a) = (_active, _hasActive);
+        if (a) _epochs[e].backstopPnl += int128(pnl);
+        emit RedemptionClaimed(a ? e : 0, requestId, assets, pnl);
+        _tip();
     }
 
     // ═════════════════════════════ lifecycle ═════════════════════════════
@@ -470,7 +509,7 @@ contract UnderwriterPool is ERC20, ReentrancyGuardTransient, IUnderwriterPool {
     /// @inheritdoc IUnderwriterPool
     function nav() public view returns (uint256) {
         uint256 plus = _asset.balanceOf(address(this)) + PoolLib.feeReceivable(market)
-            + PoolLib.inventoryValue(_inventory, _inventoryAssets, market, _scale);
+            + PoolLib.inventoryValue(_inventory, _inventoryAssets, market, _scale) + _claimsCost;
         uint256 minus = unearnedPremiums() + _totalLossReserve + _queuedDeposits + _reservedUnpaid;
         return plus > minus ? plus - minus : 0;
     }
@@ -566,6 +605,16 @@ contract UnderwriterPool is ERC20, ReentrancyGuardTransient, IUnderwriterPool {
 
     function queuedDeposits() external view returns (uint256) {
         return _queuedDeposits;
+    }
+
+    /// @inheritdoc IUnderwriterPool
+    function redemptionClaimsOutstanding() external view returns (uint256) {
+        return _claimsCost;
+    }
+
+    /// @inheritdoc IUnderwriterPool
+    function redemptionClaim(uint256 requestId) external view returns (RedemptionClaim memory) {
+        return _claims[requestId];
     }
 
     // ═════════════════════════════ internals: epochs ═════════════════════════════
@@ -747,10 +796,6 @@ contract UnderwriterPool is ERC20, ReentrancyGuardTransient, IUnderwriterPool {
 
     function _engine() internal view returns (IRiskEngine) {
         return IRiskEngine(ICredenceMarket(market).wiring().engine);
-    }
-
-    function _oracle() internal view returns (IOracleAdapter) {
-        return IOracleAdapter(ICredenceMarket(market).wiring().oracle);
     }
 
     function _tip() internal {

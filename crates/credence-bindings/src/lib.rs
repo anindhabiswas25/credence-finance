@@ -1,6 +1,6 @@
 //! # credence-bindings
 //!
-//! alloy `sol!` bindings generated from the frozen v1 ABIs in `deployments/abis/v2/` (ADR-0104), for the keeper,
+//! alloy `sol!` bindings generated from the frozen v1 ABIs in `deployments/abis/v3/` (ADR-0104), for the keeper,
 //! relayer and other Rust services. Each contract is a module with `#[sol(rpc)]` instances, calls, events and the full
 //! Credence error set (`ICredenceErrors` is part of every ABI).
 //!
@@ -11,141 +11,148 @@
 //! ```
 //! Regenerate the ABIs with `make abis-export`; this crate picks them up at compile time. Implementation ABIs are
 //! used where an implementation exists (they add admin functions and constructors to the interface); the pool and
-//! the auction house are bound to their v2 interfaces, the settlement adapter (S4) to its interface.
+//! the auction house are bound to their interfaces, and so are the NAV settlement adapter and the solver auction (v3, S4).
 #![allow(missing_docs, clippy::too_many_arguments, clippy::large_enum_variant)]
 
 alloy::sol!(
     #[sol(rpc, all_derives)]
     CredenceMarket,
-    "../../deployments/abis/v2/CredenceMarket.json"
+    "../../deployments/abis/v3/CredenceMarket.json"
 );
 
 alloy::sol!(
     #[sol(rpc, all_derives)]
     SeniorVault,
-    "../../deployments/abis/v2/SeniorVault.json"
+    "../../deployments/abis/v3/SeniorVault.json"
 );
 
 alloy::sol!(
     #[sol(rpc, all_derives)]
     SigmaOracle,
-    "../../deployments/abis/v2/SigmaOracle.json"
+    "../../deployments/abis/v3/SigmaOracle.json"
 );
 
 alloy::sol!(
     #[sol(rpc, all_derives)]
     KeeperTips,
-    "../../deployments/abis/v2/KeeperTips.json"
+    "../../deployments/abis/v3/KeeperTips.json"
 );
 
 alloy::sol!(
     #[sol(rpc, all_derives)]
     Treasury,
-    "../../deployments/abis/v2/Treasury.json"
+    "../../deployments/abis/v3/Treasury.json"
 );
 
 alloy::sol!(
     #[sol(rpc, all_derives)]
     ProtocolReserve,
-    "../../deployments/abis/v2/ProtocolReserve.json"
+    "../../deployments/abis/v3/ProtocolReserve.json"
 );
 
 alloy::sol!(
     #[sol(rpc, all_derives)]
     CredenceGuardian,
-    "../../deployments/abis/v2/CredenceGuardian.json"
+    "../../deployments/abis/v3/CredenceGuardian.json"
 );
 
 alloy::sol!(
     #[sol(rpc, all_derives)]
     AssetClock,
-    "../../deployments/abis/v2/AssetClock.json"
+    "../../deployments/abis/v3/AssetClock.json"
 );
 
 alloy::sol!(
     #[sol(rpc, all_derives)]
     CalendarStore,
-    "../../deployments/abis/v2/CalendarStore.json"
+    "../../deployments/abis/v3/CalendarStore.json"
 );
 
 alloy::sol!(
     #[sol(rpc, all_derives)]
     CredencePriceFeed,
-    "../../deployments/abis/v2/CredencePriceFeed.json"
+    "../../deployments/abis/v3/CredencePriceFeed.json"
 );
 
 alloy::sol!(
     #[sol(rpc, all_derives)]
     OracleAdapter,
-    "../../deployments/abis/v2/OracleAdapter.json"
+    "../../deployments/abis/v3/OracleAdapter.json"
 );
 
 alloy::sol!(
     #[sol(rpc, all_derives)]
     SequencerHealth,
-    "../../deployments/abis/v2/SequencerHealth.json"
+    "../../deployments/abis/v3/SequencerHealth.json"
 );
 
 alloy::sol!(
     #[sol(rpc, all_derives)]
     IRiskEngine,
-    "../../deployments/abis/v2/IRiskEngine.json"
+    "../../deployments/abis/v3/IRiskEngine.json"
 );
 
 alloy::sol!(
     #[sol(rpc, all_derives)]
     IAuctionHouse,
-    "../../deployments/abis/v2/IAuctionHouse.json"
+    "../../deployments/abis/v3/IAuctionHouse.json"
 );
 
 alloy::sol!(
     #[sol(rpc, all_derives)]
     IUnderwriterPool,
-    "../../deployments/abis/v2/IUnderwriterPool.json"
+    "../../deployments/abis/v3/IUnderwriterPool.json"
 );
 
 alloy::sol!(
     #[sol(rpc, all_derives)]
     ISettlementAdapter,
-    "../../deployments/abis/v2/ISettlementAdapter.json"
+    "../../deployments/abis/v3/ISettlementAdapter.json"
+);
+
+// v3 (S4, ADR-0111): the native solver venue of the NAV stack (J10, the solver bot)
+alloy::sol!(
+    #[sol(rpc, all_derives)]
+    ISolverAuction,
+    "../../deployments/abis/v3/ISolverAuction.json"
 );
 
 alloy::sol!(
     #[sol(rpc, all_derives)]
     CredenceStockToken,
-    "../../deployments/abis/v2/CredenceStockToken.json"
+    "../../deployments/abis/v3/CredenceStockToken.json"
 );
 
 alloy::sol!(
     #[sol(rpc, all_derives)]
     CredenceTreasuryFund,
-    "../../deployments/abis/v2/CredenceTreasuryFund.json"
+    "../../deployments/abis/v3/CredenceTreasuryFund.json"
 );
 
 alloy::sol!(
     #[sol(rpc, all_derives)]
     Faucet,
-    "../../deployments/abis/v2/Faucet.json"
+    "../../deployments/abis/v3/Faucet.json"
 );
 
 // S3: the clean-room RedStone price source (local / testnet only until ADR-0009 D3)
 alloy::sol!(
     #[sol(rpc, all_derives)]
     RedStonePriceSource,
-    "../../deployments/abis/v2/RedStonePriceSource.json"
+    "../../deployments/abis/v3/RedStonePriceSource.json"
 );
 
 // BE-backend REQUEST 2026-09-28 22:20: the testnet allowlist (keeper sender) and the bidder bot's canHold pre-check.
 alloy::sol!(
     #[sol(rpc, all_derives)]
     ComplianceRegistry,
-    "../../deployments/abis/v2/ComplianceRegistry.json"
+    "../../deployments/abis/v3/ComplianceRegistry.json"
 );
 
 alloy::sol!(
     #[sol(rpc, all_derives)]
     ICompliance,
-    "../../deployments/abis/v2/ICompliance.json"
+    "../../deployments/abis/v3/ICompliance.json"
 );
 
 #[cfg(test)]
@@ -204,6 +211,48 @@ mod tests {
         assert_eq!(
             ComplianceRegistry::setAllowedCall::SIGNATURE,
             "setAllowed(address,bool)"
+        );
+    }
+
+    #[test]
+    fn v3_nav_settlement() {
+        assert_eq!(
+            ISettlementAdapter::openSettlementCall::SIGNATURE,
+            "openSettlement(bytes32,address[])"
+        );
+        assert_eq!(ISettlementAdapter::finalizeCall::SIGNATURE, "finalize(uint64)");
+        assert_eq!(
+            ISettlementAdapter::completeReopenCall::SIGNATURE,
+            "completeReopen(bytes32)"
+        );
+        assert_eq!(
+            ISettlementAdapter::SettlementOpened::SIGNATURE,
+            "SettlementOpened(uint64,bytes32,address,uint256,uint256,uint40)"
+        );
+        assert_eq!(
+            ISettlementAdapter::SettlementFinalized::SIGNATURE,
+            "SettlementFinalized(uint64,bool,address,uint256,uint256,uint256)"
+        );
+        assert_eq!(
+            ISettlementAdapter::FallbackAdvanced::SIGNATURE,
+            "FallbackAdvanced(uint64,uint256,uint256,uint256)"
+        );
+        assert_eq!(
+            ISolverAuction::SolverBid::SIGNATURE,
+            "SolverBid(uint64,address,uint256)"
+        );
+        assert_eq!(ISolverAuction::bidCall::SIGNATURE, "bid(uint64,uint256)");
+        assert_eq!(
+            IUnderwriterPool::RedemptionRequested::SIGNATURE,
+            "RedemptionRequested(uint64,uint256,bytes32,address,uint256,uint256)"
+        );
+        assert_eq!(
+            IUnderwriterPool::RedemptionClaimed::SIGNATURE,
+            "RedemptionClaimed(uint64,uint256,uint256,int256)"
+        );
+        assert_eq!(
+            IUnderwriterPool::claimRedemptionCall::SIGNATURE,
+            "claimRedemption(uint256)"
         );
     }
 }

@@ -200,7 +200,17 @@ interface IUnderwriterPoolEvents {
     event InventoryListed(bytes32 indexed assetId, uint64 gdaId, uint256 qty);
     event InventorySold(bytes32 indexed assetId, uint256 qty, uint256 proceeds, int256 realisedPnl);
     event LossReserveReleased(uint64 indexed epochId, bytes32 indexed assetId, uint256 amount);
-    event FallbackAdvanced(bytes32 indexed marketId, uint256 qty, uint256 price, uint256 requestId);
+    // v3 (S4, ADR-0111): NAV-stack pool advances (fallbackAdvance) and their fund redemptions
+    event RedemptionRequested(
+        uint64 indexed epochId,
+        uint256 indexed requestId,
+        bytes32 indexed marketId,
+        address fund,
+        uint256 qty,
+        uint256 cost
+    );
+    event RedemptionClaimed(uint64 indexed epochId, uint256 indexed requestId, uint256 assets, int256 pnl);
+    event ConcentrationLimitSet(uint64 maxAssetShare);
 }
 
 /// @dev v2 (S3, ADR-0110): see IUnderwriterPoolEvents.
@@ -262,7 +272,21 @@ interface ISettlementEvents {
     event SolverBid(uint64 indexed id, address indexed solver, uint256 price);
     event SettlementFilled(uint64 indexed id, address indexed solver, uint256 qty, uint256 proceeds);
     event FallbackAdvanced(uint64 indexed id, uint256 qty, uint256 price, uint256 requestId);
-    event RedemptionClaimed(uint256 indexed requestId, uint256 assets);
+    // v3 (S4, ADR-0111)
+    /// @notice Emitted by `finalize` for every settlement: filled by a solver or advanced by the pool.
+    event SettlementFinalized(
+        uint64 indexed id, bool filled, address solver, uint256 price, uint256 proceeds, uint256 requestId
+    );
+    /// @notice Every position of the settlement's lot was settled in the market.
+    event SettlementPositionsSettled(uint64 indexed id, uint256 positions);
+    event NavReopenCompleted(bytes32 indexed assetId, uint64 closureId);
+    event VenuesSet(address[] venues);
+    event WindowSet(uint40 window);
+    // SolverAuction
+    event SolverWindowOpened(uint64 indexed id, address token, uint256 qty, uint256 floorPrice, uint40 endsAt);
+    event SolverRefunded(uint64 indexed id, address indexed solver, uint256 amount, bool pushed);
+    event SolverSet(address indexed solver, bool allowed);
+    event RefundWithdrawn(address indexed solver, uint256 amount);
 }
 
 interface IRiskEngineEvents {

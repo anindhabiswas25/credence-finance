@@ -160,4 +160,12 @@ interface ICredenceErrors {
     error UnknownGda(uint64 gdaId);
     error GdaInsufficient(uint256 available, uint256 wanted);
     error CostAboveMax(uint256 cost, uint256 maxCost);
+
+    // ── NAV settlement and hardening (v3, S4; ADR-0111, ADR-0112) ──
+    error ConcentrationExceeded(bytes32 assetId, uint256 worstAfter, uint256 cap);
+    error NothingToSettle(bytes32 marketId);
+    error UnknownSettlement(uint64 settlementId);
+    error SettlementNotOpen(uint64 settlementId);
+    error NoVenue();
+    error UnknownRedemption(uint256 requestId);
 }

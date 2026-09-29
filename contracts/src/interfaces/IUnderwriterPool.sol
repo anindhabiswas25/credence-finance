@@ -2,7 +2,7 @@
 pragma solidity 0.8.30;
 
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import {CoverRequest, Epoch, Inventory} from "../libraries/Types.sol";
+import {CoverRequest, Epoch, Inventory, RedemptionClaim} from "../libraries/Types.sol";
 import {ICredenceErrors} from "../libraries/Errors.sol";
 import {IUnderwriterPoolEvents} from "../libraries/Events.sol";
 
@@ -48,10 +48,16 @@ interface IUnderwriterPool is IERC20, IUnderwriterPoolEvents, ICredenceErrors {
     function onGdaSale(bytes32 assetId, uint256 qty, uint256 proceeds) external;
     /// @notice onlyAuctionHouse: the GDA ended with `qty` unsold tokens returned to the pool.
     function onGdaClosed(bytes32 assetId, uint256 qty) external;
-    /// @notice onlySettlement (NAV stack). S4: reverts `NotImplemented` in S3.
+    /// @notice v3: onlySettlement (NAV stack), after the adapter transferred `qty` fund tokens here: pays
+    ///         min(qty × price, freeCash) to the adapter, requests the redemption of the tokens from the fund
+    ///         (`requestRedeem(qty, pool, pool)`) and carries the claim in NAV at what it paid (§8.6.1). Emits
+    ///         `RedemptionRequested`.
     function fallbackAdvance(bytes32 marketId, uint256 qty, uint256 price)
         external
         returns (uint256 requestId);
+    /// @notice v3, permissionless, tipped (EPOCH): claims a fulfilled redemption (`fund.redeem`). Realised P&L =
+    ///         assets − cost (the κ_nav discount) goes to the active epoch. Emits `RedemptionClaimed`.
+    function claimRedemption(uint256 requestId) external returns (uint256 assets);
 
     // ── lifecycle (permissionless, tipped) ──
     function openEpoch(bytes32 venue) external;
@@ -83,4 +89,14 @@ interface IUnderwriterPool is IERC20, IUnderwriterPoolEvents, ICredenceErrors {
         view
         returns (uint256 shares, uint256 paid);
     function lossReserve(uint64 epochId, bytes32 assetId) external view returns (uint256);
+
+    // ── v3 (S4) ──
+    /// @notice Σ cost of the unclaimed redemption claims (in NAV, §8.6.1).
+    function redemptionClaimsOutstanding() external view returns (uint256);
+    function redemptionClaim(uint256 requestId) external view returns (RedemptionClaim memory);
+    /// @notice §15.1 concentration limit (WAD, 0.35 at launch): an asset's worst covered loss in an epoch stays
+    ///         ≤ maxAssetShare × u_max × J (ADR-0112). `writeCover` reverts `ConcentrationExceeded` above it.
+    function maxAssetShare() external view returns (uint64);
+    /// @notice onlyTimelock, 0 < share ≤ 1e18.
+    function setMaxAssetShare(uint64 share) external;
 }

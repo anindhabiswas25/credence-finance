@@ -52,6 +52,15 @@ ALLOWED = {
         "event GdaStarted(uint64,bytes32,address,uint256,uint256,uint256,uint256)": _V1_AH,
         "event GdaBuy(uint64,address,uint256,uint256)": "ADR-0110: renamed GdaBought (S3 brief A2)",
     },
+    ("v2", "v3"): {
+        "function openSettlement(bytes32,address[])": "ADR-0111: returns the new settlementId (the market lot id)",
+        "function fallbackAdvance(bytes32,uint256,uint256)":
+            "ADR-0111: implemented (S3 reverted NotImplemented, so the implementation ABI said pure)",
+        "event RedemptionClaimed(uint256,uint256)":
+            "ADR-0111: never emitted; the pool claims redemptions and emits RedemptionClaimed(epochId, requestId, assets, pnl)",
+        "event FallbackAdvanced(bytes32,uint256,uint256,uint256)":
+            "ADR-0111: never emitted by the pool; the adapter emits FallbackAdvanced(id, …) and the pool RedemptionRequested",
+    },
 }
 ALLOWED_BREAKS = {}
 

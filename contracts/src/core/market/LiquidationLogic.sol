@@ -11,6 +11,7 @@ import {
     ClockData,
     AuctionKind,
     MarketAction,
+    MarketKind,
     KeeperJob
 } from "../../libraries/Types.sol";
 import {ICredenceErrors} from "../../libraries/Errors.sol";
@@ -85,7 +86,11 @@ library LiquidationLogic {
         }
         $.accrue(id);
         uint256 v = $.oracle().valuationPrice(p.assetId);
-        uint256 kappa = lot.kind == AuctionKind.PRECLOSE ? p.precloseKappa : $.engine().params().kappa;
+        // κ: the pre-close batch's own (R-06), κ_nav = 0.5 % for a NAV lot (§8.8, the SettlementAdapter's floor), else
+        // the engine's
+        uint256 kappa = lot.kind == AuctionKind.PRECLOSE
+            ? p.precloseKappa
+            : p.kind == MarketKind.NAV ? MarketLib.KAPPA_NAV : $.engine().params().kappa;
         uint256 reserve = v.mulWadDown(MarketLib.WAD - kappa);
         for (uint256 i = lot.borrowers.length; i > 0; --i) {
             address b = lot.borrowers[i - 1];

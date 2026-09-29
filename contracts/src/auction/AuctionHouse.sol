@@ -16,6 +16,7 @@ import {
     ClockData,
     MarketParams,
     LotInfo,
+    MarketKind,
     KeeperJob
 } from "../libraries/Types.sol";
 import {GasGuard} from "../libraries/GasGuard.sol";
@@ -251,6 +252,8 @@ contract AuctionHouse is ReentrancyGuardTransient, IAuctionHouse {
 
     /// @inheritdoc IAuctionHouse
     function completeReopen(bytes32 assetId) external nonReentrant {
+        // a NAV asset's REOPEN belongs to the SettlementAdapter (its REOPEN settlements, ADR-0111)
+        if (clock.assetConfig(assetId).kind != MarketKind.EQUITY) revert WrongKind(uint8(MarketKind.NAV));
         ClockData memory d = clock.closureInfo(assetId);
         if (!d.reopenPending || d.openPrintAt == 0) revert ReopenNotPending(assetId);
         if (block.timestamp < uint256(d.openPrintAt) + REOPEN_QUEUE + d.phaseExtension) {

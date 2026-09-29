@@ -410,3 +410,58 @@ struct Gda {
     uint40 start;
     bool active;
 }
+
+// ─────────────────────────────── NAV settlement (v3, S4; ADR-0111) ───────────────────────────────
+
+/// @notice Life of a NAV settlement (SettlementAdapter). OPEN: the solver window runs. FILLED: a solver bought the
+///         lot. ADVANCED: no bid, the pool advanced qty × floor and requested the redemption (fallbackAdvance).
+enum SettlementStatus {
+    NONE,
+    OPEN,
+    FILLED,
+    ADVANCED
+}
+
+/// @notice One NAV settlement: a market lot (its id is the market's lot / auction id) sold through a solver venue.
+struct Settlement {
+    bytes32 marketId;
+    bytes32 assetId;
+    address token; // the fund token (collateral)
+    address venue; // the ISolverVenue that ran the window
+    AuctionKind kind; // the market lot kind: INTRADAY (REGULAR) or REOPEN (first 120 s after the open print)
+    SettlementStatus status;
+    uint64 closureId; // the asset's clock closureId when opened
+    uint40 openedAt;
+    uint40 endsAt; // end of the solver window (openedAt + window)
+    uint32 positions; // borrowers in the lot
+    uint128 qty; // collateral units released by the market
+    uint128 floorPrice; // WAD per token: NAV × (1 − κ_nav) (F-4.5a reserve)
+    uint128 price; // WAD per token: the winning bid, or the floor for a pool advance
+    uint128 proceeds; // loan units paid to the market (onAuctionCleared)
+    address solver; // winning solver (0 when advanced)
+    uint256 requestId; // the fund's redemption request id (pool advance), 0 otherwise
+    bool settled; // every position of the lot settled in the market
+}
+
+/// @notice One solver window of a SolverAuction.
+struct SolverLot {
+    address token;
+    uint128 qty;
+    uint128 floorPrice; // WAD per token
+    uint40 endsAt;
+    bool finalized;
+    address best; // current best solver (0 = no bid)
+    uint128 bestPrice; // WAD per token
+    uint128 escrow; // loan units held for the best bid (qty × bestPrice, rounded up)
+}
+
+/// @notice One outstanding fund redemption of the NAV pool (fallbackAdvance), carried in NAV at cost (§8.6.1).
+struct RedemptionClaim {
+    bytes32 marketId;
+    address fund;
+    uint64 epochId; // the pool epoch active when advanced (0 if none)
+    bool claimed;
+    uint128 qty; // fund shares redeemed
+    uint128 cost; // loan units the pool paid (qty × floor, or less if its free cash was short)
+    uint128 assets; // loan units received at the claim
+}

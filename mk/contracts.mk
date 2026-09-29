@@ -2,8 +2,8 @@
 # Every target has a `## help` comment; `make help` lists them.
 
 CONTRACTS_DIR   := contracts
-# v0 is frozen history (S1), v1 = S2 (ADR-0104), v2 = S3 (ADR-0110). Never re-export v0 or v1.
-ABI_VERSION     ?= v2
+# v0 is frozen history (S1), v1 = S2 (ADR-0104), v2 = S3 (ADR-0110), v3 = S4 (ADR-0111). Never re-export v0, v1 or v2.
+ABI_VERSION     ?= v3
 ABI_OUT         := deployments/abis/$(ABI_VERSION)
 DEVNODE_RPC     ?= http://127.0.0.1:8547
 # Pre-funded dev key of nitro-devnode (public, local only; never used on a real network).
@@ -25,7 +25,7 @@ ABI_CONTRACTS := ICredenceErrors ICalendarStore IAssetClock IPriceSource INavSou
 ABI_IMPLS ?= CalendarStore AssetClock CredencePriceFeed OracleAdapter SequencerHealth UniV3TwapSource \
   CredenceStockToken CredenceTreasuryFund ComplianceRegistry Faucet CredenceMarket SeniorVault SigmaOracle \
   KeeperTips Treasury ProtocolReserve CredenceGuardian CredenceTimelock RiskEngineRouter \
-  UnderwriterPool AuctionHouse RedStonePriceSource
+  UnderwriterPool AuctionHouse RedStonePriceSource SettlementAdapter SolverAuction
 
 .PHONY: abis-check local-deploy-clock contracts-deps contracts-build contracts-test contracts-invariant contracts-coverage contracts-fmt \
   contracts-fmt-check contracts-snapshot contracts-clean abis-export risk-build risk-test risk-lint risk-fmt stylus-test stylus-abi-check \
@@ -72,9 +72,10 @@ abis-export: contracts-build ## Export frozen ABIs to deployments/abis/$(ABI_VER
 	done
 	@echo "exported $$(ls $(ABI_OUT) | wc -l) ABIs to $(ABI_OUT)"
 
-abis-check: ## ABIs are additive release to release except the ADR-listed breaks (v0→v1, v1→v2); regenerates each CHANGELOG.md
+abis-check: ## ABIs are additive release to release except the ADR-listed breaks (v0→v1, v1→v2, v2→v3); regenerates each CHANGELOG.md
 	python3 $(CONTRACTS_DIR)/script/abi_diff.py deployments/abis/v0 deployments/abis/v1 --write deployments/abis/v1/CHANGELOG.md
 	python3 $(CONTRACTS_DIR)/script/abi_diff.py deployments/abis/v1 deployments/abis/v2 --write deployments/abis/v2/CHANGELOG.md
+	python3 $(CONTRACTS_DIR)/script/abi_diff.py deployments/abis/v2 deployments/abis/v3 --write deployments/abis/v3/CHANGELOG.md
 
 risk-build: ## Build risk-core and risk-cli (native, release)
 	cargo build --release -p credence-risk-core -p credence-risk-cli

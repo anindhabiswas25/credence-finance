@@ -79,6 +79,7 @@ library MarketLib {
     uint256 internal constant DELTA_COVER = 0.005e18; // R-03
     uint256 internal constant COVER_LT_GAP = 0.02e18; // R-03: δ never above LT − 2 pp
     uint256 internal constant H_STAR = 1.1e18; // §12.2
+    uint256 internal constant KAPPA_NAV = 0.005e18; // §8.8: NAV lot reserve = floor = NAV × 99.5 %
     uint256 internal constant EMERGENCY_HF = 0.92e18; // §12.2
     uint256 internal constant WITHDRAW_MIN_HF = 1.05e18; // §12.2
     uint256 internal constant REOPEN_QUEUE = 120; // §8.4.3

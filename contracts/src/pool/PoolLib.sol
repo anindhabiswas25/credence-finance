@@ -3,7 +3,12 @@ pragma solidity 0.8.30;
 
 import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
-import {Inventory, Session} from "../libraries/Types.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import {Inventory, Session, MarketKind, MarketParams, RedemptionClaim} from "../libraries/Types.sol";
+import {IUnderwriterPoolEvents} from "../libraries/Events.sol";
+import {INavFund} from "../interfaces/INavFund.sol";
+import {IAuctionHouse} from "../interfaces/IAuctionHouse.sol";
 import {ICredenceErrors} from "../libraries/Errors.sol";
 import {ICalendarStore} from "../interfaces/ICalendarStore.sol";
 import {GasGuard} from "../libraries/GasGuard.sol";
@@ -11,10 +16,17 @@ import {ICredenceMarket} from "../interfaces/ICredenceMarket.sol";
 import {IRiskEngine} from "../interfaces/IRiskEngine.sol";
 import {IOracleAdapter} from "../interfaces/IOracleAdapter.sol";
 
-/// @title UnderwriterPool view logic: capacity inputs (§9.5) and NAV marks (R-09, R-12).
-/// @dev External library (linked, runs by DELEGATECALL) so the pool fits the 24 KB code-size limit.
+/// @title UnderwriterPool logic: capacity inputs (§9.5), NAV marks (R-09, R-12), GDA listing (F-4.5e) and the NAV
+///        stack's redemption claims (§8.6.1, §8.8).
+/// @dev External library (linked, runs by DELEGATECALL in the pool's context, so `msg.sender` of its calls is the pool)
+///      to keep the pool under the 24 KB code-size limit.
 library PoolLib {
     using Math for uint256;
+    using SafeERC20 for IERC20;
+
+    uint256 internal constant GDA_START_MARKUP = 1.02e18; // F-4.5e: k = 1.02 × V
+    uint256 internal constant GDA_DECAY = 8_022_536_812_036; // ln 2 / 86,400 s (WAD per second): half-life 24 h
+    uint256 internal constant GDA_EMISSION_PERIOD = 3 days; // r_e = inventory / 3 days
 
     uint256 internal constant WAD = 1e18;
     uint40 internal constant BELL_WINDOW = 2 hours; // §8.2.2
@@ -126,5 +138,76 @@ library PoolLib {
                 .mulDiv(v.mulDiv(WAD - kappa, WAD), 10 ** IERC20Metadata(inv.token).decimals() * scale);
             sum += Math.min(mark, inv.cost);
         }
+    }
+
+    // ───────────── GDA resale (F-4.5e) ─────────────
+
+    /// @notice Hands the inventory of `assetId` not yet in a GDA to the auction house and starts a GDA over it.
+    function listInventory(Inventory storage inv, bytes32 assetId, address market, address auctionHouse)
+        external
+        returns (uint64 gdaId)
+    {
+        if (inv.gdaId != 0) revert ICredenceErrors.GdaRunning(inv.gdaId);
+        uint256 free = inv.qty - inv.inGda;
+        if (free == 0) revert ICredenceErrors.NoInventory(assetId);
+        uint256 v = IOracleAdapter(ICredenceMarket(market).wiring().oracle).valuationPrice(assetId);
+        uint256 emission = free / GDA_EMISSION_PERIOD;
+        if (emission == 0) emission = 1;
+        inv.inGda = inv.qty;
+        IERC20(inv.token).safeTransfer(auctionHouse, free);
+        gdaId = IAuctionHouse(auctionHouse)
+            .startGda(assetId, inv.token, free, v.mulDiv(GDA_START_MARKUP, WAD), GDA_DECAY, emission);
+        inv.gdaId = gdaId;
+        emit IUnderwriterPoolEvents.InventoryListed(assetId, gdaId, free);
+    }
+
+    // ───────────── NAV stack: pool advance and redemption claims (§8.6.1, §8.8) ─────────────
+
+    /// @notice fallbackAdvance body: the `qty` fund tokens are already here. Requests their redemption and records the
+    ///         claim at `cost` = min(qty × price, freeCash). Returns the request id and the cost to pay the adapter.
+    function advance(
+        mapping(uint256 => RedemptionClaim) storage claims,
+        address market,
+        bytes32 marketId,
+        uint256 qty,
+        uint256 price,
+        uint256 scale,
+        uint256 freeCash,
+        uint64 epochId
+    ) external returns (uint256 requestId, uint256 cost) {
+        MarketParams memory p = ICredenceMarket(market).marketParams(marketId);
+        if (p.kind != MarketKind.NAV) revert ICredenceErrors.WrongKind(uint8(p.kind));
+        if (qty == 0) revert ICredenceErrors.ZeroAmount();
+        INavFund fund = INavFund(p.collateralToken);
+        cost = Math.min(qty.mulDiv(price, 10 ** fund.decimals() * scale), freeCash);
+        requestId = fund.requestRedeem(qty, address(this), address(this));
+        if (claims[requestId].fund != address(0)) revert ICredenceErrors.InvalidParam();
+        claims[requestId] = RedemptionClaim({
+            marketId: marketId,
+            fund: address(fund),
+            epochId: epochId,
+            claimed: false,
+            qty: uint128(qty),
+            cost: uint128(cost),
+            assets: 0
+        });
+        emit IUnderwriterPoolEvents.RedemptionRequested(epochId, requestId, marketId, address(fund), qty, cost);
+    }
+
+    /// @notice claimRedemption body: redeems a fulfilled request into the pool. Returns what arrived and the claim's
+    ///         cost (realised P&L = assets − cost).
+    function claim(mapping(uint256 => RedemptionClaim) storage claims, uint256 requestId, IERC20 asset)
+        external
+        returns (uint256 assets, uint256 cost)
+    {
+        RedemptionClaim storage c = claims[requestId];
+        if (c.fund == address(0)) revert ICredenceErrors.UnknownRedemption(requestId);
+        if (c.claimed) revert ICredenceErrors.RequestAlreadyClaimed(requestId);
+        c.claimed = true;
+        uint256 bal = asset.balanceOf(address(this));
+        INavFund(c.fund).redeem(requestId, address(this), address(this));
+        assets = asset.balanceOf(address(this)) - bal;
+        c.assets = uint128(assets);
+        cost = c.cost;
     }
 }

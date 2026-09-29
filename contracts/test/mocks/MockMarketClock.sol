@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity 0.8.30;
 
-import {ClockState, ClockData, ClosureType} from "../../src/libraries/Types.sol";
+import {ClockState, ClockData, ClosureType, AssetConfig, MarketKind} from "../../src/libraries/Types.sol";
 
 /// @notice The AssetClock views and `poke` the market uses, settable per asset, with a revert switch
 ///         (INV-REPAY-01/02 run with the clock failing too).
@@ -15,7 +15,22 @@ contract MockMarketClock {
     // S3: what the real UnderwriterPool / AuctionHouse read
     address public calendar;
     address public auctionHouse;
+    address public settlement;
     uint256 public reopenCompletions;
+    mapping(bytes32 => MarketKind) public kindOf; // S4: EQUITY by default
+
+    function setSettlement(address a) external {
+        settlement = a;
+    }
+
+    function setKind(bytes32 a, MarketKind k) external {
+        kindOf[a] = k;
+    }
+
+    function assetConfig(bytes32 a) external view returns (AssetConfig memory c) {
+        c.kind = kindOf[a];
+        c.listed = true;
+    }
 
     function setCalendar(address c) external {
         calendar = c;
@@ -38,7 +53,7 @@ contract MockMarketClock {
     }
 
     function markReopenComplete(bytes32 a, uint64 closureId) external {
-        require(msg.sender == auctionHouse, "only auction house");
+        require(msg.sender == auctionHouse || (settlement != address(0) && msg.sender == settlement), "only auction house");
         require(closureId == d[a].closureId && d[a].reopenPending, "not pending");
         d[a].reopenPending = false;
         ++reopenCompletions;
