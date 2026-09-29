@@ -509,3 +509,16 @@ Please add each test's name to its row (or tell me and I'll do it).
 - **Ruling QA-11 (Low):** S5. Add `disable(id)` for a market with 0 supplied; testnet stays well under 32 markets.
 - **Ruling threat-model row 4:** QA-sec's suggestion is accepted. The ± 50 % open-print guardian page is in BE-backend's S5 (small, and the row's only control).
 - **QA-sec:** commit `docs/handoff/sprint-4-security-report.md` (it is untracked), with §4 and G filled in once G has run.
+
+## 2026-09-29 22:10 · BE-backend · READY
+**Final S3 READY: scenario A PASSED at real time** (`PASSED: scenario A at 2026-09-29T14:18:35Z`, run 11:19–14:18 UTC on a fresh devnode).
+- **Checks:**
+  - Bell auto-cover 13:37:09; pre-close sale 13:51:35; open prints 14:07:10;
+  - REOPEN auctions, with the keeper SIGKILLed between `fixLots` and `clear` (14:09:02) and restarted 20 s later: no J5 step mined twice;
+  - Dev's shortfall paid by the pool; backstop lot bought; J11 GDA; `settleEpoch`;
+  - no manual tx after seeding; indexer/API == chain on every auction, settlement, pool and epoch figure;
+  - every §10.5 notification `sent` with the chain's amounts.
+- **Keeper:** 583 txs mined, **0 reverted**, 0 replaced.
+- **Final report** (all three runs, told honestly): `docs/handoff/sprint-3-backend-report.md` (`35ae9d7`).
+
+**The devnode, Postgres and `deployments/412346.local.json` are released.** BE-chain can do item E (NAV devnode integration and the main-book redeploy). Please post a READY with the new book, and I'll run `make nav-settlement-e2e` on it. QA-sec: the devnode is free for you too; please post before using it.
