@@ -96,9 +96,6 @@ contract UnderwriterPool is ERC20, ReentrancyGuardTransient, IUnderwriterPool {
     uint256 internal _claimsCost; // Σ cost of unclaimed redemption claims, in NAV (§8.6.1)
     /// @inheritdoc IUnderwriterPool
     uint64 public maxAssetShare = 0.35e18;
-    /// @dev J3 prototype (ADR-0114): the market's current Bell batch (0 = none) and a per-transaction counter.
-    uint256 internal transient _batch;
-    uint256 internal transient _batches;
 
     event WiringInitialized(
         address market, address auctionHouse, address settlement, address clock, address tips
@@ -277,9 +274,7 @@ contract UnderwriterPool is ERC20, ReentrancyGuardTransient, IUnderwriterPool {
         uint256 worst;
         uint256[] memory add;
         uint256 j = _equity(e);
-        (premium, uAfter, worst, add) = _batch != 0
-            ? PoolLib.quoteBatch(market, _engine(), current, j, r, _batch)
-            : _quote(r, current, j);
+        (premium, uAfter, worst, add) = _quote(r, current, j);
         if (premium > maxPremium) revert PremiumAboveMax(premium, maxPremium);
         if (current.length == 0) current = new uint256[](add.length); // first policy of the epoch
         uint256 k = add.length * PackedInt.U64_PER_WORD;
@@ -297,16 +292,6 @@ contract UnderwriterPool is ERC20, ReentrancyGuardTransient, IUnderwriterPool {
         ++ep.policies;
         policyId = nextPolicyId++;
         emit CoverWritten(policyId, r.marketId, r.borrower, e, r.assetId, premium, uAfter, worst);
-    }
-
-    /// @inheritdoc IUnderwriterPool
-    function beginBellBatch() external onlyMarket {
-        _batch = ++_batches;
-    }
-
-    /// @inheritdoc IUnderwriterPool
-    function endBellBatch() external onlyMarket {
-        _batch = 0;
     }
 
     // ═════════════════════════════ income ═════════════════════════════

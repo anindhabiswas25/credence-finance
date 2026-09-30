@@ -126,9 +126,4 @@ interface IUnderwriterPool is IERC20, IUnderwriterPoolEvents, ICredenceErrors {
     function maxAssetShare() external view returns (uint64);
     /// @notice onlyTimelock, 0 < share ≤ 1e18.
     function setMaxAssetShare(uint64 share) external;
-    /// @notice onlyMarket, around `enforceBell`'s loop: the auto-covers of the batch share one cached uncovered bound
-    ///         (J3 prototype, ADR-0114). Anything outside the bracket computes capacity in full.
-    function beginBellBatch() external;
-    /// @notice onlyMarket: ends the Bell batch.
-    function endBellBatch() external;
 }
