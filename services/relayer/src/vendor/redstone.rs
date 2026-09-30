@@ -17,17 +17,20 @@
 //! timestamp, at least 3 of 5, median (the mean of the two middle values for an even count), 8
 //! decimals → WAD. The byte layout is the one `packages/feeds/src/redstone.ts` documents and tests.
 //!
-//! LIVE and STATUS still come from the wrapped vendor; this module only replaces OPEN and CLOSE.
+//! With `PRINT_SOURCE=redstone` LIVE and STATUS still come from the wrapped vendor. With `VENDOR=redstone` (R-26: a
+//! public deployment publishes no Alpaca / Polygon price) [`RedStoneLive`] is that vendor too: LIVE is the newest
+//! verified package median, STATUS the venue calendar plus the public Nasdaq halt feed. The free vendor keys then
+//! only run as a monitoring shadow.
 
 use super::{
-    DynVendor, LiveInput, MarketDataVendor, OfficialPrint, PrintSource, StatusInput, VendorError,
-    VendorResult,
+    halts::HaltFeed, DynVendor, LiveInput, MarketDataVendor, OfficialPrint, PrintSource, Quote,
+    StatusInput, Trade, VendorError, VendorMarket, VendorResult,
 };
 use crate::asset::Asset;
 use alloy::primitives::{address, keccak256, Address, Signature};
 use async_trait::async_trait;
 use base64::Engine as _;
-use credence_common::calendar::Session;
+use credence_common::calendar::{Calendar, Session, Window};
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, path::Path, sync::Arc};
 
@@ -544,6 +547,135 @@ impl MarketDataVendor for RedStonePrints {
 
     fn updates(&self) -> Option<tokio::sync::broadcast::Receiver<String>> {
         self.inner.updates()
+    }
+}
+
+/// `VENDOR=redstone` (R-26, testnet): LIVE from the newest verified `redstone-primary-prod` package of `<TICKER>` in
+/// the regular session and `<TICKER>---EXTENDED` in extended hours (none while the venue is closed), as
+/// one regular-session observation (not an exchange trade) with a zero-spread quote at the same price and time, so
+/// the node's LIVE filter takes it unchanged: fresh within 60 s in REGULAR, 300 s in EXTENDED. STATUS is the venue
+/// calendar's window and the public halt feed. OPEN / CLOSE come from [`RedStonePrints`] around it.
+pub struct RedStoneLive {
+    pub source: Arc<dyn PackageSource>,
+    pub signers: Vec<Address>,
+    pub threshold: usize,
+    pub calendar: Arc<Calendar>,
+    pub halts: Option<Arc<HaltFeed>>,
+    /// Wall clock (unix s).
+    pub now: Arc<dyn Fn() -> u64 + Send + Sync>,
+}
+
+/// RedStone's extended-hours feed id suffix (`NVDA---EXTENDED`).
+pub const EXTENDED_SUFFIX: &str = "---EXTENDED";
+
+/// How many 10-s slots back LIVE looks for a package (the newest slot may not be published yet).
+pub const LIVE_LOOKBACK_SLOTS: u64 = 6;
+
+impl RedStoneLive {
+    pub fn new(
+        source: Arc<dyn PackageSource>,
+        calendar: Arc<Calendar>,
+        halts: Option<Arc<HaltFeed>>,
+    ) -> Self {
+        Self {
+            source,
+            signers: PRIMARY_PROD_SIGNERS.to_vec(),
+            threshold: PRIMARY_PROD_THRESHOLD,
+            calendar,
+            halts,
+            now: Arc::new(crate::node::now_s),
+        }
+    }
+
+    /// The newest verified package at or before now.
+    pub async fn latest(&self, feed: &str) -> VendorResult<Option<Aggregated>> {
+        let mut t = grid_down((self.now)());
+        for _ in 0..LIVE_LOOKBACK_SLOTS {
+            if let Some(a) = self
+                .source
+                .at(feed, t)
+                .await?
+                .and_then(|p| aggregate(feed, &p, &self.signers, self.threshold))
+            {
+                return Ok(Some(a));
+            }
+            t = t.saturating_sub(GRID_S);
+        }
+        Ok(None)
+    }
+}
+
+#[async_trait]
+impl MarketDataVendor for RedStoneLive {
+    fn name(&self) -> &'static str {
+        "redstone"
+    }
+
+    async fn live(&self, asset: &Asset, _since_ns: u64) -> VendorResult<LiveInput> {
+        // the regular feed is frozen outside the session: extended hours read `<T>---EXTENDED`, and a closed venue
+        // has no LIVE price at all (never yesterday's close presented as fresh)
+        let feed = match self.calendar.window_at((self.now)()) {
+            Window::Regular => asset.symbol.clone(),
+            w if w.is_extended() => format!("{}{EXTENDED_SUFFIX}", asset.symbol),
+            _ => {
+                return Ok(LiveInput {
+                    trades: vec![],
+                    nbbo: None,
+                })
+            }
+        };
+        let Some(a) = self.latest(&feed).await? else {
+            return Ok(LiveInput {
+                trades: vec![],
+                nbbo: None,
+            });
+        };
+        let price_wad = a.value_wad();
+        let ts_ns = a.timestamp_ms * 1_000_000;
+        Ok(LiveInput {
+            trades: vec![Trade {
+                price_wad,
+                size: 0,
+                ts_ns,
+                exchange: "REDSTONE".into(),
+                conditions: vec![],
+                plan: crate::asset::Plan::Utp,
+            }],
+            nbbo: Some(Quote {
+                bid_wad: price_wad,
+                ask_wad: price_wad,
+                ts_ns,
+            }),
+        })
+    }
+
+    async fn official_open(
+        &self,
+        _asset: &Asset,
+        _session: &Session,
+    ) -> VendorResult<Option<OfficialPrint>> {
+        Ok(None) // wrapped in RedStonePrints, which derives it
+    }
+
+    async fn official_close(
+        &self,
+        _asset: &Asset,
+        _session: &Session,
+    ) -> VendorResult<Option<OfficialPrint>> {
+        Ok(None)
+    }
+
+    async fn status(&self, asset: &Asset) -> VendorResult<StatusInput> {
+        let market = match self.calendar.window_at((self.now)()) {
+            Window::Regular => VendorMarket::Open,
+            w if w.is_extended() => VendorMarket::Extended,
+            _ => VendorMarket::Closed,
+        };
+        let halt = match &self.halts {
+            Some(h) => h.halt(&asset.symbol).await,
+            None => None,
+        };
+        Ok(StatusInput { market, halt })
     }
 }
 

@@ -16,7 +16,7 @@ use crate::{
     },
 };
 use anyhow::{bail, Context, Result};
-use credence_common::{calendar::Calendar, env};
+use credence_common::{calendar::Calendar, env, is_dev_chain};
 use std::{path::PathBuf, sync::Arc, time::Duration};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -24,6 +24,8 @@ pub enum VendorKind {
     Polygon,
     Alpaca,
     Replay,
+    /// R-26 (testnet): LIVE, OPEN and CLOSE from RedStone packages (`vendor::redstone::RedStoneLive`).
+    RedStone,
 }
 
 impl VendorKind {
@@ -32,8 +34,24 @@ impl VendorKind {
             "polygon" | "massive" => Self::Polygon,
             "alpaca" => Self::Alpaca,
             "replay" => Self::Replay,
-            other => bail!("VENDOR={other} is not supported (polygon | alpaca | replay)"),
+            "redstone" => Self::RedStone,
+            other => {
+                bail!("VENDOR={other} is not supported (polygon | alpaca | replay | redstone)")
+            }
         })
+    }
+}
+
+/// R-26: the free Alpaca / Polygon plans are personal-use only. Off dev chains the relayer publishes their prices
+/// only with a declared redistribution licence (`R26_REDISTRIBUTION_LICENSED=1`); a public testnet uses
+/// `VENDOR=redstone`, and the vendor keys run only as a monitoring shadow (`relayer smoke`, `make r26-probe`).
+pub fn check_r26(chain_id: u64, vendor: &VendorKind, licensed: bool) -> Result<()> {
+    match vendor {
+        VendorKind::Polygon | VendorKind::Alpaca if !is_dev_chain(chain_id) && !licensed => bail!(
+            "R-26: {vendor:?} prices may not be published on chain {chain_id} without a redistribution licence; \
+             use VENDOR=redstone (or set R26_REDISTRIBUTION_LICENSED=1 once licensed)"
+        ),
+        _ => Ok(()),
     }
 }
 
@@ -53,11 +71,17 @@ impl Common {
         if !matches!(feed_id.as_str(), "A" | "B") {
             bail!("FEED_ID must be A or B");
         }
+        let vendor_kind = VendorKind::from_env()?;
+        check_r26(
+            chain_id,
+            &vendor_kind,
+            env::optional("R26_REDISTRIBUTION_LICENSED").as_deref() == Some("1"),
+        )?;
         Ok(Self {
             chain_id,
             feed_id,
             assets,
-            vendor_kind: VendorKind::from_env()?,
+            vendor_kind,
         })
     }
 }
@@ -183,33 +207,49 @@ pub async fn build_vendor(
 /// `PRINT_SOURCE=redstone` (ADR-0009 D1, testnet only): OPEN/CLOSE are derived from RedStone packages,
 /// from the gateway's history, or from recordings (`REDSTONE_RECORDING=<file>[,<file>…]`, shifted by
 /// `REDSTONE_SHIFT_S` onto the calendar in use). LIVE and STATUS stay with `VENDOR`.
+/// RedStone packages: the public gateways (`REDSTONE_GATEWAYS`, default the history gateways) or recordings
+/// (`REDSTONE_RECORDING=<file>[,<file>…]`, shifted by `REDSTONE_SHIFT_S`).
+pub fn redstone_source() -> Result<(Arc<dyn redstone::PackageSource>, i64, usize)> {
+    let recordings = env::list("REDSTONE_RECORDING");
+    let shift: i64 = env::parse_or("REDSTONE_SHIFT_S", 0)?;
+    let source: Arc<dyn redstone::PackageSource> = if recordings.is_empty() {
+        let urls = match env::list("REDSTONE_GATEWAYS") {
+            v if v.is_empty() => redstone::HISTORY_GATEWAYS
+                .iter()
+                .map(|s| s.to_string())
+                .collect(),
+            v => v,
+        };
+        Arc::new(redstone::Gateway::new(urls))
+    } else {
+        let paths: Vec<PathBuf> = recordings.iter().map(PathBuf::from).collect();
+        let refs: Vec<&std::path::Path> = paths.iter().map(|p| p.as_path()).collect();
+        Arc::new(redstone::Recorded::load(&refs, shift)?)
+    };
+    Ok((source, shift, recordings.len()))
+}
+
 pub fn with_print_source(inner: DynVendor, chain_id: u64) -> Result<DynVendor> {
-    match env::or("PRINT_SOURCE", "vendor").to_lowercase().as_str() {
+    // VENDOR=redstone publishes nothing from another source (R-26): its prints are RedStone's too
+    let default = if inner.name() == "redstone" {
+        "redstone"
+    } else {
+        "vendor"
+    };
+    match env::or("PRINT_SOURCE", default).to_lowercase().as_str() {
+        "vendor" if inner.name() == "redstone" => {
+            bail!("VENDOR=redstone derives its OPEN/CLOSE from RedStone: PRINT_SOURCE must be redstone")
+        }
         "vendor" => Ok(inner),
         "redstone" => {
             if chain_id == 42_161 {
                 bail!("PRINT_SOURCE=redstone is a testnet-only print source (ADR-0009 D1)");
             }
-            let recordings = env::list("REDSTONE_RECORDING");
-            let shift: i64 = env::parse_or("REDSTONE_SHIFT_S", 0)?;
-            let source: Arc<dyn redstone::PackageSource> = if recordings.is_empty() {
-                let urls = match env::list("REDSTONE_GATEWAYS") {
-                    v if v.is_empty() => redstone::HISTORY_GATEWAYS
-                        .iter()
-                        .map(|s| s.to_string())
-                        .collect(),
-                    v => v,
-                };
-                Arc::new(redstone::Gateway::new(urls))
-            } else {
-                let paths: Vec<PathBuf> = recordings.iter().map(PathBuf::from).collect();
-                let refs: Vec<&std::path::Path> = paths.iter().map(|p| p.as_path()).collect();
-                Arc::new(redstone::Recorded::load(&refs, shift)?)
-            };
+            let (source, shift, recordings) = redstone_source()?;
             let mut v = redstone::RedStonePrints::new(inner, source);
             v.shift_s = shift;
             tracing::info!(
-                recordings = recordings.len(),
+                recordings,
                 shift,
                 "OPEN/CLOSE from RedStone packages (OracleFirstRegular)"
             );
@@ -225,6 +265,20 @@ async fn build_data_vendor(
 ) -> Result<(DynVendor, Arc<Calendar>)> {
     let stream = stream.filter(|_| env::or("RELAYER_STREAM", "1") != "0");
     match common.vendor_kind {
+        VendorKind::RedStone => {
+            if common.chain_id == 42_161 {
+                bail!("VENDOR=redstone is a testnet-only source (ADR-0009 D3: mainnet needs an agreement)");
+            }
+            let halts = halt_feed();
+            if let Err(e) = halts.refresh().await {
+                tracing::warn!(error = %e, "halt feed: first refresh failed (halts unknown until it succeeds)");
+            }
+            tokio::spawn(halts.clone().run(Duration::from_secs(10)));
+            let cal = Arc::new(load_calendar()?);
+            let (source, _, _) = redstone_source()?;
+            let v = redstone::RedStoneLive::new(source, cal.clone(), Some(halts));
+            Ok((Arc::new(v), cal))
+        }
         VendorKind::Replay => {
             let path = PathBuf::from(env::required("REPLAY_FILE")?);
             let speed: f64 = env::parse_or("REPLAY_SPEED", 1.0)?;
