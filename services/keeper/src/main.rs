@@ -68,7 +68,7 @@ async fn main() -> Result<()> {
     let metrics_addr: SocketAddr = env::parse_or("METRICS_ADDR", "0.0.0.0:9102".parse()?)?;
     serve(metrics_addr, ops.router()).await?;
 
-    let signer_cfg = match SignerConfig::from_env("KEEPER") {
+    let signer_cfg = match SignerConfig::resolve("KEEPER", cfg.chain_id, "keeper") {
         Ok(c) => c,
         Err(e) if is_dev_chain(cfg.chain_id) => {
             tracing::warn!(error = %e, "no keeper key configured: using the well-known dev key (dev chain only)");

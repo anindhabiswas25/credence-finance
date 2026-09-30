@@ -20,7 +20,9 @@ use crate::BPS;
 #[serde(rename_all = "camelCase")]
 pub struct SolverProfile {
     pub name: String,
-    /// Hex private key (dev keys only).
+    /// Hex private key: dev chains only. Empty (or absent): the keystore `$KEYSTORE_DIR/<chainId>/solver-<name>.json`
+    /// or `SOLVER_<NAME>_KEYSTORE` / `_KMS_KEY_ID` (ADR-0014), which also work on a testnet.
+    #[serde(default)]
     pub key: String,
     /// false = never bids (forces the pool-advance fallback).
     #[serde(default = "yes")]

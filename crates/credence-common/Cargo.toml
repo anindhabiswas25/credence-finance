@@ -7,7 +7,7 @@ version.workspace = true
 publish = false
 
 [dependencies]
-alloy = { workspace = true, features = ["signer-local"] }
+alloy = { workspace = true, features = ["signer-local", "signer-keystore"] }
 aws-config = { version = "1", features = ["behavior-version-latest"] }
 anyhow = { workspace = true }
 thiserror = { workspace = true }
@@ -24,3 +24,4 @@ dotenvy = "0.15"
 
 [dev-dependencies]
 tempfile = "3"
+rand = "0.8"

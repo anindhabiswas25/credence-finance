@@ -113,8 +113,27 @@ const ANVIL_KEYS: [&str; 4] = [
 ];
 const NITRO_DEV_KEY: &str = "0xb6b15c8cb491557369f3c7d2c287b053eb229daa9c22138887752191c9520659";
 
-fn signer_config(prefix: &str, dev_default: Option<&str>, chain_id: u64) -> Result<SignerConfig> {
-    match SignerConfig::from_env(prefix) {
+/// A key role for the keystore directory (ADR-0014): lower case, `[a-z0-9-]`.
+fn role(parts: &[&str]) -> String {
+    parts
+        .iter()
+        .map(|p| {
+            p.to_lowercase()
+                .chars()
+                .map(|c| if c.is_ascii_alphanumeric() { c } else { '-' })
+                .collect::<String>()
+        })
+        .collect::<Vec<_>>()
+        .join("-")
+}
+
+fn signer_config(
+    prefix: &str,
+    role: &str,
+    dev_default: Option<&str>,
+    chain_id: u64,
+) -> Result<SignerConfig> {
+    match SignerConfig::resolve(prefix, chain_id, role) {
         Ok(c) => Ok(c),
         Err(e) => match dev_default {
             Some(k) if is_dev_chain(chain_id) => {
@@ -194,7 +213,12 @@ async fn aggregator(
         _ => None,
     };
     let submitter = CredenceSigner::load(
-        &signer_config("RELAYER_SUBMITTER", submitter_default, common.chain_id)?,
+        &signer_config(
+            "RELAYER_SUBMITTER",
+            &role(&["relayer", &common.feed_id, "submitter"]),
+            submitter_default,
+            common.chain_id,
+        )?,
         common.chain_id,
     )
     .await?;
@@ -245,7 +269,12 @@ async fn node(
     metrics: Metrics,
 ) -> Result<Arc<Node>> {
     let signer = CredenceSigner::load(
-        &signer_config(key_prefix, dev_key, common.chain_id)?,
+        &signer_config(
+            key_prefix,
+            &role(&["relayer", &common.feed_id, id]),
+            dev_key,
+            common.chain_id,
+        )?,
         common.chain_id,
     )
     .await?;

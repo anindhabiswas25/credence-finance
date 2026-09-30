@@ -1,23 +1,26 @@
 //! `credence-solver --config solvers.json`: the S4 test solver bot for NAV settlements (see
-//! `credence_bidder::solver`). Dev chains only.
+//! `credence_bidder::solver`). Plain keys on dev chains only; on a testnet each solver's key is an encrypted
+//! keystore (or KMS) per chain and role (`solver-<name>`, ADR-0014).
 
 use std::{collections::BTreeSet, path::PathBuf, time::Duration};
 
 use alloy::{
     eips::BlockNumberOrTag,
-    network::EthereumWallet,
     primitives::{Address, U256},
     providers::{DynProvider, Provider, ProviderBuilder},
     rpc::types::Filter,
-    signers::local::PrivateKeySigner,
     sol,
     sol_types::SolEvent,
 };
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result};
 use clap::Parser;
 use credence_bidder::solver::{solver_bid, SolverConfig, SolverProfile, Window};
 use credence_bindings::ISolverAuction as ISolverAuctionV3;
-use credence_common::{env, is_dev_chain, telemetry};
+use credence_common::{
+    env,
+    signer::{CredenceSigner, SignerConfig},
+    telemetry,
+};
 
 sol! {
     #[sol(rpc)]
@@ -35,7 +38,7 @@ sol! {
 #[derive(Parser)]
 #[command(
     name = "credence-solver",
-    about = "S4 test solver bot for NAV settlements (dev chains only)"
+    about = "S4 test solver bot for NAV settlements (plain keys on dev chains only)"
 )]
 struct Cli {
     #[arg(long, env = "SOLVER_CONFIG")]
@@ -80,9 +83,6 @@ async fn main() -> Result<()> {
         .connect_http(cli.rpc.parse()?)
         .erased();
     let chain_id = read.get_chain_id().await?;
-    if !is_dev_chain(chain_id) {
-        bail!("the test solver bot runs on dev chains only (chain {chain_id})");
-    }
     let venue = match cli.venue {
         Some(v) => v,
         None => book_addr(chain_id, "/nav/solverAuction")?,
@@ -91,14 +91,24 @@ async fn main() -> Result<()> {
     let loan = va.loanToken().call().await?;
     let mut solvers = Vec::new();
     for p in cfg.solvers {
-        let s: PrivateKeySigner = p
-            .key
-            .parse()
+        let role = format!("solver-{}", p.name.to_lowercase());
+        let signer_cfg = if p.key.is_empty() {
+            SignerConfig::resolve(
+                &format!("SOLVER_{}", p.name.to_uppercase().replace('-', "_")),
+                chain_id,
+                &role,
+            )?
+        } else {
+            SignerConfig::LocalHex { key: p.key.clone() }
+        };
+        // a plain key refuses to load off dev chains
+        let s = CredenceSigner::load(&signer_cfg, chain_id)
+            .await
             .with_context(|| format!("key of {}", p.name))?;
         let addr = s.address();
         let w = ProviderBuilder::new()
             .with_simple_nonce_management()
-            .wallet(EthereumWallet::from(s))
+            .wallet(s.wallet())
             .connect_http(cli.rpc.parse()?)
             .erased();
         if p.bid {
