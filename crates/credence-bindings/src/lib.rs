@@ -1,6 +1,6 @@
 //! # credence-bindings
 //!
-//! alloy `sol!` bindings generated from the frozen ABIs in `deployments/abis/v4/` (ADR-0104), for the keeper,
+//! alloy `sol!` bindings generated from the frozen ABIs in `deployments/abis/v5/` (ADR-0104), for the keeper,
 //! relayer and other Rust services. Each contract is a module with `#[sol(rpc)]` instances, calls, events and the full
 //! Credence error set (`ICredenceErrors` is part of every ABI).
 //!
@@ -17,142 +17,142 @@
 alloy::sol!(
     #[sol(rpc, all_derives)]
     CredenceMarket,
-    "../../deployments/abis/v4/CredenceMarket.json"
+    "../../deployments/abis/v5/CredenceMarket.json"
 );
 
 alloy::sol!(
     #[sol(rpc, all_derives)]
     SeniorVault,
-    "../../deployments/abis/v4/SeniorVault.json"
+    "../../deployments/abis/v5/SeniorVault.json"
 );
 
 alloy::sol!(
     #[sol(rpc, all_derives)]
     SigmaOracle,
-    "../../deployments/abis/v4/SigmaOracle.json"
+    "../../deployments/abis/v5/SigmaOracle.json"
 );
 
 alloy::sol!(
     #[sol(rpc, all_derives)]
     KeeperTips,
-    "../../deployments/abis/v4/KeeperTips.json"
+    "../../deployments/abis/v5/KeeperTips.json"
 );
 
 alloy::sol!(
     #[sol(rpc, all_derives)]
     Treasury,
-    "../../deployments/abis/v4/Treasury.json"
+    "../../deployments/abis/v5/Treasury.json"
 );
 
 alloy::sol!(
     #[sol(rpc, all_derives)]
     ProtocolReserve,
-    "../../deployments/abis/v4/ProtocolReserve.json"
+    "../../deployments/abis/v5/ProtocolReserve.json"
 );
 
 alloy::sol!(
     #[sol(rpc, all_derives)]
     CredenceGuardian,
-    "../../deployments/abis/v4/CredenceGuardian.json"
+    "../../deployments/abis/v5/CredenceGuardian.json"
 );
 
 alloy::sol!(
     #[sol(rpc, all_derives)]
     AssetClock,
-    "../../deployments/abis/v4/AssetClock.json"
+    "../../deployments/abis/v5/AssetClock.json"
 );
 
 alloy::sol!(
     #[sol(rpc, all_derives)]
     CalendarStore,
-    "../../deployments/abis/v4/CalendarStore.json"
+    "../../deployments/abis/v5/CalendarStore.json"
 );
 
 alloy::sol!(
     #[sol(rpc, all_derives)]
     CredencePriceFeed,
-    "../../deployments/abis/v4/CredencePriceFeed.json"
+    "../../deployments/abis/v5/CredencePriceFeed.json"
 );
 
 alloy::sol!(
     #[sol(rpc, all_derives)]
     OracleAdapter,
-    "../../deployments/abis/v4/OracleAdapter.json"
+    "../../deployments/abis/v5/OracleAdapter.json"
 );
 
 alloy::sol!(
     #[sol(rpc, all_derives)]
     SequencerHealth,
-    "../../deployments/abis/v4/SequencerHealth.json"
+    "../../deployments/abis/v5/SequencerHealth.json"
 );
 
 alloy::sol!(
     #[sol(rpc, all_derives)]
     IRiskEngine,
-    "../../deployments/abis/v4/IRiskEngine.json"
+    "../../deployments/abis/v5/IRiskEngine.json"
 );
 
 alloy::sol!(
     #[sol(rpc, all_derives)]
     IAuctionHouse,
-    "../../deployments/abis/v4/IAuctionHouse.json"
+    "../../deployments/abis/v5/IAuctionHouse.json"
 );
 
 alloy::sol!(
     #[sol(rpc, all_derives)]
     IUnderwriterPool,
-    "../../deployments/abis/v4/IUnderwriterPool.json"
+    "../../deployments/abis/v5/IUnderwriterPool.json"
 );
 
 alloy::sol!(
     #[sol(rpc, all_derives)]
     ISettlementAdapter,
-    "../../deployments/abis/v4/ISettlementAdapter.json"
+    "../../deployments/abis/v5/ISettlementAdapter.json"
 );
 
 // v3 (S4, ADR-0111): the native solver venue of the NAV stack (J10, the solver bot)
 alloy::sol!(
     #[sol(rpc, all_derives)]
     ISolverAuction,
-    "../../deployments/abis/v4/ISolverAuction.json"
+    "../../deployments/abis/v5/ISolverAuction.json"
 );
 
 alloy::sol!(
     #[sol(rpc, all_derives)]
     CredenceStockToken,
-    "../../deployments/abis/v4/CredenceStockToken.json"
+    "../../deployments/abis/v5/CredenceStockToken.json"
 );
 
 alloy::sol!(
     #[sol(rpc, all_derives)]
     CredenceTreasuryFund,
-    "../../deployments/abis/v4/CredenceTreasuryFund.json"
+    "../../deployments/abis/v5/CredenceTreasuryFund.json"
 );
 
 alloy::sol!(
     #[sol(rpc, all_derives)]
     Faucet,
-    "../../deployments/abis/v4/Faucet.json"
+    "../../deployments/abis/v5/Faucet.json"
 );
 
 // S3: the clean-room RedStone price source (local / testnet only until ADR-0009 D3)
 alloy::sol!(
     #[sol(rpc, all_derives)]
     RedStonePriceSource,
-    "../../deployments/abis/v4/RedStonePriceSource.json"
+    "../../deployments/abis/v5/RedStonePriceSource.json"
 );
 
 // BE-backend REQUEST 2026-09-28 22:20: the testnet allowlist (keeper sender) and the bidder bot's canHold pre-check.
 alloy::sol!(
     #[sol(rpc, all_derives)]
     ComplianceRegistry,
-    "../../deployments/abis/v4/ComplianceRegistry.json"
+    "../../deployments/abis/v5/ComplianceRegistry.json"
 );
 
 alloy::sol!(
     #[sol(rpc, all_derives)]
     ICompliance,
-    "../../deployments/abis/v4/ICompliance.json"
+    "../../deployments/abis/v5/ICompliance.json"
 );
 
 #[cfg(test)]

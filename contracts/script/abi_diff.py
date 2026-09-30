@@ -61,6 +61,10 @@ ALLOWED = {
         "event FallbackAdvanced(bytes32,uint256,uint256,uint256)":
             "ADR-0111: never emitted by the pool; the adapter emits FallbackAdvanced(id, …) and the pool RedemptionRequested",
     },
+    ("v4", "v5"): {
+        "function beginBellBatch()": "ADR-0114: the J3 bracket is reverted (J3 10 → 13, short of the ≥ 20 rule); onlyMarket",
+        "function endBellBatch()": "ADR-0114: the J3 bracket is reverted; onlyMarket, never called off-chain",
+    },
 }
 ALLOWED_BREAKS = {}
 

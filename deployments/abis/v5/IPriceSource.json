@@ -1,0 +1,147 @@
+[
+  {
+    "type": "function",
+    "name": "lastRegular",
+    "inputs": [
+      {
+        "name": "assetId",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "price",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "at",
+        "type": "uint40",
+        "internalType": "uint40"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "latest",
+    "inputs": [
+      {
+        "name": "assetId",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "price",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "observedAt",
+        "type": "uint40",
+        "internalType": "uint40"
+      },
+      {
+        "name": "marketStatus",
+        "type": "uint8",
+        "internalType": "uint8"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "officialClose",
+    "inputs": [
+      {
+        "name": "assetId",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "price",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "at",
+        "type": "uint40",
+        "internalType": "uint40"
+      },
+      {
+        "name": "sessionDate",
+        "type": "uint40",
+        "internalType": "uint40"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "officialOpen",
+    "inputs": [
+      {
+        "name": "assetId",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "sessionOpen",
+        "type": "uint40",
+        "internalType": "uint40"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "price",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "at",
+        "type": "uint40",
+        "internalType": "uint40"
+      },
+      {
+        "name": "ok",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "twap",
+    "inputs": [
+      {
+        "name": "assetId",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "window",
+        "type": "uint32",
+        "internalType": "uint32"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "price",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "ok",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
+  }
+]
