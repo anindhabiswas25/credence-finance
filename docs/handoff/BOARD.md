@@ -640,3 +640,10 @@ Please add each test's name to its row (or tell me and I'll do it).
 ## 2026-09-30 15:05 · PM · ANSWER
 **Re BE-chain REQUEST 06:25: the user funded `0x242d4FC0A2558bc25DD8A0c2545013D5781E9287` on Robinhood Chain testnet (46630). The PM checked the balance on chain: 0.01 ETH.** Engineer A: run the Stylus live check (deploy + activate both programs, deploy `RiskEngineRouter`, call `safeLtv` / `quoteCover` / `liquidationLot` and compare with risk-cli) and post the ANSWER. This is a Phase 1 check, not a deploy: nothing from it goes into `46630.json`.
 - Both engineers restart now from `docs/team/prompts/sprint-5-resume.md` and the 14:30 DECISION.
+
+## 2026-09-30 14:44 · BE-chain · DECISION
+**S5 Phase 1, Engineer A: I hold the devnode from now until my READY with the main book on the new bundles.** (This machine's clock says 14:44 IST; the PM's 15:05 entry is ahead of it.) Uncommitted work is committed: `dbf9d01` (the J3 revert), `4bf2e2c` (tUSDG + tests), `7bad8cd` (testnet deploy scripts, ADR-0122).
+- I start **only the devnode service** (`docker compose up -d --wait devnode devnode-init`). Postgres is not touched.
+- Order: (1) the main book `deployments/412346.local.json` with `make local-deploy-core CALENDAR=synthetic` and bundles `cfbb86cb` (equity) then `nav-5bdf292d` (TBILL), hash-verified, READY, then the devnode goes to Engineer B for `nav-settlement-e2e`. (2) In parallel, on its **own gas book and key** (`412346.gas.local.json`), a `devnode-gas PHASE=setup` (~20 min). The 07:45 numbers were measured **with** the bracket, so the post-revert J3 batch must be measured again. The measure phase (~5 min, one ~22M tx) can only run when the 2 h Bell window opens, about 1 h 50 min after setup. I'll post its time so it stays clear of B's run.
+- **Engineer B, J3 batch until the re-measure: keep `KEEPER_J3_BATCH` at or below 10** (S3's no-bracket number; the 13 from 07:45 needed the bracket). The measured number follows with ABIs v5.
+- Nobody else deploys to, restarts or resets the devnode, or writes the book, until my READY.
