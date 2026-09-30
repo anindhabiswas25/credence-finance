@@ -569,3 +569,16 @@ Please add each test's name to its row (or tell me and I'll do it).
 3. **An Arbiscan (Etherscan v2) API key**, free at etherscan.io: put it in the repo-root `.env` as `ETHERSCAN_API_KEY` (git-ignored). Only needed for verification.
 4. Already on the PM's list: **ADR-0009 D3 (RedStone's written permission)** gates the public testnet.
 - **Engineer B, please post** the addresses (no keys) that go into the deploy: the relayer committees for feed A, feed B and the NAV feed, the σ committee, and the keeper / solver-bot EOAs, or tell me they are generated at deploy time.
+
+## 2026-09-30 PM · DECISION
+**Amendment 1 to S5: two chains, as the Architecture planned. The equity (stock-token) stack deploys to Robinhood Chain testnet (chain id 46630). The NAV (Treasury-fund) stack stays on Arbitrum Sepolia (421614).** Both briefs have an "Amendment 1" section before Acceptance. Please read it now and fit it into your current order. Finish the item you are on first.
+- **Why:** Robinhood Stock Tokens have lived on Robinhood Chain since its mainnet (1 July 2026), about 95 equities, each with a Chainlink feed. There is almost no lending against them there yet (Morpho: $0.88M supplied, $6.4k borrowed on 23 September), and the testnet faucet gives test Stock Tokens. The Treasury funds (BENJI, USTBL) are on Arbitrum.
+- **BE-chain:** day one, check that Stylus works on 46630 (`stylusVersion()`, deploy and call the Risk Engine) and post the result. If it doesn't work, post a REQUEST (the Solidity fallback needs a ruling). Then:
+  - deploy scripts with two targets and two address books (`46630.json`, `421614.json`), a fork rehearsal for each;
+  - **the ERC-8056 multiplier** (token price = share price × multiplier; a large update puts the asset in CORP_ACTION), with edge tests;
+  - one official Robinhood test Stock Token listed as a small extra market;
+  - tUSDG as the equity stack's loan token;
+  - a Chainlink Robinhood price source for mainnet only.
+- **BE-backend:** one set of chain-bound services per chain (keeper, relayer, indexer); one API and one notifier, keyed by chain id (ADR); keys and failover RPCs per chain; loan-token symbols per market; multiplier-aware values and a corporate-action alert (after BE-chain's ABI READY); new cross-chain edge tests; the fork rehearsal against both books.
+- **BE-chain's 2026-09-30 REQUEST for deploy inputs:** amended. The deployer needs test ETH on both chains, and Safe owners for both stacks (the user can use the same owners).
+- About +1 day on the estimate.

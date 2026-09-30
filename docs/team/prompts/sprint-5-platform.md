@@ -58,6 +58,22 @@ Post a READY listing each row and its test.
 - **Rehearse the whole off-chain deploy** on a local host against Engineer A's Arbitrum Sepolia **fork** address book. The stack must reach its steady state: feeds publishing, the keeper idle and healthy, the indexer caught up, the API matching the chain.
 - **The real testnet deploy needs the user:** a host (the PM default is a free one, for example Oracle Cloud Always Free; the user decides), a domain or subdomain for the API, the free RPC keys, and a Telegram bot token. Post a board REQUEST with the exact list as soon as D starts. Deploy only after the user provides them and Engineer A posts READY with `deployments/421614.json`. Then run the post-deploy checks, and hand over with a READY.
 
+## Amendment 1 (PM, 2026-09-30): two chains. The equity stack goes on Robinhood Chain; the NAV stack stays on Arbitrum
+
+**Decision:** the **equity stack deploys to Robinhood Chain testnet (chain id 46630, RPC `https://rpc.testnet.chain.robinhood.com`)**. The **NAV stack deploys to Arbitrum Sepolia (421614)**. Engineer A owns the contract side (brief `sprint-5-protocol.md`, Amendment 1). The off-chain stack must now run **one set of chain-bound services per chain**.
+
+Changes to your items (the rest of the brief stands):
+1. **Per-chain services:** a keeper, relayer committee and aggregator, and indexer for each chain, driven by config (`CHAIN_ID`, RPC list, address book `deployments/46630.json` or `deployments/421614.json`). Equity feeds (feed A/B, the RedStone relayer) run on 46630. The NAV feed and the J10 jobs run on 421614. **One API and one notifier** serve both chains, with the chain id in every route, table key and message (`/v1/markets?chain=…` or a path prefix; pick one and write an ADR). DB tables are keyed by chain id. Keep the local devnode flow working as it is.
+2. **Keys:** separate keeper and relayer node keys per chain. The signer abstraction takes a chain id.
+3. **RPC failover per chain:** at least 2 RPCs for 46630 (the public RPC plus a free-tier provider, if one offers Robinhood Chain testnet: check Alchemy, QuickNode, Chainstack) and 2 for 421614.
+4. **Loan token naming:** the equity stack lends **tUSDG** (USDG on Robinhood Chain), and the NAV stack lends USDC. The API, notifier templates and SDK must use each market's own loan token symbol, never a hard-coded "USDC".
+5. **Multiplier (ERC-8056):** Engineer A adds a per-token multiplier (token price = share price × multiplier) and a `CORP_ACTION` pause for large updates. The relayer publishes **per-share** prices as today. The indexer and API must show the collateral value per token, with the multiplier, and the notifier must send a corporate-action alert. Edge tests: split, reverse split, and a dividend update on an open position, all shown correctly in the API. Wait for A's READY with the new ABI first.
+6. **Edge suite additions:** one chain's RPC down while the other chain's services keep working; the same wallet address with positions on both chains (the API keeps them apart); the indexer reindexing one chain without touching the other chain's tables.
+7. **D, deploy:** the fork rehearsal runs the stack against **both** fork address books at once and reaches steady state on both. Alerts and dashboards carry a `chain` label. Runbooks name the chain in each command.
+8. **User REQUEST, amend your list:** RPC keys for both chains. The host must be able to run both service sets (roughly double the chain-bound processes; one Postgres).
+
+Time: about +1 day.
+
 ## Acceptance (the PM re-runs each item from a clean clone)
 1. S4 closed: `outcome = 5` mapped; `make nav-settlement-e2e` passes in ≤ 30 min on the new book; the S4 report final.
 2. `make backend-install backend-build backend-test backend-lint backend-edge` green from a clean clone, `backend-edge` ≤ 30 min, and every off-chain row of `docs/qa/edge-cases.md` §2 names its passing test.
