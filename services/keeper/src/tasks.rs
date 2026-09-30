@@ -105,6 +105,7 @@ impl Keeper {
     /// One scheduler pass. `conn` is the leader's fenced connection.
     pub async fn tick(&self, conn: &mut PgConnection) -> Result<TickReport> {
         let mut rep = TickReport::default();
+        self.rpc.health_check().await; // RPC failover: pick the active provider for this tick's reads
         if let Err(e) = self.reconcile_submitted(conn, &mut rep).await {
             tracing::warn!(error = %e, "reconciling submitted jobs failed");
         }
