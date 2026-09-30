@@ -33,11 +33,25 @@ export const ClosureType = {
 } as const;
 export type ClosureType = (typeof ClosureType)[keyof typeof ClosureType];
 
-export const ReportKind = { LIVE: 0, OPEN: 1, CLOSE: 2, NAV: 3, STATUS: 4 } as const;
+export const ReportKind = {
+  LIVE: 0,
+  OPEN: 1,
+  CLOSE: 2,
+  NAV: 3,
+  STATUS: 4,
+} as const;
 export type ReportKind = (typeof ReportKind)[keyof typeof ReportKind];
 
-export const FeedMarketStatus = { CLOSED: 0, PRE: 1, REGULAR: 2, POST: 3, OVERNIGHT: 4, HALTED: 5 } as const;
-export type FeedMarketStatus = (typeof FeedMarketStatus)[keyof typeof FeedMarketStatus];
+export const FeedMarketStatus = {
+  CLOSED: 0,
+  PRE: 1,
+  REGULAR: 2,
+  POST: 3,
+  OVERNIGHT: 4,
+  HALTED: 5,
+} as const;
+export type FeedMarketStatus =
+  (typeof FeedMarketStatus)[keyof typeof FeedMarketStatus];
 
 export const MarketKind = { EQUITY: 0, NAV: 1 } as const;
 export type MarketKind = (typeof MarketKind)[keyof typeof MarketKind];
@@ -93,8 +107,24 @@ export function clockStateName(s: number): ClockStateName {
 export type { Address, Hex };
 
 /** `BellEnforced.outcome` (v1). */
-export const BellOutcome = { SAFE: 0, ALREADY_COVERED: 1, AUTO_COVERED: 2, PRECLOSE_THEN_COVER: 3, PRECLOSE_SALE: 4 } as const;
+export const BellOutcome = {
+  SAFE: 0,
+  ALREADY_COVERED: 1,
+  AUTO_COVERED: 2,
+  PRECLOSE_THEN_COVER: 3,
+  PRECLOSE_SALE: 4,
+  /** Needs a pre-close sale, but the PRECLOSE lot is past its fixing (`close − 5 min`): skipped, no tip (ADR-0115). */
+  SALE_TOO_LATE: 5,
+} as const;
 export type BellOutcome = (typeof BellOutcome)[keyof typeof BellOutcome];
+
+/** The `BellOutcome` name of an on-chain `outcome` value, or `UNKNOWN_<n>` for a value this SDK doesn't know. */
+export function bellOutcomeName(
+  outcome: number,
+): keyof typeof BellOutcome | `UNKNOWN_${number}` {
+  const e = Object.entries(BellOutcome).find(([, v]) => v === outcome);
+  return e ? (e[0] as keyof typeof BellOutcome) : `UNKNOWN_${outcome}`;
+}
 
 /** `ActionNotAllowedInState.action` (v1). */
 export const MarketAction = {

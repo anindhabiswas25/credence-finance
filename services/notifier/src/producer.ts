@@ -5,6 +5,7 @@
 // | event                | source rows                                             | dedupe key                         |
 // | -------------------- | ------------------------------------------------------- | ---------------------------------- |
 // | bell_outcome         | position_event kind auto_cover_applied                  | AUTO:<market>:<closure>:<owner>    |
+// | bell_outcome         | position_event kind bell_enforced, outcome 5            | TOOLATE:<market>:<closure>:<owner> |
 // | reopen_queued        | position_event kind flagged, auction kind REOPEN        | REOPENQ:<auction>:<owner>          |
 // | auction_settled      | lot_position settled (every kind; PRECLOSE = the sale)  | SETTLED:<auction>:<owner>          |
 // | nav_sold             | lot_position settled in a NAV settlement (S4, §8.8)     | NAVSOLD:<settlement>:<owner>       |
@@ -299,6 +300,31 @@ export function autoCoverPayload(
   };
 }
 
+/** Bell outcome 5 SALE_TOO_LATE (ADR-0115): nothing sold or covered; the LTV at the latest LIVE price. */
+export function saleTooLatePayload(
+  r: {
+    marketId: string;
+    closureId: bigint;
+    debt: bigint;
+    collateral: bigint;
+    price: bigint;
+  },
+  l: Labels,
+  u: Units = DEFAULT_UNITS,
+): BellOutcome {
+  const t = l.ticker(r.marketId);
+  const cv = collateralValue(r.collateral, r.price, u);
+  return {
+    marketId: r.marketId,
+    asset: t,
+    token: `t${t}`,
+    closureId: r.closureId.toString(),
+    outcome: "saleTooLate",
+    newLtv: (cv === 0n ? 0n : ceilDiv(r.debt * WAD, cv)).toString(),
+    ...u,
+  };
+}
+
 // ── the scan ─────────────────────────────────────────────────────────────────────────────────────
 
 const big = (v: unknown) => BigInt(v as string);
@@ -368,6 +394,36 @@ export async function scan(
       hex(r.owner),
       "bell_outcome",
       payload,
+    );
+  }
+
+  // Bell enforced too late for the pre-close sale (outcome 5): the position enters the closure as it is
+  for (const r of (await sql`
+      select e.owner, e.market_id, e.amounts, e.ts, p.collateral, p.debt_snapshot,
+             (select pp.price from ${ix("price_point")} pp where pp.asset_id = m.asset_id and pp.kind = 0 and pp.observed_at <= e.ts
+               order by pp.observed_at desc limit 1) as price
+        from ${ix("position_event")} e
+        join ${ix("market")} m on m.market_id = e.market_id
+        join ${ix("position")} p on p.market_id = e.market_id and p.owner = e.owner
+       where e.kind = 'bell_enforced' and (e.amounts->>'outcome')::int = 5 and e.ts >= ${since}`) as postgres.Row[]) {
+    seen(r.ts);
+    if (r.price === null) continue;
+    const a = r.amounts as { closureId: string };
+    await add(
+      `TOOLATE:${hex(r.market_id)}:${a.closureId}:${hex(r.owner)}`,
+      hex(r.owner),
+      "bell_outcome",
+      saleTooLatePayload(
+        {
+          marketId: hex(r.market_id),
+          closureId: big(a.closureId),
+          debt: big(r.debt_snapshot),
+          collateral: big(r.collateral),
+          price: big(r.price),
+        },
+        l,
+        u,
+      ),
     );
   }
 

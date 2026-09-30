@@ -28,8 +28,8 @@ use sqlx::{postgres::PgConnection, Row};
 use crate::{
     core::{
         abi, bell, bell_at, expected_outcome, health, preclose_qty, preview_cover, project,
-        read_ctx, read_position, safe_ltv_for, targets, RiskCtx, Target, EXTENDED, NEEDS_ACTION,
-        PRECLOSE_SALE, PRECLOSE_THEN_COVER, REGULAR,
+        read_ctx, read_position, safe_ltv_for, targets, RiskCtx, Target, AUTO_COVERED, EXTENDED,
+        NEEDS_ACTION, PRECLOSE_SALE, PRECLOSE_THEN_COVER, REGULAR, SALE_TOO_LATE,
     },
     jobs::{self, Claim},
     tasks::{Keeper, TickReport},
@@ -44,6 +44,32 @@ pub const BELL_BATCH: usize = 10;
 pub const FLAG_BATCH: usize = 128;
 /// J3 pages ops if NEEDS_ACTION positions remain this long after bellAt (§10.2).
 pub const BELL_PAGE_AFTER_S: u64 = 10 * 60;
+/// The PRECLOSE lot is fixed at `close − timings[PRECLOSE][0]` (AuctionHouse default 5 min, §8.4.3).
+pub const PRECLOSE_FIX_S: u64 = 5 * 60;
+/// J3 stops sending pre-close candidates this long before the fixing, so a batch sent just before it is not mined
+/// after it (QA-10 guard, kept as defence in depth after ADR-0115).
+pub const J3_PRECLOSE_MARGIN_S: u64 = 60;
+
+/// True once a pre-close sale can no longer be joined by a tx sent at `now` (the fixing, less J3's margin).
+pub fn preclose_too_late(now: u64, close_at: u64) -> bool {
+    now + PRECLOSE_FIX_S + J3_PRECLOSE_MARGIN_S >= close_at
+}
+
+/// Splits a J3 plan into what may be sent now and the pre-close candidates held back after the guard time: past it,
+/// a batch carries auto-covers only, so no position needing a sale can make it revert (old contract) or end as a
+/// wasted SALE_TOO_LATE (ADR-0115). The held ones stay NEEDS_ACTION and are paged.
+pub fn j3_split<T: Clone>(
+    plan: &[(Address, u8, T)],
+    now: u64,
+    close_at: u64,
+) -> (Vec<(Address, u8, T)>, Vec<Address>) {
+    if !preclose_too_late(now, close_at) {
+        return (plan.to_vec(), Vec::new());
+    }
+    let (send, held): (Vec<_>, Vec<_>) = plan.iter().cloned().partition(|x| x.1 == AUTO_COVERED);
+    (send, held.into_iter().map(|x| x.0).collect())
+}
+
 /// 0.92 (§10.2 J4, EXTENDED uncovered).
 pub const EXTENDED_HF_FLOOR: u128 = 920_000_000_000_000_000;
 const WAD: u128 = 1_000_000_000_000_000_000;
@@ -577,6 +603,25 @@ impl Keeper {
             }
         }
         let plan = self.j3_plan(conn, core, m, ctx).await?;
+        let (send, held) = j3_split(&plan, now, ctx.close_at);
+        if !held.is_empty() {
+            let k = format!("{prefix}:late");
+            if !jobs::exists(conn, &k).await? {
+                jobs::mark_covered(conn, &[k], "J3", "page", &self.instance).await?;
+                self.page(
+                    "J3",
+                    format!(
+                        "{} pre-close sale candidate(s) in {} held out of J3 after close − {} s (QA-10 guard): {:?}",
+                        held.len(),
+                        m.asset,
+                        PRECLOSE_FIX_S + J3_PRECLOSE_MARGIN_S,
+                        held
+                    ),
+                    rep,
+                )
+                .await;
+            }
+        }
         self.metrics
             .bell_unenforced
             .with_label_values(&[&m.asset])
@@ -604,7 +649,7 @@ impl Keeper {
                 .await;
             }
         }
-        for batch in plan.chunks(core.j3_batch) {
+        for batch in send.chunks(core.j3_batch) {
             let borrowers: Vec<Address> = batch.iter().map(|x| x.0).collect();
             let k = format!("{prefix}:{}", batch_hash(&borrowers));
             let r = self
@@ -650,7 +695,12 @@ impl Keeper {
             }
             let ltv_now =
                 credence_risk_core::fixed::ltv_up(debt, p.collateral_value).unwrap_or(U256::MAX);
-            plan.push((owner, expected_outcome(ctx, &p, ltv_now), b));
+            let mut outcome = expected_outcome(ctx, &p, ltv_now);
+            // the chain's QA-10 rule (ADR-0115): past the PRECLOSE fixing a needed sale is skipped
+            if outcome != AUTO_COVERED && ctx.timestamp + PRECLOSE_FIX_S >= ctx.close_at {
+                outcome = SALE_TOO_LATE;
+            }
+            plan.push((owner, outcome, b));
         }
         Ok(plan)
     }
@@ -971,6 +1021,45 @@ pub type SharedCore = Arc<CoreJobs>;
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// K-07 / QA-10 guard: from `close − 5 min − 60 s` a J3 batch carries auto-covers only; to the second.
+    #[test]
+    fn edge_k07_no_preclose_candidate_in_a_j3_batch_after_the_guard() {
+        let close = 1_791_576_000;
+        let (a, b, c) = (
+            Address::repeat_byte(1),
+            Address::repeat_byte(2),
+            Address::repeat_byte(3),
+        );
+        let plan = vec![
+            (a, AUTO_COVERED, ()),
+            (b, PRECLOSE_SALE, ()),
+            (c, PRECLOSE_THEN_COVER, ()),
+        ];
+        let guard = close - PRECLOSE_FIX_S - J3_PRECLOSE_MARGIN_S;
+        let (send, held) = j3_split(&plan, guard - 1, close);
+        assert_eq!(send.len(), 3, "1 s before the guard every candidate goes");
+        assert!(held.is_empty());
+        for now in [guard, close - PRECLOSE_FIX_S, close - 1] {
+            let (send, held) = j3_split(&plan, now, close);
+            assert_eq!(
+                send.iter().map(|x| x.0).collect::<Vec<_>>(),
+                vec![a],
+                "at {now}"
+            );
+            assert_eq!(held, vec![b, c]);
+        }
+        let late = vec![(b, SALE_TOO_LATE, ())];
+        assert_eq!(
+            j3_split(&late, guard, close).1,
+            vec![b],
+            "a SALE_TOO_LATE is never sent"
+        );
+        assert!(
+            j3_split::<()>(&[], guard, close).0.is_empty(),
+            "a Bell with 0 positions sends nothing"
+        );
+    }
 
     #[test]
     fn alert_inputs() {

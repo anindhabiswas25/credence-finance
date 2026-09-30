@@ -18,7 +18,11 @@ import {
   vaultRequest,
   vaultState,
 } from "ponder:schema";
-import { ICredenceMarketAbi, ISeniorVaultAbi } from "@credence/sdk";
+import {
+  bellOutcomeName,
+  ICredenceMarketAbi,
+  ISeniorVaultAbi,
+} from "@credence/sdk";
 import { indexerBook, stackOf } from "./book";
 
 const chainId = Number(process.env.PONDER_CHAIN_ID ?? 412346);
@@ -295,7 +299,8 @@ ponder.on("Market:BellEnforced", async ({ event, context }) =>
     event.args.id,
     event.args.owner,
     "bell_enforced",
-    event.args,
+    // outcome 5 SALE_TOO_LATE (ADR-0115): no sale, no tip, lastBellClosureId not set; the notifier alerts on it
+    { ...event.args, outcomeName: bellOutcomeName(Number(event.args.outcome)) },
   ),
 );
 ponder.on("Market:AutoCoverSet", async ({ event, context }) =>

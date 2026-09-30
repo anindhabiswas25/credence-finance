@@ -52,6 +52,8 @@ pub const COVERED: u8 = 2;
 pub const AUTO_COVERED: u8 = 2;
 pub const PRECLOSE_THEN_COVER: u8 = 3;
 pub const PRECLOSE_SALE: u8 = 4;
+/// Needs a pre-close sale, but the PRECLOSE lot is past its fixing: skipped on-chain, no tip (ADR-0115, QA-10).
+pub const SALE_TOO_LATE: u8 = 5;
 
 #[derive(Clone, Debug)]
 pub struct RiskParams {

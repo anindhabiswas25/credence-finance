@@ -57,7 +57,13 @@ export const BellOutcome = z.object({
   asset: z.string(),
   token: z.string(),
   closureId: z.string(),
-  outcome: z.enum(["autoCover", "autoCoverAfterSale", "precloseSale"]),
+  // saleTooLate: BellEnforced outcome 5 (ADR-0115): the Bell ran after the pre-close lot was fixed, nothing sold
+  outcome: z.enum([
+    "autoCover",
+    "autoCoverAfterSale",
+    "precloseSale",
+    "saleTooLate",
+  ]),
   premium: uint.optional(),
   saleQty: uint.optional(),
   newLtv: uint, // WAD, after the action (the sale counted at its reserve price)
@@ -298,12 +304,23 @@ export function renderBellOutcome(p: BellOutcome, webOrigin: string): Rendered {
           `pre-close sale. At the sale's reserve price your LTV is ${pct(p.newLtv)}. You will get the sale result when it settles.`,
       );
       break;
+    case "saleTooLate":
+      paras.push(
+        `Your ${p.asset} loan was above the safe LTV at the Bell, but the Bell was enforced after the pre-close sale ` +
+          `was fixed, so it was too late for a pre-close sale: nothing was sold and no Gap Cover was bought. ` +
+          `Your LTV is ${pct(p.newLtv)}.`,
+        `Until the close you can still repay or add collateral. If you don't, the loan goes into the closure as it ` +
+          `is, and if its health factor is below 1 at the reopen it goes into the reopen auction.`,
+      );
+      break;
   }
   const url = `${webOrigin}/markets/${p.marketId}`;
   const title =
     p.outcome === "precloseSale"
       ? `${p.asset}: pre-close sale of ${sale}`
-      : `${p.asset}: auto-cover applied (${premium})`;
+      : p.outcome === "saleTooLate"
+        ? `${p.asset}: too late for a pre-close sale`
+        : `${p.asset}: auto-cover applied (${premium})`;
   return {
     subject: title,
     text: `${paras.join("\n\n")}\n\n${url}`,

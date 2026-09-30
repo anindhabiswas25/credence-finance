@@ -18,7 +18,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "eslint .",
     "test": "vitest run",
-    "e2e": "vitest run test/e2e.test.ts"
+    "e2e": "vitest run test/e2e.test.ts test/scan.e2e.test.ts"
   },
   "dependencies": {
     "pino": "10.3.1",
