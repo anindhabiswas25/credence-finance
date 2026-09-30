@@ -7,7 +7,7 @@ import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol
 import {ReentrancyGuardTransient} from "@openzeppelin/contracts/utils/ReentrancyGuardTransient.sol";
 import {SolverLot} from "../libraries/Types.sol";
 import {WadMath} from "../libraries/WadMath.sol";
-import {ICompliance} from "../interfaces/ICompliance.sol";
+import {TokenProbe} from "../libraries/TokenProbe.sol";
 import {ISolverAuction} from "../interfaces/ISolverVenue.sol";
 
 /// @title SolverAuction: the native testnet venue for NAV settlements (Build Guide §8.8 step 2, ADR-0111).
@@ -184,10 +184,8 @@ contract SolverAuction is ISolverAuction, ReentrancyGuardTransient {
         return ok && (ret.length == 0 || (ret.length >= 32 && abi.decode(ret, (bool))));
     }
 
-    /// @dev §8.7.3 step 7: the fund's compliance hook, if it has one (a missing hook means an open token).
+    /// @dev §8.7.3 step 7: the fund's compliance hook, or a Robinhood-style blocklist (ADR-0120); neither = open.
     function _canHold(address token, address a) internal view returns (bool) {
-        (bool ok, bytes memory ret) = token.staticcall(abi.encodeCall(ICompliance.canHold, (a)));
-        if (!ok || ret.length < 32) return true;
-        return abi.decode(ret, (bool));
+        return !TokenProbe.blocked(token, a);
     }
 }

@@ -18,6 +18,7 @@ import {ITwapSource} from "../interfaces/ITwapSource.sol";
 import {IAssetClock} from "../interfaces/IAssetClock.sol";
 import {ICollateralToken} from "../interfaces/ICollateralToken.sol";
 import {IScaledUIAmount} from "../interfaces/IScaledUIAmount.sol";
+import {IStockTokenCompliance} from "../libraries/TokenProbe.sol";
 import {INavFund} from "../interfaces/INavFund.sol";
 import {ICalendarStore} from "../interfaces/ICalendarStore.sol";
 import {GasGuard} from "../libraries/GasGuard.sol";
@@ -473,11 +474,18 @@ contract OracleAdapter is IOracleAdapter {
         if (n >= 2) strikeBefore = cal.session(venue, n - 2).close;
     }
 
-    /// @dev A token whose probe reverts is treated as frozen (fail closed).
+    /// @dev The issuer's freeze: `frozen()` (our tokens), else `paused()` (a Robinhood Stock Token, which pauses by
+    ///      itself or through its registry; ADR-0120). A token that answers neither is frozen (fail closed).
     function _tokenFrozen(address token) internal view returns (bool) {
         uint256 g0 = gasleft();
         try ICollateralToken(token).frozen() returns (bool f) {
             return f;
+        } catch {
+            GasGuard.check(g0);
+        }
+        g0 = gasleft();
+        try IStockTokenCompliance(token).paused() returns (bool p) {
+            return p;
         } catch {
             GasGuard.check(g0);
             return true;

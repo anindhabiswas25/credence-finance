@@ -28,7 +28,7 @@ import {IRiskEngine} from "../interfaces/IRiskEngine.sol";
 import {IAssetClock} from "../interfaces/IAssetClock.sol";
 import {IOracleAdapter} from "../interfaces/IOracleAdapter.sol";
 import {IKeeperTips} from "../interfaces/IKeeperTips.sol";
-import {ICompliance} from "../interfaces/ICompliance.sol";
+import {TokenProbe} from "../libraries/TokenProbe.sol";
 
 /// @title AuctionHouse: every liquidation as a uniform-price batch (Build Guide §8.7, F-4.5c, R-04, R-05, R-19).
 /// @notice Four kinds: REOPEN (sealed commit–reveal, 10% bond), INTRADAY, EMERGENCY and PRECLOSE (open, firm bids).
@@ -569,10 +569,10 @@ contract AuctionHouse is ReentrancyGuardTransient, IAuctionHouse {
         if (block.timestamp >= to) revert TooLate(to);
     }
 
-    /// @dev R-02 / §8.7.3.7: `canHold` if the collateral token exposes it (a token without it accepts anyone).
+    /// @dev R-02 / §8.7.3.7: `canHold` if the collateral token exposes it, else a Robinhood Stock Token's blocklist
+    ///      (ADR-0120); a token with neither accepts anyone.
     function _checkHolder(address token, address who) internal view {
-        (bool ok, bytes memory ret) = token.staticcall(abi.encodeCall(ICompliance.canHold, (who)));
-        if (ok && ret.length >= 32 && !abi.decode(ret, (bool))) revert NotAllowlisted(who);
+        if (TokenProbe.blocked(token, who)) revert NotAllowlisted(who);
     }
 
     function _reopenCleared(Auction storage a) internal {
