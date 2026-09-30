@@ -240,14 +240,7 @@ impl Config {
             specs.push("TBILL:USBANK".into());
         }
         let assets = tracked(&specs, &calendars)?;
-        let mut rpc_urls = vec![env::optional("RPC_URL")
-            .or_else(|| env::optional("ARB_SEPOLIA_RPC_URL"))
-            .context("RPC_URL")?];
-        if let Some(f) = env::optional("RPC_URL_FALLBACK")
-            .or_else(|| env::optional("ARB_SEPOLIA_RPC_URL_FALLBACK"))
-        {
-            rpc_urls.push(f);
-        }
+        let rpc_urls = env::rpc_urls()?;
         let watch_wallets = env::list("WATCH_WALLETS")
             .into_iter()
             .map(|w| {

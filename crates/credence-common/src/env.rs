@@ -54,6 +54,35 @@ where
     }
 }
 
+/// A chain-bound service's RPCs in failover order (ADR-0014: ≥ 2 per chain in prod): `RPC_URL`, then
+/// `RPC_URL_FALLBACK`, each a comma-separated list (the legacy `ARB_SEPOLIA_RPC_URL[_FALLBACK]` still work);
+/// duplicates dropped. Errors when none is set.
+pub fn rpc_urls() -> Result<Vec<String>> {
+    rpc_urls_from(optional)
+}
+
+/// `rpc_urls` over any variable source (testable).
+pub fn rpc_urls_from(get: impl Fn(&str) -> Option<String>) -> Result<Vec<String>> {
+    let mut out: Vec<String> = Vec::new();
+    for raw in [
+        get("RPC_URL").or_else(|| get("ARB_SEPOLIA_RPC_URL")),
+        get("RPC_URL_FALLBACK").or_else(|| get("ARB_SEPOLIA_RPC_URL_FALLBACK")),
+    ]
+    .into_iter()
+    .flatten()
+    {
+        for u in raw.split(',').map(str::trim).filter(|u| !u.is_empty()) {
+            if !out.iter().any(|x| x == u) {
+                out.push(u.to_owned());
+            }
+        }
+    }
+    if out.is_empty() {
+        return Err(anyhow!("missing required env var RPC_URL"));
+    }
+    Ok(out)
+}
+
 /// A comma-separated list (empty items dropped).
 pub fn list(name: &str) -> Vec<String> {
     optional(name)
@@ -69,4 +98,32 @@ pub fn list(name: &str) -> Vec<String> {
 /// `CHAIN_ID`, required by every service.
 pub fn chain_id() -> Result<u64> {
     parse::<u64>("CHAIN_ID").context("CHAIN_ID")
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn rpc_urls_keep_failover_order_and_drop_duplicates() {
+        let env = |pairs: &'static [(&'static str, &'static str)]| {
+            move |n: &str| {
+                pairs
+                    .iter()
+                    .find(|(k, _)| *k == n)
+                    .map(|(_, v)| v.to_string())
+            }
+        };
+        assert_eq!(
+            super::rpc_urls_from(env(&[
+                ("RPC_URL", "https://a, https://b"),
+                ("RPC_URL_FALLBACK", "https://b,https://c"),
+            ]))
+            .unwrap(),
+            ["https://a", "https://b", "https://c"]
+        );
+        assert_eq!(
+            super::rpc_urls_from(env(&[("ARB_SEPOLIA_RPC_URL", "https://s")])).unwrap(),
+            ["https://s"]
+        );
+        assert!(super::rpc_urls_from(env(&[])).is_err());
+    }
 }

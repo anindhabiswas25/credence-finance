@@ -167,15 +167,7 @@ fn feed_address() -> Result<Address> {
 }
 
 fn rpc_urls() -> Result<Vec<String>> {
-    let mut v = vec![env::optional("RPC_URL")
-        .or_else(|| env::optional("ARB_SEPOLIA_RPC_URL"))
-        .context("RPC_URL")?];
-    if let Some(f) =
-        env::optional("RPC_URL_FALLBACK").or_else(|| env::optional("ARB_SEPOLIA_RPC_URL_FALLBACK"))
-    {
-        v.push(f);
-    }
-    Ok(v)
+    env::rpc_urls()
 }
 
 async fn store(chain_id: u64) -> Result<Arc<dyn ReportStore>> {
