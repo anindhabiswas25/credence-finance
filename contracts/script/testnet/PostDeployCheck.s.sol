@@ -331,6 +331,12 @@ contract PostDeployCheck is TestnetBase {
         if (nav) _eqA(IOwned(vm.parseJsonAddress(j, ".shared.registry")).owner(), ops, "registry owner");
         string[] memory tickers = vm.envString("ASSETS", ",");
         address fundIssuer = vm.envOr("FUND_ISSUER", ops);
+        if (nav) {
+            // testnet: a dedicated issuer EOA publishes the daily NAV (nav-strike), not the Ops Safe (PM 2026-09-30)
+            _ok(fundIssuer != ops, "fund issuer is the Ops Safe (testnet wants the dedicated issuer EOA)");
+            _ok(fundIssuer.code.length == 0, "fund issuer is a contract (testnet wants the dedicated issuer EOA)");
+            _ok(fundIssuer != deployer, "fund issuer is the deployer");
+        }
         for (uint256 i; i < tickers.length; ++i) {
             address token = vm.parseJsonAddress(j, string.concat(".tokens.t", tickers[i]));
             (bool ok, bytes memory r) = token.staticcall(abi.encodeWithSignature("issuer()"));

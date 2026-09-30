@@ -11,7 +11,7 @@
   "assets": [
     { "ticker": "TBILL", "token": "new", "supplyCap": 5000000, "borrowCap": 4500000, "vaultCap": 5000000, "faucet": 100000 }
   ],
-  "fund": { "issuer": "", "reserveWallet": "" },
+  "fund": { "_issuer": "INPUT (generated with the service keys): a dedicated issuer EOA, role issuer, keystore KEYSTORE_DIR/421614/issuer.json; credence-relayer nav-strike publishes the daily NAV with it (PM 2026-09-30 16:30). Not the Ops Safe; the post-deploy check requires an EOA", "issuer": "", "reserveWallet": "" },
   "navSolvers": [],
   "registryOperators": [],
   "settlementWindow": 900,

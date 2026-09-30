@@ -34,6 +34,7 @@ is ranked by what an auditor is most likely to find. Items are not dropped: each
 | --- | --- | --- |
 | 1b | Gap worse than history: caps, θ = 100 % loading | The backtest is QE's and lives outside this repo's tests; bring it into CI or record its result per release |
 | 4 | Both feeds wrong the same way | **The open-print vs last close ± 50 % guardian page** (REQUEST to BE-backend 2026-09-29 18:02). *Suggest this one is done before public testnet, not deferred: it is small and is the only control for this row.* |
+| 4a | Both feeds from one vendor | **Mainnet gate (PM, 2026-09-30 16:30):** on testnet, feed A and feed B on 46630 are both RedStone (`VENDOR=redstone`), as two separate committees, so the §10.1 A/B vendor independence is lost. Before mainnet, feed A and feed B need **two licensed vendors** |
 | 10 | Keeper down | Chaos drill (kill keepers during a live Bell and REOPEN; a third party runs the jobs from the tips alone) |
 | 13 | Stylus engine bug | PM-2 and PM-7 |
 | 14 | Governance key compromise | Key custody: Safes on hardware wallets, signer runbook, timelock 48 h on mainnet (1 h on testnet) |
