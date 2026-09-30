@@ -65,7 +65,7 @@ async fn main() -> Result<()> {
 
     let ops = OpsState::new("credence-keeper");
     let metrics = Metrics::new(&ops.registry)?;
-    let metrics_addr: SocketAddr = env::parse_or("METRICS_ADDR", "0.0.0.0:9102".parse()?)?;
+    let metrics_addr: SocketAddr = env::parse_or("METRICS_ADDR", "127.0.0.1:9102".parse()?)?; // OFF-08: private unless set
     serve(metrics_addr, ops.router()).await?;
 
     let signer_cfg = match SignerConfig::resolve("KEEPER", cfg.chain_id, "keeper") {

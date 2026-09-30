@@ -557,7 +557,7 @@ async fn main() -> Result<()> {
     let common = Common::from_env()?;
     let ops = OpsState::new("credence-relayer");
     let metrics = Metrics::new(&ops.registry)?;
-    let metrics_addr: SocketAddr = env::parse_or("METRICS_ADDR", "0.0.0.0:9101".parse()?)?;
+    let metrics_addr: SocketAddr = env::parse_or("METRICS_ADDR", "127.0.0.1:9101".parse()?)?; // OFF-08: private unless set
 
     match cli.cmd {
         Cmd::SampleReplay { .. } | Cmd::RedstoneRecord { .. } => unreachable!("handled above"),

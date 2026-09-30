@@ -78,7 +78,7 @@ relayer-dev: ## Run the relayer on the devnode: 3 nodes + aggregator (VENDOR=rep
 	  ASSETS=$${ASSETS:-NVDA:XNAS,AAPL:XNAS} $(CARGO) run -q -p credence-relayer -- sample-replay --out target/replay-sample.jsonl; fi
 	CHAIN_ID=$${CHAIN_ID:-412346} RPC_URL=$${RPC_URL:-http://127.0.0.1:8547} VENDOR=$${VENDOR:-replay} \
 	  REPLAY_FILE=$${REPLAY_FILE:-target/replay-sample.jsonl} REPLAY_START_OFFSET_S=$${REPLAY_START_OFFSET_S:-4200} ASSETS=$${ASSETS:-NVDA:XNAS,AAPL:XNAS} \
-	  FEED_ADDRESS=$${FEED_ADDRESS:-$$(jq -r .shared.feedA deployments/412346.local.json)} \
+	  METRICS_ADDR=$${METRICS_ADDR:-0.0.0.0:9101} FEED_ADDRESS=$${FEED_ADDRESS:-$$(jq -r .shared.feedA deployments/412346.local.json)} \
 	  $(CARGO) run -p credence-relayer -- run
 
 relayer-smoke: ## Live vendor smoke test (VENDOR=polygon|alpaca, keys in .env)
@@ -87,8 +87,8 @@ relayer-smoke: ## Live vendor smoke test (VENDOR=polygon|alpaca, keys in .env)
 relayer-e2e: contracts-build ## Relayer e2e on anvil: 2-of-3 accepted; 1-of-3, stale/old seq, wrong domain rejected (+ops.relayer_report with Postgres up)
 	TEST_DATABASE_URL=$(TEST_DATABASE_URL) $(CARGO) test -p credence-relayer --test e2e -- --ignored --nocapture --test-threads=1
 
-keeper-dev: ## Run one keeper instance locally (reads .env)
-	$(CARGO) run -p credence-keeper -- run
+keeper-dev: ## Run one keeper instance locally (reads .env); metrics on all interfaces so obs-up's Prometheus (docker) reaches them
+	METRICS_ADDR=$${METRICS_ADDR:-0.0.0.0:9102} $(CARGO) run -p credence-keeper -- run
 
 keeper-e2e: contracts-build ## Keeper e2e on anvil + Postgres: J1 pokes on schedule; leader failover with no duplicate txs (needs infra-up)
 	TEST_DATABASE_URL=$(TEST_DATABASE_URL) $(CARGO) test -p credence-keeper --test keeper_e2e -- --ignored --nocapture
@@ -105,11 +105,11 @@ indexer-core-e2e: contracts-build ## Acceptance 6: DeployCoreLocal on a scratch 
 indexer-dev: ## Run the Ponder indexer against the local devnode
 	$(PNPM) --filter @credence/indexer dev
 
-api-dev: ## Run the Hono API on :8787
-	$(PNPM) --filter @credence/api dev
+api-dev: ## Run the Hono API on :8787 (metrics on their own listener :9104, OFF-08)
+	API_METRICS_ADDR=$${API_METRICS_ADDR:-0.0.0.0:9104} $(PNPM) --filter @credence/api dev
 
 notifier-dev: ## Run the notifier (queue consumer + /healthz /readyz /metrics on :9103; reads .env)
-	$(PNPM) --filter @credence/notifier dev
+	NOTIFIER_HOST=$${NOTIFIER_HOST:-0.0.0.0} $(PNPM) --filter @credence/notifier dev
 
 notifier-e2e: ## Notifier e2e on Postgres: scenario A Bell heads-up (G-10, G-11) by email + push + Telegram against mock providers; retries, dead-letter, SKIP LOCKED (needs infra-up)
 	$(CARGO) build -q -p credence-risk-cli

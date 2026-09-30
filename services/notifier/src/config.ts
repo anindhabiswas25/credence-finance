@@ -7,6 +7,8 @@ import type { WorkerConfig } from "./worker.ts";
 const Env = z.object({
   DATABASE_URL: z.string().min(1),
   NOTIFIER_PORT: z.coerce.number().int().default(9103),
+  /** OFF-08: the ops listener (/healthz, /readyz, /metrics) binds here; set 0.0.0.0 only on a private network. */
+  NOTIFIER_HOST: z.string().default("127.0.0.1"),
   NOTIFIER_WORKER_ID: z
     .string()
     .default(`notifier-${hostname()}-${process.pid}`),
@@ -49,6 +51,7 @@ const Env = z.object({
 export interface Config {
   databaseUrl: string;
   port: number;
+  host: string;
   workerId: string;
   batch: number;
   pollMs: number;
@@ -134,6 +137,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   return {
     databaseUrl: e.DATABASE_URL,
     port: e.NOTIFIER_PORT,
+    host: e.NOTIFIER_HOST,
     workerId: e.NOTIFIER_WORKER_ID,
     batch: e.NOTIFIER_BATCH,
     pollMs: e.NOTIFIER_POLL_MS,

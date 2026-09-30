@@ -118,6 +118,10 @@ const injectWebSocket = await attachStream(
   config.corsOrigins.map((o) => o.replace(/\/$/, "").toLowerCase()),
 );
 const app = new Hono();
+// OFF-08: metrics never on the public port; they have their own listener (API_METRICS_ADDR, private by default)
+app.all("/metrics", (c) =>
+  c.json({ error: "not_found", message: "Not found" }, 404),
+);
 app.route("/", stream);
 app.route("/", top);
 // OFF-04c: an expired session's bell:<owner> streams end within STREAM_SESSION_CHECK_MS
@@ -149,10 +153,32 @@ const server = serve({ fetch: app.fetch, port: config.port }, (info) => {
 
 injectWebSocket(server);
 
+const metricsAddr = process.env.API_METRICS_ADDR ?? "127.0.0.1:9104";
+const cut = metricsAddr.lastIndexOf(":");
+const metricsApp = new Hono();
+metricsApp.get("/metrics", async (c) =>
+  c.text(await metrics.registry.metrics(), 200, {
+    "content-type": metrics.registry.contentType,
+  }),
+);
+const metricsServer = serve(
+  {
+    fetch: metricsApp.fetch,
+    hostname: metricsAddr.slice(0, cut),
+    port: Number(metricsAddr.slice(cut + 1)),
+  },
+  (info) =>
+    log.info(
+      { metrics: `${metricsAddr}`, port: info.port },
+      "metrics listener",
+    ),
+);
+
 for (const sig of ["SIGINT", "SIGTERM"] as const) {
   process.on(sig, () => {
     for (const x of served) x.hub.stop();
     server.close();
+    metricsServer.close();
     void Promise.all(
       [...new Set(served.map((x) => x.repos))].map((r) => r.close()),
     ).then(() => process.exit(0));

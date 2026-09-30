@@ -122,7 +122,9 @@ createServer(async (req, res) => {
     return void res.end(await metrics.registry.metrics());
   }
   res.writeHead(404).end();
-}).listen(cfg.port, () => log.info({ port: cfg.port }, "ops server listening"));
+}).listen(cfg.port, cfg.host, () =>
+  log.info({ host: cfg.host, port: cfg.port }, "ops server listening"),
+);
 
 for (const sig of ["SIGINT", "SIGTERM"] as const) {
   process.on(sig, async () => {
