@@ -25,7 +25,7 @@ ABI_CONTRACTS := ICredenceErrors ICalendarStore IAssetClock IPriceSource INavSou
 ABI_IMPLS ?= CalendarStore AssetClock CredencePriceFeed OracleAdapter SequencerHealth UniV3TwapSource \
   CredenceStockToken CredenceTreasuryFund ComplianceRegistry Faucet CredenceMarket SeniorVault SigmaOracle \
   KeeperTips Treasury ProtocolReserve CredenceGuardian CredenceTimelock RiskEngineRouter \
-  UnderwriterPool AuctionHouse RedStonePriceSource SettlementAdapter SolverAuction
+  UnderwriterPool AuctionHouse RedStonePriceSource SettlementAdapter SolverAuction ChainlinkStockPriceSource
 
 .PHONY: abis-check local-deploy-clock contracts-deps contracts-build contracts-test contracts-invariant contracts-coverage contracts-fmt \
   contracts-fmt-check contracts-snapshot contracts-clean abis-export risk-build risk-test risk-lint risk-fmt stylus-test stylus-abi-check \
