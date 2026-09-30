@@ -68,6 +68,8 @@ export interface Deps {
   /** ADR-0014: one API serves several chains through one app per chain; they share these windows, so a client
    * gets one quota whatever chain it asks for. */
   limiters?: Limiters;
+  /** OFF-04c: called with the session id at logout (the server ends that session's `bell:<owner>` streams). */
+  onLogout?: (session: string) => void;
 }
 
 export interface Limiters {
@@ -572,7 +574,10 @@ export function createApp(deps: Deps) {
         config.sessionSecret,
         getCookie(c, SESSION_COOKIE),
       );
-      if (id) await deps.auth.deleteSession(id);
+      if (id) {
+        await deps.auth.deleteSession(id);
+        deps.onLogout?.(id);
+      }
       deleteCookie(c, SESSION_COOKIE, { path: "/" });
       return c.body(null, 204);
     },

@@ -308,3 +308,68 @@ describe("S3 channels", () => {
     expect(got[1]).toMatchObject({ data: { kind: "auto_cover_applied" } });
   });
 });
+
+describe("OFF-04c: bell:<owner> ends with the SIWE session", () => {
+  const ME = "0x00000000000000000000000000000000000000b1";
+  const ev = (block: bigint): OwnerEvent => ({
+    owner: ME as Hex,
+    marketId: NVDA,
+    kind: "auto_cover_applied",
+    amounts: {},
+    clockState: 0,
+    block,
+    ts: 1n,
+    txHash: NVDA,
+  });
+  const setup = async () => {
+    const src = new FakeSource();
+    const hub = new StreamHub(src, toAssetId);
+    const ws = new FakeSocket();
+    const other = new FakeSocket();
+    hub.add(ws, { owner: ME, session: "sid-1" });
+    hub.add(other, { owner: ME, session: "sid-2" }); // the same wallet on another device
+    for (const s of [ws, other])
+      hub.message(
+        s,
+        JSON.stringify({
+          op: "subscribe",
+          channels: ["auctions", `bell:${ME}`],
+        }),
+      );
+    await hub.poll();
+    return { src, hub, ws, other };
+  };
+  const bells = (s: FakeSocket) =>
+    s.sent.filter((f) => f.channel === `bell:${ME}`).length;
+
+  it("logout: that session's socket stops getting bell frames, keeps public channels, and is told why", async () => {
+    const { src, hub, ws, other } = await setup();
+    expect(hub.dropSession("sid-1")).toBe(1);
+    expect(ws.sent.at(-1)).toMatchObject({ type: "session_ended" });
+    src.owners.push(ev(12n));
+    await hub.poll();
+    expect(bells(ws)).toBe(0);
+    expect(bells(other)).toBe(1); // another session of the same wallet is untouched
+    // it cannot subscribe again without a new session
+    hub.message(
+      ws,
+      JSON.stringify({ op: "subscribe", channels: [`bell:${ME}`] }),
+    );
+    expect(ws.sent.at(-1)).toMatchObject({ type: "error" });
+  });
+
+  it("expiry: the periodic re-check ends expired sessions only", async () => {
+    const { src, hub, ws, other } = await setup();
+    expect(await hub.revalidate(async (sid) => sid !== "sid-2")).toBe(1);
+    src.owners.push(ev(13n));
+    await hub.poll();
+    expect(bells(ws)).toBe(1);
+    expect(bells(other)).toBe(0);
+    // a failing session store never ends a live session
+    expect(
+      await hub.revalidate(async () => {
+        throw new Error("db down");
+      }),
+    ).toBe(0);
+  });
+});

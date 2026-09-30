@@ -28,6 +28,9 @@ const config: Config = {
   allowlistPerIpPerHour: 5,
 };
 
+/** OFF-04c: the sessions the logout route handed to the stream hubs. */
+const loggedOut: string[] = [];
+
 function app(overrides: Partial<Config> = {}, nowMs = T0 * 1000) {
   const repos = memoryRepos({
     clocks: [
@@ -77,6 +80,7 @@ function app(overrides: Partial<Config> = {}, nowMs = T0 * 1000) {
     config: { ...config, ...overrides },
     clock: repos.clock,
     auth: repos.auth,
+    onLogout: (sid) => loggedOut.push(sid),
     now: () => nowMs,
     nextBoundaries: () => [{ at: T0 + 60, kind: "bell" }],
   });
@@ -226,12 +230,14 @@ describe("SIWE sessions", () => {
     expect(((await s.json()) as { address: string }).address).toBe(
       account.address,
     );
-    // logout ends it
+    // logout ends it, and ends its bell:<owner> streams (OFF-04c)
+    const before = loggedOut.length;
     const out = await a.request("/v1/auth/logout", {
       method: "POST",
       headers: { cookie: cookie.split(";")[0]! },
     });
     expect(out.status).toBe(204);
+    expect(loggedOut.length).toBe(before + 1);
     expect(
       (
         await a.request("/v1/auth/session", {

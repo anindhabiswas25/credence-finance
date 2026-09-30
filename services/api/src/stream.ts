@@ -88,7 +88,12 @@ interface Sub {
   assets: Set<string> | null;
   /** The SIWE-authenticated address of this socket (lower-case), if any. */
   owner: string | null;
+  /** The SIWE session it came from (OFF-04c: `bell:<owner>` ends with the session). */
+  session: string | null;
 }
+
+/** What the upgrade's cookie resolves to: the session's address, and the session id when there is one. */
+export type SessionOwner = string | { owner: string; session: string };
 
 /** A full batch may end mid-block: drop the trailing block (the next poll re-reads it whole). */
 export function wholeBlocks<T extends { block: bigint }>(
@@ -133,12 +138,59 @@ export class StreamHub {
   }
 
   /** `owner`: the address of the socket's SIWE session (checked at the upgrade), if any. */
-  add(ws: Socket, owner?: string | null): void {
+  add(ws: Socket, owner?: SessionOwner | null): void {
+    const o = typeof owner === "string" ? { owner, session: null } : owner;
     this.subs.set(ws, {
       channels: new Set(),
       assets: null,
-      owner: owner ? owner.toLowerCase() : null,
+      owner: o?.owner ? o.owner.toLowerCase() : null,
+      session: o?.session ?? null,
     });
+  }
+
+  /** OFF-04c: the socket loses its owner and every `bell:<owner>` subscription (public channels stay). */
+  private endSession(ws: Socket, sub: Sub) {
+    sub.owner = null;
+    sub.session = null;
+    for (const c of [...sub.channels])
+      if (c.startsWith("bell:")) sub.channels.delete(c);
+    try {
+      ws.send(
+        JSON.stringify({
+          type: "session_ended",
+          message:
+            "bell:<owner> ended with the session: sign in again, then reconnect",
+        }),
+      );
+    } catch {
+      this.subs.delete(ws);
+    }
+  }
+
+  /** OFF-04c, logout: end `session` on every socket that opened with it. Returns how many. */
+  dropSession(session: string): number {
+    let n = 0;
+    for (const [ws, s] of this.subs)
+      if (s.session === session) {
+        this.endSession(ws, s);
+        n++;
+      }
+    return n;
+  }
+
+  /** OFF-04c, expiry: re-check every socket's session (`alive` false → ended). Returns how many ended. */
+  async revalidate(
+    alive: (session: string) => Promise<boolean>,
+  ): Promise<number> {
+    let n = 0;
+    for (const [ws, s] of [...this.subs]) {
+      if (!s.session) continue;
+      if (!(await alive(s.session).catch(() => true))) {
+        this.endSession(ws, s);
+        n++;
+      }
+    }
+    return n;
   }
 
   remove(ws: Socket): void {
@@ -365,7 +417,7 @@ export async function attachStream(
   /** The SIWE session's address for the upgrade request's cookie header, if valid. */
   sessionOwner: (
     cookieHeader: string | undefined,
-  ) => Promise<string | undefined> = async () => undefined,
+  ) => Promise<SessionOwner | undefined> = async () => undefined,
   /** OFF-04: browser origins allowed to open a socket (the CORS allowlist); empty = no Origin check. */
   allowedOrigins: readonly string[] = [],
 ) {

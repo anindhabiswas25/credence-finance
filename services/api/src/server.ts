@@ -68,6 +68,10 @@ const served = chains.map(({ chainId, indexerSchema }) => {
     sets,
     publicClient,
     limiters,
+    // OFF-04c: a logout ends that session's bell:<owner> streams on every chain's hub
+    onLogout: (sid) => {
+      for (const s of served) s.hub.dropSession(sid);
+    },
     nextBoundaries: (id, now) => {
       const v = venues.get(id);
       const s = v ? calendars.get(v) : undefined;
@@ -93,9 +97,8 @@ const sessionOwner = async (cookie: string | undefined) => {
     config.sessionSecret,
     raw ? decodeURIComponent(raw) : undefined,
   );
-  return sid
-    ? (await shared.auth.getSession(sid, new Date()))?.address
-    : undefined;
+  const s = sid ? await shared.auth.getSession(sid, new Date()) : undefined;
+  return s && sid ? { owner: s.address, session: sid } : undefined;
 };
 const hubs = new Map(served.map((s) => [String(s.chainId), s.hub]));
 const top = createMultiChainApp(
@@ -117,6 +120,17 @@ const injectWebSocket = await attachStream(
 const app = new Hono();
 app.route("/", stream);
 app.route("/", top);
+// OFF-04c: an expired session's bell:<owner> streams end within STREAM_SESSION_CHECK_MS
+const sessionCheck = setInterval(
+  () => {
+    for (const s of served)
+      void s.hub.revalidate(
+        async (sid) => !!(await shared.auth.getSession(sid, new Date())),
+      );
+  },
+  Number(process.env.STREAM_SESSION_CHECK_MS ?? 30_000),
+);
+sessionCheck.unref();
 for (const s of served)
   s.hub.start((err) =>
     log.warn({ chainId: s.chainId, err: String(err) }, "stream poll failed"),
