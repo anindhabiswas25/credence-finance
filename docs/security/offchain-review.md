@@ -22,6 +22,20 @@ and nonces, notifier templates), plus one on-chain proof test (`contracts/test/s
 | OFF-10 | Info | `notifier/src/templates.ts: esc` | `esc` escapes `& < >` but not quotes, and is also used inside `href="…"`. Safe today (URLs are built server-side from config and hex ids). | Escape `"` and `'` too. | BE-backend |
 | OFF-11 | Info | `api/src/app.ts` (SIWE verify) | The nonce is consumed before the signature is checked and is not bound to the requesting client: whoever learns a user's nonce can burn it (that one login fails; no takeover). | Verify the signature first, or bind the nonce to a pre-session cookie. | BE-backend |
 
+## Status (S5, 2026-09-30)
+Fixes by BE-backend, recorded by Engineer A (QA-sec paths, charter §2b) from BE-backend's REQUEST 16:05. The tests are
+BE-backend's (`backend-edge` / the service suites); Engineer A has not re-run them.
+
+| ID | Status | Fix | Test |
+| --- | --- | --- | --- |
+| OFF-04 (c) | fixed | `ffd8b05`: a socket's `bell:<owner>` ends at logout at once and at session expiry within 30 s | `services/api/test/stream.test.ts`, `app.test.ts` |
+| OFF-07 | fixed (code); network half open | `535923e`: Ponder's `/sql` and `/graphql` are off unless `INDEXER_QUERY_API=1`; API statement timeout 5 s; `credence_api_ro` read-only with timeouts (migration `20260930000003`) | `services/api/test/pg.test.ts` |
+| OFF-08 | fixed (code); network half open | `eb1f65a`: metrics on private listeners (keeper 127.0.0.1:9102, relayer :9101, notifier :9103, API `API_METRICS_ADDR` 127.0.0.1:9104; the public `/metrics` is a 404) | BE-backend's service tests |
+
+The network half of OFF-07 / OFF-08 (the indexer port 42069 and the metrics ports on the private network only) is
+Engineer C's `infra/prod` (charter §2c). OFF-04 (a) and (b) are covered by the S4 fixes. OFF-06 and OFF-11 stay
+pre-mainnet.
+
 ## What is sound (checked, no finding)
 - **SIWE:** EIP-4361 parse + `validateSiweMessage` (domain, time) + chain id + single-use 10-min nonce (deleted on use) +
   EOA or ERC-1271/6492 signature; session = random UUID in an HMAC-SHA256 cookie (timing-safe compare) backed by a DB

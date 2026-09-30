@@ -45,8 +45,8 @@ is ranked by what an auditor is most likely to find. Items are not dropped: each
 | --- | --- | --- | --- | --- |
 | QA-11 | Low | Senior vault market list append-only, capped at 32 (market lists 64) | BE-chain / PM | Testnet lists 3–10 markets; fix (a remove path, or MAX_QUEUE = MAX_MARKETS) before the 33rd listing. If it is not fixed in S5, it moves here |
 | OFF-06 | Low | Telegram chat id taken as given (alerts can be routed to any chat that started the bot) | BE-backend | Spam only; verify ownership with a `/start <nonce>` handshake |
-| OFF-07 | Low | Ponder `/sql` and `/graphql` mounted on the indexer | BE-backend / ops | Private network on testnet; must be closed or firewalled on mainnet |
-| OFF-08 | Low | `/metrics` on the public API port and the relayer on 0.0.0.0 | BE-backend / ops | Separate private listener |
+| OFF-07 | Low | Ponder `/sql` and `/graphql` mounted on the indexer. **Code fixed in S5 (`535923e`: off by default, API statement timeout, read-only role with timeouts)** | Engineer C (network) | Only the network half is left: keep the indexer port on the private network in `infra/prod` |
+| OFF-08 | Low | `/metrics` on the public API port and the relayer on 0.0.0.0. **Code fixed in S5 (`eb1f65a`: private listeners, public `/metrics` 404)** | Engineer C (network) | Only the network half is left: the metrics ports stay private in `infra/prod` |
 | OFF-11 | Info | SIWE nonce consumed before the signature check, not bound to the client | BE-backend | A user's nonce can be burned (retry works) |
 | QA-I1 | Info | The pool has no dead shares | PM (accepted risk?) | Fuzz: loss ≤ (a0 + donation)/1e12 + 2 units |
 | QA-I2 | Info | Lazy loss recognition: a senior lender can exit between clear and `settlePositions` | PM / auditors | Keeper settles in the same minute; the audit should look at making settlement atomic with clear |
