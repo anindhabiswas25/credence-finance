@@ -13,8 +13,7 @@ at 18:30) an edge-case matrix across the contracts and the off-chain stack. **Th
 Mediums the same day. Each fix was checked here, and each has a regression test that failed before the fix. The one
 still open is QA-11 (Low), which the PM ruled for S5. The static tools found one true positive (QA-07); every other
 result they report is triaged. Per the PM's 18:30 decision the 512 × 256 run, the 7 nightlies, the audits and the long
-soaks are pre-mainnet work (`docs/security/pre-mainnet.md`). Item G (devnode re-check) is pending: the devnode was
-released at 22:10 and BE-chain holds it for item E (see §2 item 6).
+soaks are pre-mainnet work (`docs/security/pre-mainnet.md`). Item G (the devnode re-check) was done in S5 by Engineer A, who took over QA-sec's paths (§2 item 6).
 
 ## 2. Acceptance checklist
 
@@ -25,7 +24,7 @@ released at 22:10 and BE-chain holds it for item E (see §2 item 6).
 | 3 | Inflation and rounding fuzz pass at 10,000 runs | ✅ | `FOUNDRY_PROFILE=ci forge test --match-path 'test/{security,fuzz}/**' --no-match-path 'test/security/invariant/*'` → **63 passed, 0 failed**; every fuzz test `runs: 10000`, except `testFuzz_capHolds` at 1,000 (~20M gas a case, set inline) |
 | 4 | `invariant-map.md` maps §14.2; `edge-cases.md` covers every probable case (contract row: passing test or open REQUEST; off-chain row: BE-backend's test or a gap REQUEST); `pre-mainnet.md` lists the deferred work | ✅ | `docs/security/invariant-map.md` (every row, strength, gaps). `docs/qa/edge-cases.md`: 110 rows proven, 10 partly, 20 gaps, all off-chain and under REQUEST 18:55 (BE-backend has since closed R-05..R-11, reviewed here). No contract row open: QA-10 fixed, QA-11 ruled S5. 49 contract edge tests in `contracts/test/security/edge/`. `docs/security/pre-mainnet.md`. The 512 × 256 local run moved to pre-mainnet (PM, 18:30); `nightly-invariants` exists (`.github/workflows/security.yml`) |
 | 5 | `threat-model.md` and `offchain-review.md` exist, every §15.1 row has a status | ✅ | `docs/security/threat-model.md`: every row has a status. The only control not in code is the ± 50 % open-print page (row 4, ruled into BE-backend's S5). Both named gaps covered: concentration proven; ADR-0109 proven after QA-09. `docs/security/offchain-review.md`: OFF-01..11 |
-| 6 | G done and answered on the board, if the devnode was released in time | ⏳ pending | Devnode released 22:10; BE-chain holds it for item E (DECISION 22:38) until its READY. G runs after that READY (DECISION first), and this row is updated then |
+| 6 | G done and answered on the board, if the devnode was released in time | ✅ (S5) | On the post-revert code, 2026-09-30: `make devnode-integration` 29 checks, 0 mismatches (16:42–17:06); `make devnode-gas` J3 = 9 within 24M (ADR-0114); BE-backend's `nav-settlement-e2e` on the new main book passed (board 15:29). Board READY 2026-09-30 (Engineer A Phase 1) |
 | 7 | Report, findings ranked with owner and status | ✅ | this file, §6 |
 
 ## 3. What was built
@@ -66,7 +65,12 @@ released at 22:10 and BE-chain holds it for item E (see §2 item 6).
 - Static: Slither 5 High / 129 Medium / 223 Low / 69 Info / 6 Opt; Aderyn 105 High / 318 Low instances. 0 untriaged.
 - **512 × 256:** not run locally. The PM moved it to pre-mainnet (DECISION 18:30); `make security-invariants` and the
   `nightly-invariants` job are ready.
-- **Item G:** pending (§2 item 6).
+- **Item G (S5, Engineer A, 2026-09-30):** `devnode-integration` 29/29 on the post-revert code. `devnode-gas` J3 = 9
+  (the 9-position `enforceBell` was sent for real at 21.27M gas). `security-findings` 18 passed. `security-test`
+  126 passed, 0 failed. **The static gate is not at 0 on the S5 tree:** Slither has 17 untriaged Medium keys and Aderyn
+  4 untriaged High keys. Most are in code added on 2026-09-30 (the ERC-8056 multiplier in `AssetClock` / `OracleAdapter`,
+  and the mainnet-only `ChainlinkStockPriceSource`); a few may be known false positives re-keyed after line changes.
+  They are triaged in S5 Phase 2 (the triage gate is a Phase 2 item).
 
 ## 5. Deviations from the brief
 - **Aderyn install.** crates.io's `aderyn` is 0.1.9 (2024), and current releases ship from GitHub. It was installed with
@@ -113,7 +117,7 @@ released at 22:10 and BE-chain holds it for item E (see §2 item 6).
    the contract, and the PM's J3 guard stays.
 
 ## 8. Known gaps and TODOs
-- Item G (devnode re-check) after BE-chain's item E READY.
+- The S5 static-gate triage of the 2026-09-30 code (21 keys), in S5 Phase 2.
 - Off-chain edge-case gaps (20 rows: K-02, K-05..K-14, I-01..03, W-04, N-05, D-01, …) are under the 18:55 REQUEST to
   BE-backend. R-05..R-11 are now closed.
 - QA-11 (S5); the ± 50 % open-print page (S5); hot-wallet balance caps; INV-LIQ-02 on the real auction house.

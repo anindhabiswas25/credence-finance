@@ -46,7 +46,20 @@ went from 10 to 13 (+30 %), short of the ≥ 20 rule.
   is `devnode-gas` on the reverted code, recorded below. The keeper's `KEEPER_J3_BATCH` uses that number.
 
 ## Post-revert measurement
-_Pending: `devnode-gas` PHASE=setup at 14:45 IST, measure at bellAt. Filled in with the result._
+`make devnode-gas` on the reverted code (`dbf9d01`), 2026-09-30 16:39 IST, own engine and book, same N = 32 AAPL
+positions at 72 %, all auto-covered (`target/chain/devnode-gas.measure.log`):
+
+| Call | Gas |
+| --- | --- |
+| `enforceBell`, 1 / 2 / 4 / 8 | 3,475,376 / 5,760,638 / 10,304,371 / 19,569,174 |
+| `enforceBell`, 12 | 28,771,781 (over 24M) |
+| `enforceBell`, 16 / 20 / 24 / 32 | estimate fails (over the block gas limit) |
+| **largest J3 batch within 24M** | **9** (sent for real: status 1, 21,268,770 gas, 9 auto-covered) |
+| `writeCover` (setup) | 3,231,912 |
+
+The marginal cost is about 2.3M gas per position, against 1.59M with the bracket. S3 held 10 positions. Today's
+`writeCover` costs more (3.23M against 3.16M), probably from the S4/S5 additions on the cover path (the concentration
+limit, the ERC-8056 multiplier), though that is not profiled. **`KEEPER_J3_BATCH` = 9** (BE-backend set 9 provisionally in `b80376b`; the measurement confirms it).
 
 ## Consequences
 - The J3 batch stays near S3's size, so a Bell with many auto-cover borrowers needs several batches. The keeper sends
