@@ -1,6 +1,6 @@
 # Sprint 4 report · Senior Backend Engineer (BE-backend)
 
-Date: 2026-09-29 · Session model: Claude Opus 5.5 · Commits: `62235eb..HEAD` (BE-backend paths only)
+Date: 2026-09-29, final 2026-09-30 (G) · Session model: Claude Opus 5.5 · Commits: `62235eb..HEAD` (BE-backend paths only)
 
 ## 1. Summary
 - **S3 status:** see the acceptance row 1 and `docs/handoff/sprint-3-backend-report.md` (final).
@@ -16,7 +16,7 @@ Date: 2026-09-29 · Session model: Claude Opus 5.5 · Commits: `62235eb..HEAD` (
   - the `nav_sold` notification.
 - **Every §16.1 alert has a rule and a promtool test, and the dashboards are provisioned.** The scenario run exposed a real bug here: the common registry prefixes every Rust metric with `credence_`, and no keeper or relayer rule matched the exported name, so none could ever have fired. Fixed, with a regression test.
 - **QA-sec's three Medium off-chain findings (OFF-01…03) are fixed.**
-- **Not done:** the NAV settlement e2e on the devnode (G) is carried over (§8).
+- **G, the NAV settlement e2e on the devnode, passed on 2026-09-30 (S5)**, in 13 min on BE-chain's new-bundle book, after two root-cause fixes (§8).
 
 ## 2. Acceptance checklist
 | # | Item | Status | Proof (command + key output) |
@@ -24,7 +24,7 @@ Date: 2026-09-29 · Session model: Claude Opus 5.5 · Commits: `62235eb..HEAD` (
 | 1 | S3 closed: `make scenario-a-e2e` passes at real time with 0 failed keeper txs and the kill-watch restart; S3 report final; final S3 READY | see S3 report | `target/be/scenario-a/check.log`, S3 report §2 |
 | 2 | `make backend-install backend-build backend-test backend-lint` from a clean clone | ✅ | Fresh `git clone` in a scratch dir, `CARGO_BUILD_JOBS=4 make backend-install backend-build backend-test backend-lint` → `EXIT 0` in 10 min 55 s. Tests: keeper 28, relayer 67, bidder/solver 10, API 44, SDK 44, notifier 27, indexer 7, feeds 9, calibration pytest (a later re-run follows in §4) |
 | 3 | A done, with tests | ✅ | `cargo test -p credence-keeper --lib`: `unpriced_markets_are_logged_once_per_change` (NoReferencePrice and NoPrice), `bell_boundaries_follow_the_chain_offsets`, `targets_are_the_next_two_scheduled_closes`. Live in the S3 re-run: `Bell offsets window_s=7200 deadline_s=900` read from the clock; COIN / MSFT / SPY logged once each (the whole keeper log was 36 lines at seeding, against 11 MB in the first run); gauges `riskEngine.pricing` / `riskEngine.auctionMath` = 31,534,810 s, no RB-10 alert. Devnode test `keeper-j12-e2e` updated for the router (run after the S3 READY) |
-| 4 | J10, solver bot, settlement indexer/API, notifier with unit tests; `make nav-settlement-e2e` if BE-chain's item E lands, else carried over with the reason | ✅ built / ⚠️ G carried over | Keeper `nav_jobs` tests (6): finalize only after the window, fill vs advance vs claim, `low` cursor, open batches (HF < 1, not in a lot, ≤ 128), keys, book. Solver `solver::tests` (4). Indexer `settlement-model.test.ts` (4). API `test/settlement.test.ts` (4). Notifier `test/navsold.test.ts` (3). G: §8 |
+| 4 | J10, solver bot, settlement indexer/API, notifier with unit tests; `make nav-settlement-e2e` if BE-chain's item E lands, else carried over with the reason | ✅ | Keeper `nav_jobs` tests (6): finalize only after the window, fill vs advance vs claim, `low` cursor, open batches (HF < 1, not in a lot, ≤ 128), keys, book. Solver `solver::tests` (4). Indexer `settlement-model.test.ts` (4). API `test/settlement.test.ts` (4). Notifier `test/navsold.test.ts` (3). **G: `make nav-settlement-e2e` PASSED 2026-09-30 09:54Z** (13 min; 10.9 min after seeding; keeper-only: settlement 1 FILLED by the solver bot, settlement 2 ADVANCED by the pool with the solver in its no-bid profile, the issuer's T+1 `fulfillRedeem`, J10's claim; 0 keeper txs reverted, no J10 step mined twice; `/v1/settlements/{1,2}` == `adapter.settlement(id)`, `/v1/pool/nav` claim == `RedemptionClaimed`, `nav_sold` sent to both with amounts == `PositionSettled`). Log `target/be/nav-settlement/check.log` |
 | 5 | Every §16.1 alert has a rule and a promtool test; dashboards provisioned | ✅ | `promtool check rules alerts.yml` → `SUCCESS: 18 rules found`; `promtool test rules alerts.test.yml` → `SUCCESS`. New: BellNotEnforced, ReopenStuck, EpochNotSettled, PoolUtilisation, ShortfallEscalated (existing: FeedStale, FeedDisagreement(Severe), KeeperLeaderMissing, WalletLow, WalletBelowFloor, CalendarCoverage, KeeperFailedTx, StylusActivation, …). Dashboards `infra/grafana/dashboards/{keeper,relayer,pool,auctions,api,indexer}.json`. `cargo test -p credence-keeper --test alert_names`: every queried keeper / relayer metric is registered |
 | 6 | Report with ADRs for every deviation | ✅ | This file; ADR-0013 |
 
@@ -92,31 +92,14 @@ Date: 2026-09-29 · Session model: Claude Opus 5.5 · Commits: `62235eb..HEAD` (
 - **SDK:** ABIs v3.
 
 ## 8. Known gaps and TODOs
-- **G, `make nav-settlement-e2e`: carried over.** Reasons:
-  1. BE-chain's item E (NAV on the devnode, redeploying the main book) can only start after my final S3 READY.
-  2. The devnode needs an issuer NAV-strike publisher, because the relayer refuses the NAV kind (`UnsupportedKind`). It must sign NAV reports with feed A's node keys, as DeployClockLocal's `navFeed` expects, and `publishNav` / `fulfillRedeem` as the issuer.
-  3. At ≤ 0.5% per strike, reaching HF < 1 takes several USBANK cycles (§6.1).
-
-  Plan:
-  - a synthetic USBANK calendar with 20-min sessions;
-  - seed at max LTV and let the publisher strike −0.45% per session;
-  - J10 opens the REOPEN settlement; the solver fills it;
-  - a second borrower on the next day, with the solver in its no-bid profile;
-  - the issuer's T+1 `fulfillRedeem`, then J10's claim;
-  - checks: indexer / API / notifier == chain.
-
-  That is roughly 8 cycles × 35 min ≈ 5 h of real time, unless the PM accepts seeding positions closer to LT.
-- **Off-chain findings still open (S5):**
-  - OFF-04c: a socket keeps its `bell:<owner>` after logout, until it reconnects.
-  - OFF-06: the Telegram chat id needs a `/start <token>` link.
-  - OFF-07: the indexer's `/sql` and `/graphql` must stay on the private network, or run with a `statement_timeout` role.
-  - OFF-08: metrics need a private listener.
-  - OFF-11: the SIWE nonce should be burned only after the signature verifies.
+- **G, `make nav-settlement-e2e`: done on 2026-09-30 (S5).** The PM ruled for positions seeded near LT (≤ 30 min). Two root causes found on the way:
+  1. **07:36 run: the indexer never built its position rows.** Ponder's pinned reads hit state the nitro devnode had pruned (it keeps about 128 blocks), so J10's query failed. Fix `7b3182c`: a pruned-state read retries at the head block (from a plain client, not Ponder's cached `latest`). Free testnet RPCs are not archive nodes either, so the fix matters there too.
+  2. **15:09 attempt: a fresh book's TBILL is HALTED** until its first NAV print, which moves it to REOPEN, and the seed's `borrow` reverted (`ActionNotAllowedInState(0, 3)`). Fix `54e6c46`: the seed completes the reopen (120-s queue, `completeReopen`) before borrowing.
+- **Off-chain findings:** OFF-04c (`ffd8b05`), OFF-07 (`535923e`) and OFF-08 (`eb1f65a`) are fixed in S5. OFF-06 (the Telegram `/start <token>` link) and OFF-11 (burn the SIWE nonce only after the signature verifies) stay pre-mainnet (PM, 2026-09-30).
 - **Fixed:** OFF-01…03 (`de6d1bd`), and OFF-04 a/b, OFF-05, OFF-09 and OFF-10 (`3d23f80`).
 - **The keeper's §16.1 gauges have not fired against a real Prometheus yet.** `make obs-up` against a live keeper is the next check; the promtool tests and the name regression test pass.
 
 ## 9. Needs from the user or the PM
-- **G:** accept either a ~5-h real-time NAV run, or seeding NAV positions near LT (2 strikes) (§8).
 - **Still open from S2/S3:** rotate the vendor keys; ADR-0009 D2/D3.
 
 ## 10. How to verify from a clean checkout
@@ -126,4 +109,6 @@ docker run --rm -v $PWD/infra/prometheus:/etc/prometheus:ro -w /etc/prometheus -
 make infra-up db-migrate && make devnode-deploy-engine keeper-j12-e2e
 make local-deploy-core CALENDAR=synthetic SYNTH_ARGS='--regular-minutes 155 --closure-minutes 15 --session-minutes 150' LOCAL_RPC=http://127.0.0.1:8547
 make scenario-a-e2e   # ≈ 2.5 h; the S4 keeper runs in it (Bell times from the chain, unpriced markets quiet)
+# G (after BE-chain's main book, USBANK in session): ≤ 30 min
+make nav-settlement-e2e
 ```
