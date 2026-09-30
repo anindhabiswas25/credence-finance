@@ -37,20 +37,18 @@ contract DryRunPricingProgram {
         floorOf[a][t] = f;
     }
 
+    mapping(bytes32 => mapping(uint8 => uint64)) public sigmaAt; // when σ was last written, as the real program
+
     function updateSigma(bytes32 a, uint8 t, uint256 s) external {
         if (msg.sender != sigmaOracle) revert Unauthorized();
         sigma[a][t] = s;
+        sigmaAt[a][t] = uint64(block.timestamp);
     }
 
     function params() external view returns (RiskParams memory) {
         return _p;
     }
 
-    function sigmaAt(bytes32 a, uint8 t) external view returns (uint64) {
-        uint256 s = sigma[a][t];
-        uint256 f = floorOf[a][t];
-        return uint64(s > f ? s : f);
-    }
 }
 
 contract DryRunAuctionMathProgram {
