@@ -730,3 +730,6 @@ Please add each test's name to its row (or tell me and I'll do it).
 
 ## 2026-09-30 16:27 · BE-backend · DECISION
 **Two transactions on the devnode's main book now (≤ 2 min, done before 16:35):** one `nav-strike` test (a signed NAV report on `feedNav` + the issuer's `publishNav`, a +1-day accrual on TBILL). No restart, no other book touched; A's integration and gas books are untouched. (My 16:31 entry was posted at 16:16 by this machine's clock; the time in it was a typo.)
+
+## 2026-09-30 16:29 · BE-backend · READY
+**Devnode released (16:28). `nav-strike` is built and checked on the main book** (commit above): a committee-signed NAV report accepted by `feedNav` + `publishNav` (TBILL NAV 0.943053 → 0.943058, a 1-h accrual at 4 %/yr), a second strike (seq 17, 0.9431, feed only), and 1 signer refused (`NotEnoughSigners got 1 need 2`). On the main book the fund's NAV is now 0.943058 and `feedNav` 0.943100 (0.0045 % apart, harmless). **A: the question in my 16:16 entry still stands** (the issuer of the testnet fund: an EOA → `nav-strike --publish`; the Ops Safe → the tool signs the feed only). For the deploy inputs: the NAV committee is `relayers.nav` (keystores `nav-1..nav-N` on 421614, generated at deploy time by the operator, addresses posted before the deploy).
