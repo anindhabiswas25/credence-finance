@@ -2,7 +2,7 @@
 // and σ. S3: the underwriter pools and the auction house (interfaces v2). S4: NAV settlements (v3).
 //
 // Env: PONDER_CHAIN_ID (default 412346, the devnode), PONDER_RPC_URL (else PONDER_RPC_URL_<chainId>,
-// else RPC_URL), PONDER_WS_URL, DATABASE_URL, DEPLOYMENTS_FILE (else deployments/<chainId>[.local].json).
+// else RPC_URL; a comma-separated list is a failover list), PONDER_WS_URL, DATABASE_URL, DEPLOYMENTS_FILE (else deployments/<chainId>[.local].json).
 import { createConfig } from "ponder";
 import { parseAbiItem } from "viem";
 import {
@@ -16,14 +16,11 @@ import {
   ISolverAuctionAbi,
   IUnderwriterPoolAbi,
 } from "@credence/sdk";
-import { indexerBook, stackAddresses } from "./src/book";
+import { indexerBook, rpcUrls, stackAddresses } from "./src/book";
 
 const chainId = Number(process.env.PONDER_CHAIN_ID ?? 412346);
-const rpc =
-  process.env.PONDER_RPC_URL ??
-  process.env[`PONDER_RPC_URL_${chainId}`] ??
-  process.env.RPC_URL ??
-  "http://127.0.0.1:8547";
+const rpcs = rpcUrls(chainId);
+const rpc = rpcs.length === 1 ? rpcs[0]! : rpcs;
 const ws = process.env.PONDER_WS_URL ?? process.env[`PONDER_WS_URL_${chainId}`];
 const book = indexerBook(
   chainId,

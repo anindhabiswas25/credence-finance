@@ -61,3 +61,20 @@ export function feedLabeler(book: Pick<AddressBook, "shared">) {
     return x === a ? "A" : x === b ? "B" : addr;
   };
 }
+
+/** The indexer's RPCs in failover order: PONDER_RPC_URL, else PONDER_RPC_URL_<chainId>, else RPC_URL, each a
+ * comma-separated list (Ponder falls back through them in order; ADR-0014 wants ≥ 2 per chain in prod). */
+export function rpcUrls(
+  chainId: number,
+  env: Record<string, string | undefined> = process.env,
+): string[] {
+  const raw =
+    env.PONDER_RPC_URL ??
+    env[`PONDER_RPC_URL_${chainId}`] ??
+    env.RPC_URL ??
+    "http://127.0.0.1:8547";
+  return raw
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+}

@@ -23,9 +23,20 @@ import {
   ICredenceMarketAbi,
   ISeniorVaultAbi,
 } from "@credence/sdk";
-import { indexerBook, stackOf } from "./book";
+import { createPublicClient, fallback, http } from "viem";
+import { indexerBook, rpcUrls, stackOf } from "./book";
+import { withPrunedFallback } from "./pinned";
+
+/** `context.client` whose pinned reads fall back to the latest state when the RPC pruned the event's block. */
+function client(context: Context): Pick<Context["client"], "readContract"> {
+  return { readContract: withPrunedFallback(context.client, headBlock) };
+}
 
 const chainId = Number(process.env.PONDER_CHAIN_ID ?? 412346);
+const headClient = createPublicClient({
+  transport: fallback(rpcUrls(chainId).map((u) => http(u))),
+});
+const headBlock = () => headClient.getBlockNumber({ cacheTime: 0 });
 const book = indexerBook(
   chainId,
   process.env.DEPLOYMENTS_DIR ?? "../deployments",
@@ -53,7 +64,7 @@ export function jsonable(v: unknown): unknown {
 
 async function refreshMarket(context: Context, event: Ev, id: Hex) {
   const addr = event.log.address;
-  const s = await context.client.readContract({
+  const s = await client(context).readContract({
     abi: ICredenceMarketAbi,
     address: addr,
     functionName: "marketState",
@@ -77,7 +88,7 @@ async function refreshMarket(context: Context, event: Ev, id: Hex) {
     return row;
   }
   // First sight without MarketCreated (e.g. startBlock after creation): read the params too.
-  const p = await context.client.readContract({
+  const p = await client(context).readContract({
     abi: ICredenceMarketAbi,
     address: addr,
     functionName: "marketParams",
@@ -145,13 +156,13 @@ async function refreshPosition(
     blockNumber: event.block.number,
   } as const;
   const [p, debt] = await Promise.all([
-    context.client.readContract({
+    client(context).readContract({
       abi: ICredenceMarketAbi,
       functionName: "position",
       args: [id, owner],
       ...at,
     }),
-    context.client.readContract({
+    client(context).readContract({
       abi: ICredenceMarketAbi,
       functionName: "debtOf",
       args: [id, owner],
@@ -510,12 +521,15 @@ async function refreshVault(context: Context, event: Ev) {
     pendingRedeemShares,
     claimableAssets,
   ] = await Promise.all([
-    context.client.readContract({ ...at, functionName: "totalAssets" }),
-    context.client.readContract({ ...at, functionName: "totalSupply" }),
-    context.client.readContract({ ...at, functionName: "idle" }),
-    context.client.readContract({ ...at, functionName: "queueLength" }),
-    context.client.readContract({ ...at, functionName: "pendingRedeemShares" }),
-    context.client.readContract({ ...at, functionName: "claimableAssets" }),
+    client(context).readContract({ ...at, functionName: "totalAssets" }),
+    client(context).readContract({ ...at, functionName: "totalSupply" }),
+    client(context).readContract({ ...at, functionName: "idle" }),
+    client(context).readContract({ ...at, functionName: "queueLength" }),
+    client(context).readContract({
+      ...at,
+      functionName: "pendingRedeemShares",
+    }),
+    client(context).readContract({ ...at, functionName: "claimableAssets" }),
   ]);
   const fields = {
     vault: event.log.address,
@@ -542,7 +556,7 @@ for (const ev of ["Deposit", "Withdraw", "Allocated", "CapSet"] as const) {
 
 ponder.on("SeniorVault:RedeemRequested", async ({ event, context }) => {
   const stack = vaultStack(event.log.address);
-  const r = await context.client.readContract({
+  const r = await client(context).readContract({
     abi: ISeniorVaultAbi,
     address: event.log.address,
     functionName: "redeemRequest",
