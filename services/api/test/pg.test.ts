@@ -12,6 +12,19 @@ afterAll(async () => repos?.close());
 const addr = () =>
   getAddress(`0x${randomBytes(20).toString("hex")}`) as Address;
 
+describe.skipIf(!url)("OFF-07 read limits", () => {
+  it("every API connection has a statement timeout; a slow read is cancelled", async () => {
+    const [{ t }] = (await repos!
+      .sql`select current_setting('statement_timeout') as t`) as unknown as [
+      { t: string },
+    ];
+    expect(t).toBe("5s");
+    await expect(repos!.sql`select pg_sleep(6)`).rejects.toThrow(
+      /statement timeout/,
+    );
+  }, 15_000);
+});
+
 describe.skipIf(!url)("pg MeRepo", () => {
   it("email: set unverified, verify once with the right token, re-set invalidates", async () => {
     const me = repos!.me;

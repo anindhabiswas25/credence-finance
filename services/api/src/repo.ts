@@ -153,6 +153,10 @@ export function pgRepos(databaseUrl: string, indexerSchema: string) {
     max: 10,
     idle_timeout: 30,
     types: { bigint: postgres.BigInt },
+    // OFF-07: no public read may run long, whatever role the API logs in as
+    connection: {
+      statement_timeout: Number(process.env.API_STATEMENT_TIMEOUT_MS ?? 5000),
+    },
   });
   const ix = (t: string) => sql(`${indexerSchema}.${t}`);
 
