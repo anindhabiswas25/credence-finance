@@ -20,7 +20,14 @@
      other chain's `submitted` jobs, find no receipt on its own chain, mark them failed, and let the other keeper
      send them again. `ops.keeper_tx` already has `chain_id`.
    - `ops.relayer_report` gets `chain_id` (it's keyed by feed address today, which can repeat across chains).
-   - The indexer tables are separated by schema (point 1). The notifier's dedupe keys are prefixed `<chainId>:`.
+   - The indexer tables are separated by schema (point 1).
+   - Every service connection carries its chain in the Postgres setting `credence.chain_id`
+     (`credence_common::db::connect_chain`); `ops.chain()` reads it and every keeper/relayer query filters on it. A
+     connection without it fails on its first query (no silent default).
+   - `app.notification_job` gets `chain_id` and its dedupe key is unique per `(chain_id, dedupe_key)` (0 for
+     account-level jobs such as email verification). `app.allowlist_request` is keyed `(chain_id, address)`: one
+     self-attestation queues the allowlist tx on every served testnet chain (`?chain=` picks one), and each chain's
+     keeper sends only its own.
 3. **One API**, chain-scoped by a **query parameter** `?chain=<chainId>` on every chain-bound route (markets,
    positions, auctions, settlements, pools, clock, risk, the WS `subscribe` message). The API serves the chains
    listed in `API_CHAINS=46630:ix_46630,421614:ix_421614` (chain id → views schema). With one chain configured,
@@ -41,6 +48,8 @@
 
 ## Consequences
 
-- One DB migration (`chain_id` on `ops.keeper_job` and `ops.relayer_report`, default `412346` for existing rows).
+- Two DB migrations (`20260930000001`: `chain_id` on `ops.keeper_job` and `ops.relayer_report`; `20260930000002`:
+  on `app.allowlist_request` and `app.notification_job`); existing rows become `412346`. Both roll back on a
+  single-chain database.
 - The keeper's job queries all take the chain id; existing single-chain tests pass unchanged.
 - The prod stack (`infra/prod/`) has two env files, one per chain, and runs the chain-bound services twice.

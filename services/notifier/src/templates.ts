@@ -18,6 +18,15 @@ export const GAP_COVER_MEANS =
   "Gap Cover lets you keep your LTV through this closure, and exempts you from overnight emergency liquidation.";
 
 const uint = z.string().regex(/^\d+$/, "a decimal string in base units");
+/** ADR-0014: the chain and the market's loan token (optional: single-chain payloads omit them). */
+/** `?chain=<id>` (or `&chain=`) for web links when the payload names its chain. */
+const chainQuery = (p: { chainId?: number }, sep: "?" | "&") =>
+  p.chainId === undefined ? "" : `${sep}chain=${p.chainId}`;
+const ChainFields = {
+  loanSymbol: z.string().optional(),
+  chainId: z.number().int().optional(),
+  chainName: z.string().optional(),
+};
 const unix = z.number().int().positive();
 
 /** What happens at the Bell if the borrower does nothing (mirrors `enforceBell`, §8.4.3). */
@@ -46,6 +55,7 @@ export const BellHeadsUp = z.object({
   coverUnavailable: z.string().optional(),
   default: Default,
   loanDecimals: z.number().int().default(6),
+  ...ChainFields,
   collateralDecimals: z.number().int().default(18),
   /** Drop the message instead of delivering it late (the Bell deadline). */
   expiresAt: unix.optional(),
@@ -69,6 +79,7 @@ export const BellOutcome = z.object({
   newLtv: uint, // WAD, after the action (the sale counted at its reserve price)
   txHash: z.string().optional(),
   loanDecimals: z.number().int().default(6),
+  ...ChainFields,
   collateralDecimals: z.number().int().default(18),
 });
 export type BellOutcome = z.infer<typeof BellOutcome>;
@@ -81,6 +92,7 @@ export const EmailVerify = z.object({
 const wad = uint;
 const Decimals = {
   loanDecimals: z.number().int().default(6),
+  ...ChainFields,
   collateralDecimals: z.number().int().default(18),
 };
 
@@ -157,6 +169,7 @@ export const EpochSettled = z.object({
   shares: uint, // the underwriter's pool shares (18 decimals)
   value: uint, // those shares at sharePriceAfter, loan-token base units
   loanDecimals: z.number().int().default(6),
+  ...ChainFields,
 });
 export type EpochSettled = z.infer<typeof EpochSettled>;
 
@@ -167,8 +180,24 @@ export const WithdrawalClaimable = z.object({
   shares: uint,
   assets: uint,
   loanDecimals: z.number().int().default(6),
+  ...ChainFields,
 });
 export type WithdrawalClaimable = z.infer<typeof WithdrawalClaimable>;
+
+/** ERC-8056 (ADR-0119; S5 Amendment 1): a collateral token's multiplier change and the corporate action around
+ * it. Multipliers are WAD (1e18 = 1 share per token). */
+export const CorporateAction = z.object({
+  stage: z.enum(["scheduled", "cancelled", "begun", "confirmed"]),
+  marketId: z.string(),
+  asset: z.string(), // "NVDA"
+  token: z.string(), // "tNVDA"
+  oldMultiplier: uint.nullable().default(null),
+  newMultiplier: uint.nullable().default(null),
+  effectiveAt: unix.nullable().default(null),
+  closureId: z.string().nullable().default(null),
+  ...ChainFields,
+});
+export type CorporateAction = z.infer<typeof CorporateAction>;
 
 export const EVENTS = {
   bell_headsup: BellHeadsUp,
@@ -178,6 +207,7 @@ export const EVENTS = {
   nav_sold: NavSold,
   epoch_settled: EpochSettled,
   withdrawal_claimable: WithdrawalClaimable,
+  corporate_action: CorporateAction,
   email_verify: EmailVerify,
 } as const;
 export type EventName = keyof typeof EVENTS;
@@ -192,6 +222,7 @@ export const DEFAULT_CHANNELS: Record<EventName, Channel[]> = {
   nav_sold: ["email", "push", "telegram"],
   epoch_settled: ["email"],
   withdrawal_claimable: ["email", "push"],
+  corporate_action: ["email", "push", "telegram"],
   email_verify: ["email"],
 };
 
@@ -223,9 +254,10 @@ const qty = (base: string, d: number) => tokens(base, d, 4);
 
 export function renderBellHeadsUp(p: BellHeadsUp, webOrigin: string): Rendered {
   const deadline = etTime(p.bellAt);
-  const repay = usd(p.cureRepay, p.loanDecimals);
+  const repay = usd(p.cureRepay, p.loanDecimals, p.loanSymbol);
   const add = `${tokens(p.cureCollateral, p.collateralDecimals)} ${p.token}`;
-  const premium = p.premium === null ? null : usd(p.premium, p.loanDecimals);
+  const premium =
+    p.premium === null ? null : usd(p.premium, p.loanDecimals, p.loanSymbol);
   const options =
     premium === null
       ? `repay ${repay}, or add ${add}`
@@ -259,7 +291,7 @@ export function renderBellHeadsUp(p: BellHeadsUp, webOrigin: string): Rendered {
       `Gap Cover is not available for this closure: ${p.coverUnavailable}.`,
     );
   paras.push(dflt);
-  const url = `${webOrigin}/markets/${p.marketId}`;
+  const url = `${webOrigin}/markets/${p.marketId}${chainQuery(p, "?")}`;
   return {
     subject: `${p.asset}: action needed before ${deadline}`,
     text: `${paras.join("\n\n")}\n\n${url}`,
@@ -277,7 +309,9 @@ export function renderBellHeadsUp(p: BellHeadsUp, webOrigin: string): Rendered {
 
 export function renderBellOutcome(p: BellOutcome, webOrigin: string): Rendered {
   const premium =
-    p.premium === undefined ? null : usd(p.premium, p.loanDecimals);
+    p.premium === undefined
+      ? null
+      : usd(p.premium, p.loanDecimals, p.loanSymbol);
   const sale =
     p.saleQty === undefined
       ? null
@@ -314,7 +348,7 @@ export function renderBellOutcome(p: BellOutcome, webOrigin: string): Rendered {
       );
       break;
   }
-  const url = `${webOrigin}/markets/${p.marketId}`;
+  const url = `${webOrigin}/markets/${p.marketId}${chainQuery(p, "?")}`;
   const title =
     p.outcome === "precloseSale"
       ? `${p.asset}: pre-close sale of ${sale}`
@@ -345,13 +379,13 @@ export function renderReopenQueued(
   webOrigin: string,
 ): Rendered {
   const until = etClock(p.deadline);
-  const repay = usd(p.cureRepay, p.loanDecimals);
+  const repay = usd(p.cureRepay, p.loanDecimals, p.loanSymbol);
   const add = `${tokens(p.cureCollateral, p.collateralDecimals)} ${p.token}`;
   const lead =
     `${p.asset} reopened at ${price(p.openPrint)} and your loan's health factor is ${ratio(p.healthFactor)}, ` +
     `so it is queued for the reopen auction #${p.auctionId}.`;
   const cta = `You can leave the queue by repaying ${repay} or adding ${add} until ${until}.`;
-  const url = `${webOrigin}/markets/${p.marketId}`;
+  const url = `${webOrigin}/markets/${p.marketId}${chainQuery(p, "?")}`;
   const paras = [
     lead,
     cta,
@@ -388,20 +422,20 @@ export function renderAuctionSettled(
       : ` (${p.kind === "REOPEN" ? "open print" : "reference"} ${price(p.openPrint)}, ${change(p.pStar, p.openPrint)})`;
   const paras = [
     `Your ${p.asset} position was settled in ${KIND_WORD[p.kind]} #${p.auctionId}: ${sold} sold at ${price(p.pStar)}${ref}, ` +
-      `for ${usdNearest(p.proceeds, p.loanDecimals)}.`,
-    `Liquidation penalty ${usdNearest(p.penalty, p.loanDecimals)}; ${usdNearest(p.repaid, p.loanDecimals)} repaid your loan; ` +
-      `${usdNearest(p.refund, p.loanDecimals)} refunded to you.`,
+      `for ${usdNearest(p.proceeds, p.loanDecimals, p.loanSymbol)}.`,
+    `Liquidation penalty ${usdNearest(p.penalty, p.loanDecimals, p.loanSymbol)}; ${usdNearest(p.repaid, p.loanDecimals, p.loanSymbol)} repaid your loan; ` +
+      `${usdNearest(p.refund, p.loanDecimals, p.loanSymbol)} refunded to you.`,
   ];
   if (BigInt(p.shortfall) > 0n)
     paras.push(
-      `The sale did not cover the whole debt: a shortfall of ${usdNearest(p.shortfall, p.loanDecimals)} was absorbed by the protocol's loss layers.`,
+      `The sale did not cover the whole debt: a shortfall of ${usdNearest(p.shortfall, p.loanDecimals, p.loanSymbol)} was absorbed by the protocol's loss layers.`,
     );
   paras.push(
     p.healthFactorAfter === null
       ? "Your loan is fully repaid."
-      : `Your remaining debt is ${usdNearest(p.debtAfter, p.loanDecimals)} and your health factor is now ${ratio(p.healthFactorAfter)}.`,
+      : `Your remaining debt is ${usdNearest(p.debtAfter, p.loanDecimals, p.loanSymbol)} and your health factor is now ${ratio(p.healthFactorAfter)}.`,
   );
-  const url = `${webOrigin}/auctions/${p.auctionId}`;
+  const url = `${webOrigin}/auctions/${p.auctionId}${chainQuery(p, "?")}`;
   return {
     subject: `${p.asset}: ${KIND_WORD[p.kind]} settled (${sold} at ${price(p.pStar)})`,
     text: `${paras.join("\n\n")}\n\n${url}`,
@@ -426,20 +460,20 @@ export function renderNavSold(p: NavSold, webOrigin: string): Rendered {
       : `bought by the NAV underwriter pool at the floor, ${navPrice(p.price)} (no solver bid in the window)`;
   const paras = [
     `Your ${p.asset} position was settled today (settlement #${p.settlementId}): ${sold} ${how}, ` +
-      `for ${usdNearest(p.proceeds, p.loanDecimals)}.`,
-    `Liquidation penalty ${usdNearest(p.penalty, p.loanDecimals)}; ${usdNearest(p.repaid, p.loanDecimals)} repaid your loan; ` +
-      `${usdNearest(p.refund, p.loanDecimals)} refunded to you.`,
+      `for ${usdNearest(p.proceeds, p.loanDecimals, p.loanSymbol)}.`,
+    `Liquidation penalty ${usdNearest(p.penalty, p.loanDecimals, p.loanSymbol)}; ${usdNearest(p.repaid, p.loanDecimals, p.loanSymbol)} repaid your loan; ` +
+      `${usdNearest(p.refund, p.loanDecimals, p.loanSymbol)} refunded to you.`,
   ];
   if (BigInt(p.shortfall) > 0n)
     paras.push(
-      `The sale did not cover the whole debt: a shortfall of ${usdNearest(p.shortfall, p.loanDecimals)} was absorbed by the protocol's loss layers.`,
+      `The sale did not cover the whole debt: a shortfall of ${usdNearest(p.shortfall, p.loanDecimals, p.loanSymbol)} was absorbed by the protocol's loss layers.`,
     );
   paras.push(
     p.healthFactorAfter === null
       ? "Your loan is fully repaid."
-      : `Your remaining debt is ${usdNearest(p.debtAfter, p.loanDecimals)} and your health factor is now ${ratio(p.healthFactorAfter)}.`,
+      : `Your remaining debt is ${usdNearest(p.debtAfter, p.loanDecimals, p.loanSymbol)} and your health factor is now ${ratio(p.healthFactorAfter)}.`,
   );
-  const url = `${webOrigin}/settlements/${p.settlementId}`;
+  const url = `${webOrigin}/settlements/${p.settlementId}${chainQuery(p, "?")}`;
   return {
     subject: `${p.asset}: position settled (${sold} at ${navPrice(p.price)})`,
     text: `${paras.join("\n\n")}\n\n${url}`,
@@ -463,14 +497,17 @@ export function renderEpochSettled(
   webOrigin: string,
 ): Rendered {
   const d = p.loanDecimals;
-  const px = (v: string) => `$${decimalNearest(v, d, 6)}`;
+  const px = (v: string) =>
+    p.loanSymbol
+      ? `${decimalNearest(v, d, 6)} ${p.loanSymbol}`
+      : `$${decimalNearest(v, d, 6)}`;
   const paras = [
-    `Epoch ${p.epochId} of the ${POOL[p.stack]} settled. Premiums ${usdNearest(p.premiums, d)}, risk fees ${usdNearest(p.fees, d)}, ` +
-      `penalties ${usdNearest(p.penalties, d)}, forfeited bonds ${usdNearest(p.bonds, d)}; losses paid ${usdNearest(p.losses, d)}.`,
+    `Epoch ${p.epochId} of the ${POOL[p.stack]} settled. Premiums ${usdNearest(p.premiums, d, p.loanSymbol)}, risk fees ${usdNearest(p.fees, d, p.loanSymbol)}, ` +
+      `penalties ${usdNearest(p.penalties, d, p.loanSymbol)}, forfeited bonds ${usdNearest(p.bonds, d, p.loanSymbol)}; losses paid ${usdNearest(p.losses, d, p.loanSymbol)}.`,
     `The new share price is ${px(p.sharePriceAfter)}${p.sharePriceBefore === null ? "" : ` (was ${px(p.sharePriceBefore)})`}. ` +
-      `Your ${shares(p.shares)} shares are worth ${usdNearest(p.value, d)}.`,
+      `Your ${shares(p.shares)} shares are worth ${usdNearest(p.value, d, p.loanSymbol)}.`,
   ];
-  const url = `${webOrigin}/underwrite`;
+  const url = `${webOrigin}/underwrite${chainQuery(p, "?")}`;
   return {
     subject: `Underwriter pool epoch ${p.epochId} settled: share price ${px(p.sharePriceAfter)}`,
     text: `${paras.join("\n\n")}\n\n${url}`,
@@ -488,8 +525,8 @@ export function renderWithdrawalClaimable(
   p: WithdrawalClaimable,
   webOrigin: string,
 ): Rendered {
-  const amount = usdNearest(p.assets, p.loanDecimals);
-  const url = `${webOrigin}/underwrite?claim=${p.stack}:${p.epochId}`;
+  const amount = usdNearest(p.assets, p.loanDecimals, p.loanSymbol);
+  const url = `${webOrigin}/underwrite?claim=${p.stack}:${p.epochId}${chainQuery(p, "&")}`;
   const lead = `Your withdrawal of ${shares(p.shares)} ${p.stack === "equity" ? "cfUP-EQ" : "cfUP-NAV"} shares settled with epoch ${p.epochId}: ${amount} is ready to claim.`;
   return {
     subject: `Withdrawal ready: claim ${amount}`,
@@ -499,6 +536,74 @@ export function renderWithdrawalClaimable(
       title: `Claim ${amount}`,
       body: lead,
       tag: `withdraw:${p.stack}:${p.epochId}`,
+      url,
+    },
+  };
+}
+
+/** A step above 2 % opens a corporate action (no borrow, no liquidation) a day before it takes effect; a
+ * smaller one (a dividend) is applied at the next poke with no pause (ADR-0119). */
+export const MULTIPLIER_AUTO_STEP_BPS = 200n;
+export function isLargeStep(oldM: string, newM: string): boolean {
+  const o = BigInt(oldM);
+  const n = BigInt(newM);
+  if (o === 0n) return true;
+  const d = n > o ? n - o : o - n;
+  return d * 10_000n > MULTIPLIER_AUTO_STEP_BPS * o;
+}
+
+export function renderCorporateAction(
+  p: CorporateAction,
+  webOrigin: string,
+): Rendered {
+  const url = `${webOrigin}/markets/${p.marketId}${chainQuery(p, "?")}`;
+  const on = p.chainName ? ` on ${p.chainName}` : "";
+  const m = (v: string | null) => (v === null ? "?" : ratio(v));
+  let subject: string;
+  let paras: string[];
+  switch (p.stage) {
+    case "scheduled": {
+      const large =
+        p.oldMultiplier !== null &&
+        p.newMultiplier !== null &&
+        isLargeStep(p.oldMultiplier, p.newMultiplier);
+      const when = p.effectiveAt === null ? "soon" : etTime(p.effectiveAt);
+      subject = `${p.asset}: ${p.token} multiplier changes ${when}`;
+      paras = [
+        `The issuer of ${p.token}${on} scheduled a multiplier change from ${m(p.oldMultiplier)} to ${m(p.newMultiplier)} shares per token, effective ${when}.`,
+        large
+          ? `From a day before it takes effect, ${p.asset} is in a corporate action: no new borrowing and no liquidations until post-action prices arrive. Your token balance does not change; its value moves with the multiplier.`
+          : `This is a small step (at most 2 %), applied at once with no pause. Your token balance does not change; its value moves with the multiplier.`,
+      ];
+      break;
+    }
+    case "cancelled":
+      subject = `${p.asset}: ${p.token} multiplier change cancelled`;
+      paras = [
+        `The scheduled multiplier change of ${p.token}${on} was cancelled. Nothing changes for your position.`,
+      ];
+      break;
+    case "begun":
+      subject = `${p.asset}: corporate action started`;
+      paras = [
+        `${p.asset}${on} is in a corporate action (a multiplier change). New borrowing and liquidations are paused until post-action prices arrive. Repaying and adding collateral still work.`,
+      ];
+      break;
+    case "confirmed":
+      subject = `${p.asset}: corporate action over`;
+      paras = [
+        `${p.asset}'s corporate action${on} is over: ${p.token} now counts ${m(p.newMultiplier)} shares per token, and borrowing and liquidations resume. Check your health factor at the new price.`,
+      ];
+      break;
+  }
+  return {
+    subject,
+    text: `${paras.join("\n\n")}\n\n${url}`,
+    html: html(paras) + link(url, `Open your ${p.asset} position`),
+    push: {
+      title: subject,
+      body: paras[0]!,
+      tag: `corp:${p.chainId ?? 0}:${p.marketId}:${p.stage}`,
       url,
     },
   };
@@ -565,6 +670,10 @@ export function render(
     case "withdrawal_claimable":
       return parsed(WithdrawalClaimable, payload, (d) =>
         renderWithdrawalClaimable(d, webOrigin),
+      );
+    case "corporate_action":
+      return parsed(CorporateAction, payload, (d) =>
+        renderCorporateAction(d, webOrigin),
       );
     case "email_verify": {
       const r = EmailVerify.safeParse(payload);

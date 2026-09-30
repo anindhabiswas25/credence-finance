@@ -29,6 +29,7 @@ pub mod abi {
         #[sol(rpc)]
         interface IERC20Decimals {
             function decimals() external view returns (uint8);
+            function symbol() external view returns (string);
         }
     }
 }
@@ -106,6 +107,8 @@ pub struct RiskCtx {
     pub valuation_price: U256,
     pub coll_dec: u8,
     pub loan_dec: u8,
+    /// The loan token's symbol (tUSDG on Robinhood Chain, USDC on Arbitrum; ADR-0014: never assumed).
+    pub loan_symbol: String,
     pub pool: Address,
     pub engine: Address,
     /// Annual borrow rate (WAD), for projecting debt over a later closure.
@@ -347,6 +350,7 @@ pub async fn read_ctx(
         .decimals()
         .call()
         .await?;
+    let loan_symbol = token_symbol(p, params.loanToken).await?;
     let max_eff = max_ltv_eff(
         U256::from(params.maxLtv),
         now,
@@ -401,6 +405,7 @@ pub async fn read_ctx(
         valuation_price: v,
         coll_dec,
         loan_dec,
+        loan_symbol,
         pool: w.pool,
         engine: w.engine,
         borrow_rate: m.borrowRate(id).block(at).call().await?,
@@ -463,6 +468,24 @@ pub async fn preview_cover(
         .call()
         .await?;
     Ok((r.premium, r.uAfter))
+}
+
+/// A token's `symbol()`, read once per token per process (symbols don't change).
+async fn token_symbol(p: &DynProvider, token: Address) -> Result<String> {
+    static CACHE: std::sync::OnceLock<
+        std::sync::Mutex<std::collections::HashMap<Address, String>>,
+    > = std::sync::OnceLock::new();
+    let cache = CACHE.get_or_init(Default::default);
+    if let Some(s) = cache.lock().expect("symbol cache").get(&token) {
+        return Ok(s.clone());
+    }
+    let s = IERC20Decimals::new(token, p)
+        .symbol()
+        .call()
+        .await
+        .with_context(|| format!("symbol() of {token}"))?;
+    cache.lock().expect("symbol cache").insert(token, s.clone());
+    Ok(s)
 }
 
 #[cfg(test)]
@@ -538,6 +561,7 @@ mod tests {
             valuation_price: wad("180"),
             coll_dec: 18,
             loan_dec: 6,
+            loan_symbol: "tUSDG".into(),
             pool: Address::ZERO,
             engine: Address::ZERO,
             borrow_rate: wad("0.0733"),

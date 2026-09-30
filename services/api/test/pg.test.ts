@@ -75,12 +75,14 @@ describe.skipIf(!url)("pg MeRepo", () => {
     ]);
     const key = `test:${randomBytes(6).toString("hex")}`;
     await me.enqueue({
+      chainId: 0,
       dedupeKey: key,
       address: a,
       event: "email_verify",
       payload: { email: "z@example.com", link: "https://x/y" },
     });
     await me.enqueue({
+      chainId: 0,
       dedupeKey: key,
       address: a,
       event: "email_verify",
@@ -91,14 +93,39 @@ describe.skipIf(!url)("pg MeRepo", () => {
       { n: number },
     ];
     expect(n).toBe(1);
-    expect(await me.requestAllowlist(a, new Date())).toEqual({
+    // ADR-0014: the same dedupe key on another chain is another job
+    await me.enqueue({
+      chainId: 46630,
+      dedupeKey: key,
+      address: a,
+      event: "email_verify",
+      payload: { email: "z@example.com", link: "https://x/y" },
+    });
+    const [{ m }] = (await repos!
+      .sql`select count(*)::int as m from app.notification_job where dedupe_key = ${key}`) as unknown as [
+      { m: number },
+    ];
+    expect(m).toBe(2);
+    // one attestation allowlists on each served chain, idempotent per chain
+    expect(await me.requestAllowlist(a, new Date(), [412346])).toEqual({
       status: "pending",
       created: true,
+      chains: [{ chainId: 412346, status: "pending", created: true }],
     });
-    expect(await me.requestAllowlist(a, new Date())).toEqual({
+    expect(await me.requestAllowlist(a, new Date(), [412346, 421614])).toEqual({
       status: "pending",
-      created: false,
+      created: true,
+      chains: [
+        { chainId: 412346, status: "pending", created: false },
+        { chainId: 421614, status: "pending", created: true },
+      ],
     });
+    expect((await me.account(a)).allowlistChains).toEqual([
+      { chainId: 412346, status: "pending", txHash: null },
+      { chainId: 421614, status: "pending", txHash: null },
+    ]);
+    await repos!
+      .sql`delete from app.allowlist_request where chain_id = 421614 and address = ${Buffer.from(a.slice(2), "hex")}`;
     expect((await me.account(a)).allowlist).toEqual({
       status: "pending",
       txHash: null,

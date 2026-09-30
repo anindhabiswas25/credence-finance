@@ -2,7 +2,14 @@
 // Repositories are interfaces so route tests run without a database.
 import postgres from "postgres";
 import { getAddress, type Address, type Hex } from "viem";
-import type { AccountView, MeRepo, Pref, PushSub } from "./me.ts";
+import {
+  allowlistStatus,
+  type AccountView,
+  type AllowlistResult,
+  type MeRepo,
+  type Pref,
+  type PushSub,
+} from "./me.ts";
 import type { StreamSource } from "./stream.ts";
 import { pgRiskTransferRepo } from "./rt.ts";
 import { pgSettlementRepo } from "./settlement.ts";
@@ -326,8 +333,13 @@ export function pgRepos(databaseUrl: string, indexerSchema: string) {
         await sql`select endpoint from app.push_subscription where address = ${addr(a)} order by id`;
       const prefs =
         await sql`select event, channel, enabled from app.notification_pref where address = ${addr(a)}`;
-      const [al] =
-        await sql`select status, tx_hash from app.allowlist_request where address = ${addr(a)}`;
+      const al =
+        await sql`select chain_id, status, tx_hash from app.allowlist_request where address = ${addr(a)} order by chain_id`;
+      const chains = al.map((r) => ({
+        chainId: Number(r.chain_id),
+        status: String(r.status),
+        txHash: r.tx_hash ? bufToHex(r.tx_hash) : null,
+      }));
       return {
         email: acct?.email ?? null,
         emailVerified: !!acct?.email_verified_at,
@@ -344,12 +356,13 @@ export function pgRepos(databaseUrl: string, indexerSchema: string) {
         testnetAttestedAt: acct?.testnet_attested_at
           ? new Date(acct.testnet_attested_at)
           : null,
-        allowlist: al
+        allowlist: chains.length
           ? {
-              status: String(al.status),
-              txHash: al.tx_hash ? bufToHex(al.tx_hash) : null,
+              status: allowlistStatus(chains.map((x) => x.status)),
+              txHash: chains.length === 1 ? chains[0]!.txHash : null,
             }
           : null,
+        allowlistChains: chains,
       } satisfies AccountView;
     },
     async setEmail(a, email, tokenHash, expiresAt) {
@@ -396,19 +409,39 @@ export function pgRepos(databaseUrl: string, indexerSchema: string) {
       }
     },
     async enqueue(j) {
-      await sql`insert into app.notification_job (dedupe_key, address, event, payload) values (${j.dedupeKey}, ${addr(j.address)}, ${j.event}, ${sql.json(j.payload as postgres.JSONValue)})
-                on conflict (dedupe_key) do nothing`;
+      await sql`insert into app.notification_job (chain_id, dedupe_key, address, event, payload) values (${j.chainId}, ${j.dedupeKey}, ${addr(j.address)}, ${j.event}, ${sql.json(j.payload as postgres.JSONValue)})
+                on conflict (chain_id, dedupe_key) do nothing`;
     },
-    async requestAllowlist(a, now) {
+    async requestAllowlist(a, now, chainIds) {
       return sql.begin(async (tx) => {
         await ensure(tx, a);
         await tx`update app.account set testnet_attested_at = coalesce(testnet_attested_at, ${now}) where address = ${addr(a)}`;
-        const ins =
-          await tx`insert into app.allowlist_request (address, requested_at) values (${addr(a)}, ${now}) on conflict (address) do nothing returning status`;
-        if (ins[0]) return { status: String(ins[0].status), created: true };
-        const [r] =
-          await tx`select status from app.allowlist_request where address = ${addr(a)}`;
-        return { status: String(r!.status), created: false };
+        const chains: AllowlistResult["chains"] = [];
+        for (const id of chainIds) {
+          const ins =
+            await tx`insert into app.allowlist_request (chain_id, address, requested_at) values (${id}, ${addr(a)}, ${now})
+                     on conflict (chain_id, address) do nothing returning status`;
+          if (ins[0]) {
+            chains.push({
+              chainId: id,
+              status: String(ins[0].status),
+              created: true,
+            });
+            continue;
+          }
+          const [r] =
+            await tx`select status from app.allowlist_request where chain_id = ${id} and address = ${addr(a)}`;
+          chains.push({
+            chainId: id,
+            status: String(r!.status),
+            created: false,
+          });
+        }
+        return {
+          status: allowlistStatus(chains.map((x) => x.status)),
+          created: chains.some((x) => x.created),
+          chains,
+        };
       });
     },
   };
@@ -583,7 +616,7 @@ export function memoryRepos(
       push: Map<string, PushSub>;
       prefs: Pref[];
       attested: Date | null;
-      allowlist: string | null;
+      allowlist: Map<number, string>;
     }
   >();
   const acct = (a: Address) => {
@@ -599,7 +632,7 @@ export function memoryRepos(
           push: new Map(),
           prefs: [],
           attested: null,
-          allowlist: null,
+          allowlist: new Map(),
         }),
       );
     return x;
@@ -609,6 +642,7 @@ export function memoryRepos(
     { address: Address; email: string; expiresAt: Date }
   >();
   const jobs: {
+    chainId: number;
     dedupeKey: string;
     address: Address;
     event: string;
@@ -624,7 +658,14 @@ export function memoryRepos(
         push: [...x.push.keys()].map((endpoint) => ({ endpoint })),
         prefs: x.prefs,
         testnetAttestedAt: x.attested,
-        allowlist: x.allowlist ? { status: x.allowlist, txHash: null } : null,
+        allowlist: x.allowlist.size
+          ? { status: allowlistStatus([...x.allowlist.values()]), txHash: null }
+          : null,
+        allowlistChains: [...x.allowlist].map(([chainId, status]) => ({
+          chainId,
+          status,
+          txHash: null,
+        })),
       };
     },
     async setEmail(a, email, tokenHash, expiresAt) {
@@ -667,14 +708,26 @@ export function memoryRepos(
         ];
     },
     async enqueue(j) {
-      if (!jobs.some((x) => x.dedupeKey === j.dedupeKey)) jobs.push(j);
+      if (
+        !jobs.some(
+          (x) => x.chainId === j.chainId && x.dedupeKey === j.dedupeKey,
+        )
+      )
+        jobs.push(j);
     },
-    async requestAllowlist(a, now) {
+    async requestAllowlist(a, now, chainIds) {
       const x = acct(a);
       x.attested ??= now;
-      if (x.allowlist) return { status: x.allowlist, created: false };
-      x.allowlist = "pending";
-      return { status: "pending", created: true };
+      const chains = chainIds.map((chainId) => {
+        const had = x.allowlist.get(chainId);
+        if (!had) x.allowlist.set(chainId, "pending");
+        return { chainId, status: had ?? "pending", created: !had };
+      });
+      return {
+        status: allowlistStatus(chains.map((c) => c.status)),
+        created: chains.some((c) => c.created),
+        chains,
+      };
     },
   };
   return { clock, auth, core, me, jobs, close: async () => {} };

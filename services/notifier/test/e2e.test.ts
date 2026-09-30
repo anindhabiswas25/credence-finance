@@ -275,6 +275,7 @@ describe.skipIf(!DB)("notifier e2e (Postgres)", () => {
     const kM = `J2:12:${MAYA_ADDR}:T-2h`;
     expect(
       await enqueue(sql, {
+        chainId: 412346,
         dedupeKey: kP,
         address: PRIYA_ADDR,
         event: "bell_headsup",
@@ -283,6 +284,7 @@ describe.skipIf(!DB)("notifier e2e (Postgres)", () => {
     ).not.toBeNull();
     expect(
       await enqueue(sql, {
+        chainId: 412346,
         dedupeKey: kM,
         address: MAYA_ADDR,
         event: "bell_headsup",
@@ -292,6 +294,7 @@ describe.skipIf(!DB)("notifier e2e (Postgres)", () => {
     // the keeper re-running J2 is deduplicated
     expect(
       await enqueue(sql, {
+        chainId: 412346,
         dedupeKey: kP,
         address: PRIYA_ADDR,
         event: "bell_headsup",
@@ -389,6 +392,7 @@ describe.skipIf(!DB)("notifier e2e (Postgres)", () => {
     await sql`insert into app.account (address, email, email_verified_at) values (${buf(a)}, 'down@example.com', now())`;
     p.failures.set("down@example.com", 99);
     await enqueue(sql, {
+      chainId: 412346,
       dedupeKey: "dead-1",
       address: a,
       event: "bell_outcome",
@@ -403,6 +407,7 @@ describe.skipIf(!DB)("notifier e2e (Postgres)", () => {
       },
     });
     await enqueue(sql, {
+      chainId: 412346,
       dedupeKey: "late-1",
       address: PRIYA_ADDR,
       event: "bell_headsup",
@@ -421,12 +426,14 @@ describe.skipIf(!DB)("notifier e2e (Postgres)", () => {
       },
     });
     await enqueue(sql, {
+      chainId: 412346,
       dedupeKey: "bad-1",
       address: PRIYA_ADDR,
       event: "bell_headsup",
       payload: { asset: "NVDA" },
     });
     await enqueue(sql, {
+      chainId: 412346,
       dedupeKey: "none-1",
       address: addr(0xb2),
       event: "bell_headsup",
@@ -464,6 +471,7 @@ describe.skipIf(!DB)("notifier e2e (Postgres)", () => {
     const before = p.hits.length;
     for (let i = 0; i < 30; i++) {
       await enqueue(sql, {
+        chainId: 412346,
         dedupeKey: `many-${i}`,
         address: a,
         event: "bell_outcome",
@@ -480,6 +488,7 @@ describe.skipIf(!DB)("notifier e2e (Postgres)", () => {
     }
     // a job stuck in `sending` by a worker that died 10 minutes ago
     await enqueue(sql, {
+      chainId: 412346,
       dedupeKey: "stuck-1",
       address: a,
       event: "bell_outcome",

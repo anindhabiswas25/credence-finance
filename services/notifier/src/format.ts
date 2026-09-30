@@ -25,9 +25,15 @@ export function decimalUp(
   return dp > 0 ? `${group(int)}.${frac}` : group(int);
 }
 
-/** USD (the loan token), rounded up to the cent: "$2,896.78". */
-export function usd(base: bigint | string, decimals = 6): string {
-  return `$${decimalUp(base, decimals, 2)}`;
+/** The loan token, rounded up to the cent: "2,896.78 tUSDG" with the market's symbol (ADR-0014: each market's
+ * own loan token), else "$2,896.78". */
+export function usd(
+  base: bigint | string,
+  decimals = 6,
+  symbol?: string,
+): string {
+  const v = decimalUp(base, decimals, 2);
+  return symbol ? `${v} ${symbol}` : `$${v}`;
 }
 
 /** Collateral tokens to add, rounded up to 3 decimals: "54.419". */
@@ -78,8 +84,13 @@ export function decimalNearest(
 }
 
 /** An amount the user receives or a figure they read (not one they must pay): nearest cent. */
-export function usdNearest(base: bigint | string, decimals = 6): string {
-  return `$${decimalNearest(base, decimals, 2)}`;
+export function usdNearest(
+  base: bigint | string,
+  decimals = 6,
+  symbol?: string,
+): string {
+  const v = decimalNearest(base, decimals, 2);
+  return symbol ? `${v} ${symbol}` : `$${v}`;
 }
 
 /** A WAD price per token: "$171.23". */

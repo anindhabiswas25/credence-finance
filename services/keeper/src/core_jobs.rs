@@ -486,6 +486,7 @@ impl Keeper {
                 "premium": prem.map(s),
                 "default": default,
                 "loanDecimals": ctx.loan_dec,
+                "loanSymbol": ctx.loan_symbol,
                 "collateralDecimals": ctx.coll_dec,
                 "expiresAt": t.bell_at,
             });
@@ -494,8 +495,9 @@ impl Keeper {
             }
             let dedupe = format!("J2:{}:{closure_id}:{owner:#x}:{stage}", m.id);
             let inserted = sqlx::query(
-                "insert into app.notification_job (dedupe_key, address, event, payload) values ($1, $2, 'bell_headsup', $3)
-                 on conflict (dedupe_key) do nothing",
+                "insert into app.notification_job (chain_id, dedupe_key, address, event, payload)
+                 values (ops.chain(), $1, $2, 'bell_headsup', $3::jsonb || jsonb_build_object('chainId', ops.chain()))
+                 on conflict (chain_id, dedupe_key) do nothing",
             )
             .bind(&dedupe)
             .bind(owner.as_slice())
@@ -898,7 +900,7 @@ impl Keeper {
         let Some(registry) = core.registry else {
             return Ok(());
         };
-        let rows = sqlx::query("select address from app.allowlist_request where status = 'pending' order by requested_at limit 50")
+        let rows = sqlx::query("select address from app.allowlist_request where chain_id = ops.chain() and status = 'pending' order by requested_at limit 50")
             .fetch_all(&mut *conn)
             .await?;
         if rows.is_empty() {
@@ -941,7 +943,7 @@ impl Keeper {
             Err(e) => ("failed", None, Some(e.to_string())),
         };
         for a in &addrs {
-            sqlx::query("update app.allowlist_request set status = $2, tx_hash = $3, last_error = $4, updated_at = now() where address = $1")
+            sqlx::query("update app.allowlist_request set status = $2, tx_hash = $3, last_error = $4, updated_at = now() where chain_id = ops.chain() and address = $1")
                 .bind(a.as_slice())
                 .bind(status)
                 .bind(hash.map(|h| h.to_vec()))

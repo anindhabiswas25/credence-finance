@@ -135,6 +135,9 @@ export async function finish(
 }
 
 export interface EnqueueArgs {
+  /** ADR-0014: the chain the event happened on (0: account-level, e.g. email verification). A dedupe key is
+   * unique per chain. */
+  chainId: number;
   dedupeKey: string;
   /** 0x-prefixed 20-byte address */
   address: string;
@@ -143,7 +146,7 @@ export interface EnqueueArgs {
   runAt?: Date;
 }
 
-/** Producers' side: insert once per dedupe key. Returns the job id, or null if it already existed. */
+/** Producers' side: insert once per (chain, dedupe key). Returns the job id, or null if it already existed. */
 export async function enqueue(
   sql: Sql,
   a: EnqueueArgs,
@@ -151,9 +154,9 @@ export async function enqueue(
   const addr = Buffer.from(a.address.replace(/^0x/, ""), "hex");
   if (addr.length !== 20) throw new Error(`bad address ${a.address}`);
   const rows = await sql`
-    insert into app.notification_job (dedupe_key, address, event, payload, run_at)
-    values (${a.dedupeKey}, ${addr}, ${a.event}, ${sql.json(a.payload as postgres.JSONValue)}, ${a.runAt ?? sql`now()`})
-    on conflict (dedupe_key) do nothing
+    insert into app.notification_job (chain_id, dedupe_key, address, event, payload, run_at)
+    values (${a.chainId}, ${a.dedupeKey}, ${addr}, ${a.event}, ${sql.json(a.payload as postgres.JSONValue)}, ${a.runAt ?? sql`now()`})
+    on conflict (chain_id, dedupe_key) do nothing
     returning id`;
   return rows[0] ? BigInt(rows[0].id) : null;
 }

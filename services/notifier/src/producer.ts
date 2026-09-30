@@ -11,11 +11,17 @@
 // | nav_sold             | lot_position settled in a NAV settlement (S4, §8.8)     | NAVSOLD:<settlement>:<owner>       |
 // | epoch_settled        | epoch settled × pool_holder                             | EPOCH:<pool>:<epoch>:<owner>       |
 // | withdrawal_claimable | epoch settled × pool_request withdraw of that epoch     | WITHDRAW:<pool>:<epoch>:<owner>    |
+// | corporate_action     | corporate_action scheduled/cancelled/begun/confirmed ×  | CORP:<kind>:<row id>:<owner>       |
+// |                      | positions with collateral in that asset's market        |                                    |
+//
+// Every job carries its chain (ADR-0014): dedupe keys are unique per chain, payloads name the chain and the
+// market's loan token.
 //
 // J2's Bell heads-ups are enqueued by the keeper (it computes the Bell natively).
 import type postgres from "postgres";
 import { enqueue, type Sql } from "./queue.ts";
 import type {
+  CorporateAction,
   AuctionSettled,
   NavSold,
   BellOutcome,
@@ -31,7 +37,16 @@ const KINDS = ["REOPEN", "INTRADAY", "EMERGENCY", "PRECLOSE"] as const;
 export interface Units {
   loanDecimals: number;
   collateralDecimals: number;
+  /** The market's loan token (tUSDG on 46630, USDC on 421614); templates print it. */
+  loanSymbol?: string;
 }
+
+/** The chain a scan reads (ADR-0014): every job and payload carries it. */
+export interface ChainTag {
+  chainId: number;
+  chainName: string;
+}
+const LOCAL: ChainTag = { chainId: 412346, chainName: "local devnode" };
 const DEFAULT_UNITS: Units = { loanDecimals: 6, collateralDecimals: 18 };
 
 /** Collateral value in loan base units: qty (collateral units) × price (WAD per whole token), rounded down. */
@@ -325,6 +340,31 @@ export function saleTooLatePayload(
   };
 }
 
+/** A corporate-action row (indexer `corporate_action`, joined to its market) → the payload. */
+export function corporateActionPayload(
+  r: {
+    kind: "scheduled" | "cancelled" | "begun" | "confirmed";
+    marketId: string;
+    oldValue: bigint | null;
+    newValue: bigint | null;
+    effectiveAt: bigint | null;
+    closureId: bigint | null;
+  },
+  l: Labels,
+): CorporateAction {
+  const t = l.ticker(r.marketId);
+  return {
+    stage: r.kind,
+    marketId: r.marketId,
+    asset: t,
+    token: `t${t}`,
+    oldMultiplier: r.oldValue === null ? null : r.oldValue.toString(),
+    newMultiplier: r.newValue === null ? null : r.newValue.toString(),
+    effectiveAt: r.effectiveAt === null ? null : Number(r.effectiveAt),
+    closureId: r.closureId === null ? null : r.closureId.toString(),
+  };
+}
+
 // ── the scan ─────────────────────────────────────────────────────────────────────────────────────
 
 const big = (v: unknown) => BigInt(v as string);
@@ -342,6 +382,7 @@ export async function scan(
   sinceTs: bigint,
   l: Labels,
   u: Units = DEFAULT_UNITS,
+  chain: ChainTag = LOCAL,
 ): Promise<ScanResult> {
   const ix = (t: string) => sql(`${schema}.${t}`);
   let enqueued = 0;
@@ -356,7 +397,21 @@ export async function scan(
     event: string,
     payload: object,
   ) => {
-    if ((await enqueue(sql, { dedupeKey, address, event, payload })) !== null)
+    const tagged = {
+      ...payload,
+      chainId: chain.chainId,
+      chainName: chain.chainName,
+      ...(u.loanSymbol ? { loanSymbol: u.loanSymbol } : {}),
+    };
+    if (
+      (await enqueue(sql, {
+        chainId: chain.chainId,
+        dedupeKey,
+        address,
+        event,
+        payload: tagged,
+      })) !== null
+    )
       enqueued++;
   };
   const since = sinceTs.toString();
@@ -583,6 +638,42 @@ export async function scan(
         `WITHDRAW:${pool}:${e.epoch_id}:${hex(w.owner)}`,
         hex(w.owner),
         "withdrawal_claimable",
+        payload,
+      );
+    }
+  }
+  // ERC-8056 corporate actions (ABIs v4): the early warning when the token schedules a multiplier change, its
+  // cancellation, and the clock's corporate-action window; to every borrower with collateral in that asset
+  const opt = (v: unknown) => (v === null || v === undefined ? null : big(v));
+  for (const r of (await sql`
+      select ca.id, ca.kind, ca.old_value, ca.new_value, ca.effective_at, ca.closure_id, ca.ts, m.market_id
+        from ${ix("corporate_action")} ca
+        join ${ix("market")} m
+          on (ca.token is not null and lower(m.collateral_token) = lower(ca.token))
+          or (ca.asset_id is not null and m.asset_id = ca.asset_id)
+       where ca.kind in ('scheduled', 'cancelled', 'begun', 'confirmed') and ca.ts >= ${since}`.catch(
+    (e: { code?: string }) => {
+      if (e.code === "42P01") return []; // an indexer without the v4 tables
+      throw e;
+    },
+  )) as postgres.Row[]) {
+    seen(r.ts);
+    const payload = corporateActionPayload(
+      {
+        kind: r.kind as CorporateAction["stage"],
+        marketId: hex(r.market_id),
+        oldValue: opt(r.old_value),
+        newValue: opt(r.new_value),
+        effectiveAt: opt(r.effective_at),
+        closureId: opt(r.closure_id),
+      },
+      l,
+    );
+    for (const h of await sql`select owner from ${ix("position")} where market_id = ${r.market_id} and collateral > 0`) {
+      await add(
+        `CORP:${r.kind}:${r.id}:${hex(h.owner)}`,
+        hex(h.owner),
+        "corporate_action",
         payload,
       );
     }

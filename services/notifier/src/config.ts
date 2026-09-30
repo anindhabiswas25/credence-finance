@@ -30,6 +30,11 @@ const Env = z.object({
   NOTIFIER_SCAN_MS: z.coerce.number().int().positive().default(5000),
   NOTIFIER_SCAN_LOOKBACK_S: z.coerce.number().int().nonnegative().default(3600),
   CHAIN_ID: z.coerce.number().int().default(412346),
+  /** ADR-0014: the chains this notifier scans, comma-separated (default: CHAIN_ID alone). Per chain:
+   * INDEXER_SCHEMA_<id> (default `ix_<id>`; INDEXER_SCHEMA with one chain), DEPLOYMENTS_FILE_<id> (default
+   * `deployments/<id>.json`; DEPLOYMENTS_FILE with one chain), LOAN_SYMBOL_<id> / LOAN_DECIMALS_<id>, and
+   * RPC_URL_<id> to read them from the loan token instead. */
+  NOTIFIER_CHAINS: z.string().optional(),
   DEPLOYMENTS_FILE: z.string().optional(),
   RESEND_API_KEY: z.string().optional(),
   RESEND_API_URL: z.string().default("https://api.resend.com"),
@@ -48,14 +53,74 @@ export interface Config {
   batch: number;
   pollMs: number;
   lockTimeoutS: number;
-  /** Indexer-triggered events (producer.ts). */
+  /** Indexer-triggered events (producer.ts), one scan per chain. */
   scan: {
-    schema: string;
     everyMs: number;
     lookbackS: number;
-    bookFile: string;
+    chains: ChainScanConfig[];
   };
   worker: WorkerConfig;
+}
+
+export interface ChainScanConfig {
+  chainId: number;
+  /** Ponder's views schema for this chain; empty disables its scan. */
+  schema: string;
+  bookFile: string;
+  /** Overrides; otherwise read from the loan token through `rpcUrl`, or known from a local book. */
+  loanSymbol?: string;
+  loanDecimals?: number;
+  rpcUrl?: string;
+}
+
+/** Display names for the chains we deploy to (payloads and templates carry them). */
+export const CHAIN_NAMES: Record<number, string> = {
+  46630: "Robinhood Chain testnet",
+  421614: "Arbitrum Sepolia",
+  42161: "Arbitrum One",
+  412346: "local devnode",
+  31337: "anvil",
+};
+export const chainName = (id: number) => CHAIN_NAMES[id] ?? `chain ${id}`;
+
+/** ADR-0014: one scan per served chain. With a single chain the legacy variables apply unchanged. */
+export function chainScans(
+  env: NodeJS.ProcessEnv,
+  e: z.infer<typeof Env>,
+): ChainScanConfig[] {
+  const ids = (e.NOTIFIER_CHAINS ?? String(e.CHAIN_ID))
+    .split(",")
+    .map((x) => x.trim())
+    .filter(Boolean)
+    .map((x) => {
+      const n = Number(x);
+      if (!Number.isInteger(n) || n <= 0)
+        throw new Error(`NOTIFIER_CHAINS: bad chain id ${x}`);
+      return n;
+    });
+  if (new Set(ids).size !== ids.length)
+    throw new Error("NOTIFIER_CHAINS: duplicate chain id");
+  const single = ids.length === 1;
+  return ids.map((id) => {
+    const v = (k: string) => set(env[`${k}_${id}`]);
+    const schema =
+      v("INDEXER_SCHEMA") ?? (single ? e.INDEXER_SCHEMA : `ix_${id}`);
+    if (!/^[a-z0-9_]*$/.test(schema))
+      throw new Error(`INDEXER_SCHEMA_${id}: bad schema ${schema}`);
+    const dec = v("LOAN_DECIMALS");
+    return {
+      chainId: id,
+      schema,
+      bookFile:
+        v("DEPLOYMENTS_FILE") ??
+        (single
+          ? (e.DEPLOYMENTS_FILE ?? `deployments/${id}.local.json`)
+          : `deployments/${id}.json`),
+      loanSymbol: v("LOAN_SYMBOL"),
+      loanDecimals: dec === undefined ? undefined : Number(dec),
+      rpcUrl: v("RPC_URL") ?? (single ? set(env.RPC_URL) : undefined),
+    };
+  });
 }
 
 const set = (v?: string) => (v && v.trim() ? v.trim() : undefined);
@@ -74,10 +139,9 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     pollMs: e.NOTIFIER_POLL_MS,
     lockTimeoutS: e.NOTIFIER_LOCK_TIMEOUT_S,
     scan: {
-      schema: e.INDEXER_SCHEMA,
       everyMs: e.NOTIFIER_SCAN_MS,
       lookbackS: e.NOTIFIER_SCAN_LOOKBACK_S,
-      bookFile: e.DEPLOYMENTS_FILE ?? `deployments/${e.CHAIN_ID}.local.json`,
+      chains: chainScans(env, e),
     },
     worker: {
       email: resend

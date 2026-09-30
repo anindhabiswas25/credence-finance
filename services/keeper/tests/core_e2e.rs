@@ -716,7 +716,7 @@ async fn core_jobs_match_the_contracts() {
         .execute(&pool_db)
         .await
         .unwrap();
-    sqlx::query("insert into app.allowlist_request (address) values ($1)")
+    sqlx::query("insert into app.allowlist_request (chain_id, address) values (ops.chain(), $1)")
         .bind(newcomer.as_slice())
         .execute(&pool_db)
         .await

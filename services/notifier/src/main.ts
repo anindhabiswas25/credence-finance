@@ -1,12 +1,13 @@
 // credence-notifier: consumes app.notification_job. Wakes on LISTEN notification_job (insert trigger)
 // and polls every NOTIFIER_POLL_MS as a safety net. Serves /healthz, /readyz and /metrics.
 import { createServer } from "node:http";
-import { loadConfig } from "./config.ts";
+import { chainName, loadConfig, type ChainScanConfig } from "./config.ts";
+import { resolveLoanToken } from "./loan.ts";
 import { log } from "./log.ts";
 import { createMetrics } from "./metrics.ts";
 import { connect } from "./queue.ts";
 import { runOnce } from "./worker.ts";
-import { labelsFromBook, scan, type Labels } from "./producer.ts";
+import { labelsFromBook, scan, type Labels, type Units } from "./producer.ts";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -68,34 +69,47 @@ async function loop() {
 
 await sql.listen("notification_job", () => wake());
 
-// indexer-triggered events (auto-cover, reopen queue, auction settled, epoch settled, withdrawal claimable)
-async function scanLoop() {
-  if (!cfg.scan.schema) return;
+// indexer-triggered events (auto-cover, reopen queue, auction settled, epoch settled, withdrawal claimable,
+// corporate actions), one scan per chain (ADR-0014), each with its own window
+async function scanLoop(c: ChainScanConfig) {
+  if (!c.schema) return;
   const root = resolve(
     fileURLToPath(new URL(".", import.meta.url)),
     "../../..",
   );
+  const tag = { chainId: c.chainId, chainName: chainName(c.chainId) };
   let labels: Labels | null = null;
+  let units: Units | null = null;
   let since = BigInt(Math.floor(Date.now() / 1000) - cfg.scan.lookbackS);
   while (!stopping) {
     try {
-      labels ??= labelsFromBook(
-        JSON.parse(readFileSync(resolve(root, cfg.scan.bookFile), "utf8")),
-      );
-      const r = await scan(sql, cfg.scan.schema, since, labels);
+      if (!labels || !units) {
+        const book = JSON.parse(
+          readFileSync(resolve(root, c.bookFile), "utf8"),
+        );
+        const loan = await resolveLoanToken(c, book);
+        labels = labelsFromBook(book);
+        units = {
+          loanDecimals: loan.decimals,
+          collateralDecimals: 18,
+          loanSymbol: loan.symbol,
+        };
+        log.info({ ...tag, schema: c.schema, loan }, "scanning chain");
+      }
+      const r = await scan(sql, c.schema, since, labels, units, tag);
       since = r.maxTs; // inclusive: rows of the same second are re-read, their dedupe keys hold
       if (r.enqueued > 0)
         log.info(
-          { enqueued: r.enqueued },
+          { ...tag, enqueued: r.enqueued },
           "indexer-triggered notifications enqueued",
         );
     } catch (e) {
-      log.warn({ err: String(e) }, "indexer scan failed");
+      log.warn({ ...tag, err: String(e) }, "indexer scan failed");
     }
     await new Promise((r) => setTimeout(r, cfg.scan.everyMs));
   }
 }
-void scanLoop();
+for (const c of cfg.scan.chains) void scanLoop(c);
 
 createServer(async (req, res) => {
   if (req.url === "/healthz") return void res.writeHead(200).end("ok");

@@ -367,6 +367,7 @@ export function createApp(deps: Deps) {
       publicApiOrigin: config.publicApiUrl,
       now,
       allowlistEnabled: config.allowlistEnabled,
+      allowlistChains: config.allowlistChains ?? [config.chainId],
       allowlistPerIpPerHour: config.allowlistPerIpPerHour,
       ipOf,
     });
@@ -459,8 +460,9 @@ export function createApp(deps: Deps) {
       ) {
         return deny("wrong domain, expired or not yet valid");
       }
-      if (parsed.chainId !== config.chainId)
-        return deny(`wrong chain (expected ${config.chainId})`);
+      const siweChains = config.siweChainIds ?? [config.chainId];
+      if (parsed.chainId === undefined || !siweChains.includes(parsed.chainId))
+        return deny(`wrong chain (expected ${siweChains.join(" or ")})`);
       if (!(await deps.auth.takeNonce(parsed.nonce, new Date(now()))))
         return deny("unknown, used or expired nonce");
       const ok = deps.publicClient

@@ -54,7 +54,10 @@ export interface AccountView {
   /** Explicit rows only; everything else is on (the notifier's defaults). */
   prefs: Pref[];
   testnetAttestedAt: Date | null;
+  /** The summary over every chain (`allowlistStatus`); null if never requested. */
   allowlist: { status: string; txHash: string | null } | null;
+  /** ADR-0014: one request per chain. */
+  allowlistChains?: AllowlistChain[];
 }
 
 export interface MeRepo {
@@ -73,15 +76,37 @@ export interface MeRepo {
   removePush(address: Address, endpoint: string): Promise<void>;
   setPrefs(address: Address, prefs: Pref[]): Promise<void>;
   enqueue(job: {
+    /** The chain the job is about; 0 for account-level jobs (email verification). */
+    chainId: number;
     dedupeKey: string;
     address: Address;
     event: string;
     payload: object;
   }): Promise<void>;
+  /** Queue the allowlist tx on each chain in `chainIds` (idempotent per chain). */
   requestAllowlist(
     address: Address,
     now: Date,
-  ): Promise<{ status: string; created: boolean }>;
+    chainIds: number[],
+  ): Promise<AllowlistResult>;
+}
+
+export interface AllowlistChain {
+  chainId: number;
+  status: string;
+  txHash: string | null;
+}
+export interface AllowlistResult {
+  status: string;
+  created: boolean;
+  chains: { chainId: number; status: string; created: boolean }[];
+}
+
+/** One status for several chains: the one that needs attention first (failed, pending, sent, then done). */
+export function allowlistStatus(statuses: string[]): string {
+  for (const s of ["failed", "pending", "sent", "done"])
+    if (statuses.includes(s)) return s;
+  return statuses[0] ?? "pending";
 }
 
 export interface MeDeps {
@@ -92,6 +117,8 @@ export interface MeDeps {
   publicApiOrigin: string;
   now: () => number;
   allowlistEnabled: boolean;
+  /** ADR-0014: the served testnet chains an attestation allowlists on (`?chain=` picks one). */
+  allowlistChains: number[];
   allowlistPerIpPerHour: number;
   ipOf: (c: Context) => string;
 }
@@ -126,6 +153,15 @@ const AccountBody = z
       allowlist: z
         .object({ status: z.string(), txHash: z.string().nullable() })
         .nullable(),
+      allowlistChains: z
+        .array(
+          z.object({
+            chainId: z.number(),
+            status: z.string(),
+            txHash: z.string().nullable(),
+          }),
+        )
+        .openapi({ description: "One allowlist request per chain (ADR-0014)" }),
     }),
   })
   .openapi("NotificationSettings");
@@ -156,6 +192,7 @@ function view(address: Address, a: AccountView) {
         ? Math.floor(a.testnetAttestedAt.getTime() / 1000)
         : null,
       allowlist: a.allowlist,
+      allowlistChains: a.allowlistChains ?? [],
     },
   };
 }
@@ -263,6 +300,7 @@ export function registerMeRoutes(app: OpenAPIHono, deps: MeDeps) {
         if (changed && email && token) {
           const link = `${deps.publicApiOrigin.replace(/\/$/, "")}/v1/me/email/verify?token=${token}`;
           await deps.me.enqueue({
+            chainId: 0,
             dedupeKey: `email_verify:${address.toLowerCase()}:${sha256(token).toString("hex").slice(0, 16)}`,
             address,
             event: "email_verify",
@@ -326,6 +364,12 @@ export function registerMeRoutes(app: OpenAPIHono, deps: MeDeps) {
       summary:
         "Testnet self-attestation: queue the ops allowlist transaction for the signed-in address (rate-limited)",
       request: {
+        query: z.object({
+          chain: z.string().optional().openapi({
+            description:
+              "Allowlist on this chain only (default: every served testnet chain)",
+          }),
+        }),
         body: {
           content: {
             "application/json": {
@@ -350,9 +394,20 @@ export function registerMeRoutes(app: OpenAPIHono, deps: MeDeps) {
                 address: z.string(),
                 status: z.string(),
                 created: z.boolean(),
+                chains: z.array(
+                  z.object({
+                    chainId: z.number(),
+                    status: z.string(),
+                    created: z.boolean(),
+                  }),
+                ),
               }),
             },
           },
+        },
+        400: {
+          description: "`chain` is not a served testnet chain",
+          content: { "application/json": { schema: ErrorBody } },
         },
         401: {
           description: "No session",
@@ -388,7 +443,24 @@ export function registerMeRoutes(app: OpenAPIHono, deps: MeDeps) {
           },
           429,
         );
-      const r = await deps.me.requestAllowlist(address, new Date(deps.now()));
+      const q = c.req.query("chain");
+      const chains =
+        q === undefined
+          ? deps.allowlistChains
+          : deps.allowlistChains.filter((x) => String(x) === q);
+      if (chains.length === 0)
+        return c.json(
+          {
+            error: "bad_request",
+            message: `chain must be one of ${deps.allowlistChains.join(", ")}`,
+          },
+          400,
+        );
+      const r = await deps.me.requestAllowlist(
+        address,
+        new Date(deps.now()),
+        chains,
+      );
       return c.json({ address, ...r }, 202);
     },
   );

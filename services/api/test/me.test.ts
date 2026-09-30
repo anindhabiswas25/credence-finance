@@ -252,12 +252,14 @@ describe("POST /v1/testnet/allowlist", () => {
       address: account.address,
       status: "pending",
       created: true,
+      chains: [{ chainId: 412346, status: "pending", created: true }],
     });
     const b = await post(app, cookie);
     expect(await b.json()).toEqual({
       address: account.address,
       status: "pending",
       created: false,
+      chains: [{ chainId: 412346, status: "pending", created: false }],
     });
     expect((await post(app, cookie)).status).toBe(429); // 3rd request from this IP within the hour
     expect((await post(app, cookie, "5.6.7.8")).status).toBe(202);
@@ -266,6 +268,59 @@ describe("POST /v1/testnet/allowlist", () => {
     ).json()) as Settings;
     expect(s.testnet.attestedAt).toBe(T0);
     expect(s.testnet.allowlist).toEqual({ status: "pending", txHash: null });
+  });
+
+  it("ADR-0014: one attestation queues every served testnet chain; ?chain= picks one", async () => {
+    const { app } = mk({
+      trustedProxies: ["10.0.0.1"],
+      allowlistPerIpPerHour: 10,
+      chains: [
+        { chainId: 46630, indexerSchema: "ix_46630" },
+        { chainId: 421614, indexerSchema: "ix_421614" },
+      ],
+      siweChainIds: [412346, 46630, 421614],
+      allowlistChains: [46630, 421614],
+    });
+    const cookie = await signIn(app);
+    const one = await app.request(
+      "/v1/testnet/allowlist?chain=46630",
+      {
+        method: "POST",
+        headers: {
+          cookie,
+          "content-type": "application/json",
+          "x-forwarded-for": "9.9.9.9",
+        },
+        body: JSON.stringify({ attest: true }),
+      },
+      { incoming: { socket: { remoteAddress: "10.0.0.1" } } },
+    );
+    expect(((await one.json()) as { chains: unknown }).chains).toEqual([
+      { chainId: 46630, status: "pending", created: true },
+    ]);
+    const all = (await (await post(app, cookie)).json()) as {
+      created: boolean;
+      chains: unknown;
+    };
+    expect(all.created).toBe(true);
+    expect(all.chains).toEqual([
+      { chainId: 46630, status: "pending", created: false },
+      { chainId: 421614, status: "pending", created: true },
+    ]);
+    const bad = await app.request(
+      "/v1/testnet/allowlist?chain=42161",
+      {
+        method: "POST",
+        headers: {
+          cookie,
+          "content-type": "application/json",
+          "x-forwarded-for": "9.9.9.9",
+        },
+        body: JSON.stringify({ attest: true }),
+      },
+      { incoming: { socket: { remoteAddress: "10.0.0.1" } } },
+    );
+    expect(bad.status).toBe(400);
   });
 
   it("requires the attestation and is off on mainnet", async () => {
