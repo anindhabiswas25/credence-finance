@@ -62,9 +62,12 @@ if [ "${DRY_RUN:-0}" = 1 ]; then
 else
   WS="$("$ROOT/stylus/risk-engine/scripts/stylus-ws.sh")"
   KS="$HOME/.foundry/keystores/$DEPLOYER_ACCOUNT"
+  # cargo stylus reads the password file verbatim (foundry trims it): a copy without the trailing newline
+  PW_STYLUS="$(umask 077 && mktemp)"; trap 'rm -f "$PW_STYLUS"' EXIT
+  tr -d '\r\n' < "$DEPLOYER_PASSWORD_FILE" > "$PW_STYLUS"
   program() { # contract args… → address
     (cd "$WS" && cargo stylus deploy --no-verify --contract "$1" --endpoint "$RPC" --keystore-path "$KS" \
-      --keystore-password-path "$DEPLOYER_PASSWORD_FILE" --constructor-args "${@:2}" 2>&1 | sed 's/\x1b\[[0-9;]*m//g') \
+      --keystore-password-path "$PW_STYLUS" --constructor-args "${@:2}" 2>&1 | sed 's/\x1b\[[0-9;]*m//g') \
       | grep -oE 'deployed code at address: 0x[0-9a-fA-F]{40}' | grep -oE '0x[0-9a-fA-F]{40}'
   }
   PRICING="$(program credence-risk-engine "$ROUTER" "$ROUTER")"; AUCTION="$(program credence-auction-math "$ROUTER")"
