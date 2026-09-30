@@ -37,3 +37,11 @@ From: PM · Date: 2026-09-30 15:30 IST · Repo: `/home/asus/Project/credence-fin
 - No run longer than ~30 min. The machine is shared by three engineers (16 threads, 15 GB): run heavy builds with `nice -n 19`, and don't stop or reset the devnode or the compose `postgres` (:5433) others use. Use your own compose project name for `infra/prod` tests (`-p credence-prod-test`) and different host ports.
 - Never print or commit a key, token or RPC key.
 - Post a board entry at every READY, blocker, finding, REQUEST. When the PM or user must decide, ask on the board and go on.
+
+## Amendment 2 (PM, 2026-09-30 17:20, from the user): the stack runs locally, alerts go in-app
+This overrides the host, TLS, domain and Telegram parts above. See the board entry "17:20 · PM · DECISION".
+- `infra/prod/` = **the local testnet stack on the user's machine**: both chains' services against the real testnets (46630, 421614), the API on `localhost` (the local frontend calls it; no TLS or domain), Postgres with the nightly backup, and Prometheus + Grafana + Alertmanager. Everything restarts on reboot (restart policies; the machine was rebooted today). Don't clash with the dev ports (:5433, :8547).
+- **Alerts:** Alertmanager → a webhook to B's `POST /v1/ops/alerts` (the in-app ops inbox, shared secret), plus Grafana locally. No Telegram. Every §16.1 rule still exists with a `chain` label and a promtool test; Phase 2's "every alert fires once" means once into the in-app ops inbox.
+- **Railway-ready, not deployed:** one Dockerfile per service, env-only config, a health endpoint each, no host paths or host networking; `docs/runbooks/railway.md` is a stub listing the services and their env. Multi-arch images aren't needed now.
+- **Deploy / rollback / backup / runbooks:** as above, but for local operation (`make services-deploy` brings the local stack to a new image tag; `make services-rollback` goes back).
+- **Your user-input REQUEST:** only the free RPC keys (2 providers per chain, named). No host, domain or Telegram.

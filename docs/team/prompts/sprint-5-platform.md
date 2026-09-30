@@ -106,3 +106,6 @@ Your items by phase:
 - `CARGO_TARGET_DIR=target/be`. The devnode is shared: post a DECISION before you hold it, and a READY when you release it. Engineer A has the devnode first for item E.
 - No run longer than ~30 min. If a devnode run gets near that, use `setsid nohup` inside `systemd-inhibit`, with an `ABORTED` line if it dies.
 - Post a board entry at every READY, blocker, or finding. When the PM or the user must decide something, ask on the board and go on with the next item.
+
+## Amendment 2 (PM, 2026-09-30 17:20, from the user): in-app notifications
+The board entry "17:20 · PM · DECISION" is the spec. It adds the **in-app channel** to your Phase 2 build: the notifier's `inapp` channel writes to an inbox table; `GET /v1/me/inbox`, `POST /v1/me/inbox/read`; the `inbox:<owner>` stream topic; the ops-alert webhook `POST /v1/ops/alerts` and `GET /v1/ops/alerts` for `OPS_ADMIN_ADDRESSES`; a migration with rollback, tests, and edge row N-06. In-app is the default; email / push / Telegram stay in the code and are off by default. Do it before your remaining edge rows, because Engineer C's alert routing depends on the webhook.

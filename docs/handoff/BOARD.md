@@ -774,3 +774,17 @@ Please add each test's name to its row (or tell me and I'll do it).
 
 ## 2026-09-30 16:55 · PM · DECISION
 **Engineer C (DevOps) is starting now. The 18:00 fallback in the 16:50 entry is cancelled: B does not take C's items back.** C's Phase 1 is the brief `docs/team/prompts/sprint-5-ops.md` plus the 16:30 ruling (schedule `nav-strike` once per USBANK session, with an alert if no NAV print lands). C builds on B's 16:05 interface REQUEST (private metrics ports, per-chain env, the keystore layout, the migrations). C's Phase 2 (obs-up with every alert, backup/restore, drills, deploy/rollback) starts on C's own Phase 1 READY; it doesn't wait for anyone else. A and B: carry on with Phase 2. Answer C's REQUESTs promptly.
+
+## 2026-09-30 17:20 · PM · DECISION
+**Amendment 2 to S5 (user): the testnet runs on the user's own machine, notifications are in-app, and Telegram waits until pre-mainnet.** The user's plan: (1) the backend and blockchain fully ready → (2) the testnet deploy (contracts on 46630 + 421614, services on **this machine**) → (3) the e2e flow checked on testnet, the frontend wired to it → (4) hosting on **Vercel (frontend) + Railway (backend)** → (5) pre-mainnet: the audit, Telegram, soaks. Steps 3–5 are after S5.
+- **Engineer B, a new Phase 2 build item: the in-app notification channel** (the default for users and ops):
+  - an `inapp` channel in the notifier that writes every user event to an inbox table keyed by chain id + address;
+  - `GET /v1/me/inbox` (paged, `?unread=1`) and `POST /v1/me/inbox/read` (SIWE);
+  - a live push on `/v1/stream` (an `inbox:<owner>` topic with the same session rules as OFF-04c);
+  - **ops alerts in-app:** `POST /v1/ops/alerts` as Alertmanager's webhook receiver (a shared secret) into an ops-alert table, and `GET /v1/ops/alerts` for the addresses in `OPS_ADMIN_ADDRESSES` (SIWE);
+  - a migration with rollback, tests, and an edge row (N-06: the inbox under a duplicate event and a reconnect).
+  - Email / push / Telegram stay in the code and are off by default.
+- **Engineer C, re-scoped:** no cloud host, no domain, no TLS, no Telegram. `infra/prod/` becomes **the local testnet stack on this machine**: both chains' services, the API on `localhost` for the local frontend, Postgres with backups, and Prometheus + Grafana + Alertmanager → B's `/v1/ops/alerts` webhook. Keep each service **Railway-ready** (one Dockerfile per service, env-only config, a health endpoint, no host paths; no Railway deploy now; the Railway runbook is only a stub). `services-deploy` / `services-rollback` run locally. The runbooks are for local operation. The `nav-strike` schedule stays. C's user-input REQUEST drops the host, the domain and Telegram: it covers only the free RPC keys (2 per chain).
+- **The user's inputs for the testnet deploy are now:** a deployer keystore with test ETH on 46630 and 421614; the Safe owner addresses; an `ETHERSCAN_API_KEY`; free RPC keys (2 providers per chain); and RedStone's written permission (+ the MSFT/GOOGL/AMZN extended-hours feeds). With the services on a private machine, D3 gates only a public link to the app, not the deploy itself.
+- **Moved to pre-mainnet** (A: add the rows to `docs/security/pre-mainnet.md`): the Telegram / email channels switched on; a cloud host with TLS and a domain; alert delivery outside the app.
+- Unchanged: A's Phase 2 and B's edge rows. S5 still ends with the testnet deploy and the post-deploy checks. The full e2e test on testnet and the frontend wiring are the next sprint.
