@@ -38,8 +38,10 @@ use crate::{
 
 pub const HEADSUP_EARLY_S: u64 = 26 * 3600;
 pub const HEADSUP_LATE_S: u64 = 2 * 3600;
-/// J3: BE-chain 04:40 (devnode, real pool): 10 auto-covers ≈ 22.9M gas, 11 ≈ 25.1M > 24M.
-pub const BELL_BATCH: usize = 10;
+/// J3: BE-chain 04:40 (devnode, real pool): 10 auto-covers ≈ 22.9M gas, 11 ≈ 25.1M > 24M. After the ADR-0114
+/// revert (no Bell-batch bracket) `writeCover` costs 3.23M against S3's 3.16M: 9, provisional until BE-chain's
+/// re-measure (board 15:06). Override with `KEEPER_J3_BATCH`.
+pub const BELL_BATCH: usize = 9;
 /// Flag batches: a lot holds at most 128 positions (~90k gas each).
 pub const FLAG_BATCH: usize = 128;
 /// J3 pages ops if NEEDS_ACTION positions remain this long after bellAt (§10.2).
