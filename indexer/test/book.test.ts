@@ -70,3 +70,12 @@ describe("rpcUrls", () => {
     expect(rpcUrls(1, {})).toEqual(["http://127.0.0.1:8547"]);
   });
 });
+
+describe("collateralTokenAddresses", () => {
+  it("watches every book token but the loan token (testnet `loan`, local `usdc`)", () => {
+    const book = {
+      tokens: { loan: "0x01", usdc: "0x02", tNVDA: "0x03", tTBILL: "0x04" },
+    } as unknown as Parameters<typeof collateralTokenAddresses>[0];
+    expect(collateralTokenAddresses(book)).toEqual(["0x03", "0x04"]);
+  });
+});

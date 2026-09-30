@@ -502,3 +502,45 @@ export const redemptionClaim = onchainTable(
   }),
   (table) => ({ byPool: index().on(table.pool, table.status) }),
 );
+
+/** The oracle's cached ERC-8056 multiplier per asset (`SharesPerTokenChanged`, ADR-0119): token value = share
+ * price × sharesPerToken / WAD. `corporateAction` follows `CorporateActionBegun` / `Confirmed` (the clock's
+ * `multiplierAction`). */
+export const multiplier = onchainTable("multiplier", (t) => ({
+  assetId: t.hex().primaryKey(),
+  sharesPerToken: t.bigint(), // null until the first SharesPerTokenChanged
+  corporateAction: t.boolean().notNull(),
+  closureId: t.bigint(), // of the open corporate action
+  updatedBlock: t.bigint().notNull(),
+  updatedAt: t.bigint().notNull(),
+}));
+
+/** A collateral token's scheduled multiplier update (`UIMultiplierUpdated`, often days ahead). The asset is
+ * the market whose `collateralToken` is `token`. */
+export const multiplierSchedule = onchainTable("multiplier_schedule", (t) => ({
+  token: t.hex().primaryKey(),
+  current: t.bigint().notNull(),
+  next: t.bigint(), // null once cancelled
+  effectiveAt: t.bigint(),
+  updatedBlock: t.bigint().notNull(),
+  updatedAt: t.bigint().notNull(),
+}));
+
+/** Every multiplier / corporate-action event, for the notifier: kind "scheduled" | "cancelled" (token events,
+ * `token` set) | "begun" | "confirmed" (clock events, `assetId` set) | "synced" (the oracle's cached value). */
+export const corporateAction = onchainTable(
+  "corporate_action",
+  (t) => ({
+    id: t.text().primaryKey(), // txHash:logIndex
+    kind: t.text().notNull(),
+    assetId: t.hex(),
+    token: t.hex(),
+    closureId: t.bigint(),
+    oldValue: t.bigint(),
+    newValue: t.bigint(),
+    effectiveAt: t.bigint(),
+    ts: t.bigint().notNull(),
+    block: t.bigint().notNull(),
+  }),
+  (table) => ({ byTs: index().on(table.ts) }),
+);

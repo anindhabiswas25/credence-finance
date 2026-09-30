@@ -10,13 +10,20 @@ import {
   CredencePriceFeedAbi,
   IAuctionHouseAbi,
   ICredenceMarketAbi,
+  IOracleAdapterAbi,
   IRiskEngineAbi,
+  IScaledUIAmountAbi,
   ISeniorVaultAbi,
   ISettlementAdapterAbi,
   ISolverAuctionAbi,
   IUnderwriterPoolAbi,
 } from "@credence/sdk";
-import { indexerBook, rpcUrls, stackAddresses } from "./src/book";
+import {
+  collateralTokenAddresses,
+  indexerBook,
+  rpcUrls,
+  stackAddresses,
+} from "./src/book";
 
 const chainId = Number(process.env.PONDER_CHAIN_ID ?? 412346);
 const rpcs = rpcUrls(chainId);
@@ -44,6 +51,8 @@ const houses = stackAddresses(book, "auctionHouse");
 const navBook = (book as { nav?: Record<string, string | undefined> }).nav;
 const settlementAdapter = navBook?.settlement as `0x${string}` | undefined;
 const solverAuction = navBook?.solverAuction as `0x${string}` | undefined;
+// S5 (ABIs v4, ADR-0119): collateral tokens' ERC-8056 schedule; every book token but the loan token
+const collateralTokens = collateralTokenAddresses(book);
 
 export default createConfig({
   database: process.env.DATABASE_URL
@@ -106,6 +115,18 @@ export default createConfig({
       chain: "credence",
       abi: ISolverAuctionAbi,
       address: solverAuction ?? ZERO,
+      startBlock: book.startBlock,
+    },
+    Oracle: {
+      chain: "credence",
+      abi: IOracleAdapterAbi,
+      address: book.shared.oracle ?? ZERO,
+      startBlock: book.startBlock,
+    },
+    CollateralToken: {
+      chain: "credence",
+      abi: IScaledUIAmountAbi,
+      address: collateralTokens.length ? collateralTokens : ZERO,
       startBlock: book.startBlock,
     },
     RiskEngine: {

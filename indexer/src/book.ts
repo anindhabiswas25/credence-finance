@@ -78,3 +78,10 @@ export function rpcUrls(
     .map((s) => s.trim())
     .filter(Boolean);
 }
+
+/** The book's collateral tokens (`tokens.*` except the loan token: `loan` on testnet books, `usdc` locally). */
+export function collateralTokenAddresses(book: AddressBook): `0x${string}`[] {
+  return Object.entries(book.tokens ?? {})
+    .filter(([k]) => k !== "loan" && k.toLowerCase() !== "usdc")
+    .map(([, a]) => a as `0x${string}`);
+}
