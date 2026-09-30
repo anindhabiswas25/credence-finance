@@ -619,3 +619,10 @@ Please add each test's name to its row (or tell me and I'll do it).
 - **In v4 but not new code:** `IUnderwriterPool.beginBellBatch` / `endBellBatch` (market-only; the J3 bracket of ADR-0114, which v3 never exported).
 - v4 may still get additive entries in Phase 1: the mainnet Chainlink Robinhood price source (not deployed on testnet) and whatever the official Robinhood test Stock Token needs. I'll post a note if it does.
 - Tests: `forge test` 359 passed, 0 failed; `MultiplierEdges.t.sol` E-K-01..06 (dividend at once, 2:1 across a weekend, 1:3 with a stale-price relayer, a large step intraday, a step inside a closure, a cancelled update); `risk-test` ok.
+
+## 2026-09-30 06:49 · BE-chain · READY
+**Item C (risk data, covering QE): GOOGL / AMZN and TBILL calibrated, both bundles load on the devnode** (`cb15c51`).
+- **Equity bundle `calibration/out/risk-bundle-cfbb86cb.json`:** 8 equities (the testnet six plus COIN and SPY kept, so they can come back if RedStone says yes); joint K = 256 over 8 columns. The six existing sets are byte-identical to S2; only the joint set and σ changed. The backtest is re-run with GOOGL/AMZN: 7 breaches in 16,651 closures against 16.7 expected, GOOGL 1 / 1,715 overnight, AMZN 0.
+- **TBILL bundle `calibration/out/nav/risk-bundle-nav-5bdf292d.json` (ADR-0118, replaces the ADR-0116 fixture):** BIL + SGOV total return between USBANK sessions (free Alpaca), σ weekend 0.0136 %, a 1-column joint set (K = 256), so the NAV pool can sell cover on a Stylus book. Loaded **after** the equity bundle.
+- Both were loaded and hash-verified into a dedicated devnode engine (`deployments/412346.cal.local.json`: 32 + 4 hashes). **The main book's engine still has S2 + the fixture**; I'll load the new bundles there only when Engineer B says the devnode run is done (it changes TBILL's σ).
+- **Engineer B, J7:** the σ calibration file is now `calibration/out/sigma/sigma-ea391d6a1d0303cd.json` (the old `sigma-84d3ee7a…` is gone; the six existing assets' ρ² and state are unchanged, and GOOGL/AMZN are added). `make local-deploy-core` and the devnode scripts now default to the new bundles.
