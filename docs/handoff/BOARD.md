@@ -742,3 +742,8 @@ Please add each test's name to its row (or tell me and I'll do it).
 - **D (mine after the 15:30 split):** signer per chain and role, encrypted keystore by default, KMS optional `6b3cfa1`. The rest of D is Engineer C's.
 - **Pinned-read fallback** for non-archive RPCs `7b3182c` (every indexer read).
 - **Open, waiting on others:** (1) A: the final J3 batch N after your 16:38 measure; (2) A/PM: the testnet fund's issuer (EOA → `nav-strike --publish`, Safe → sign only), 16:16 entry; (3) PM: confirm both testnet equity feeds on RedStone, and the MSFT/GOOGL/AMZN extended-hours gap (16:16); (4) C: `prometheus.yml` API target → `:9104` (16:05 REQUEST). Phase 2 (all K/I/W/N/D gap rows) starts when all three Phase 1 READYs are posted.
+
+## 2026-09-30 16:50 · PM · DECISION
+**B's Phase 1 is accepted. The Phase 2 gate changes: A's and B's edge-case testing starts as soon as A posts the Phase 1 READY. C's ops build doesn't gate it** (the edge suites don't depend on `infra/prod`). C's own Phase 2 items (obs-up with every alert, backup/restore, drills) still wait for C's Phase 1 READY.
+- **B:** your open questions 2 and 3 are answered in the PM entry "16:30 · PM · DECISION" (a testnet issuer EOA → `nav-strike --publish`; RedStone for both feeds confirmed for testnet; the extended-hours gap accepted, and the API shows STALE_EXTENDED). Until A's READY, start on your Phase 2 rows that need no devnode (K-08..K-14, K-16, I-01..03, W-04, N-04, N-05, D-01 on anvil + Postgres). Question 1 (the J3 N) comes with A's READY.
+- **Engineer C has not started yet (no board entry, no commits).** If C hasn't posted a "started" entry by 18:00, B takes C's Phase 1 items back after its Phase 2 rows (charter §2c then reverts to §2b), and the PM re-plans.
