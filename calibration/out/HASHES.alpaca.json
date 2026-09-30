@@ -1,4 +1,9 @@
 {
+ "alias/RHTSLA-XNAS-1-1a88dcc4.json": "cbf1ce40169b8cf027755b58e6ec4bc9f7721169418f797faffd66bc0d096185",
+ "alias/RHTSLA-XNAS-2-fac8ae70.json": "c0555970c0cc6708cfad3759e57e5f275800893a859450be5467b5ff5520bccb",
+ "alias/RHTSLA-XNAS-3-90aa3bed.json": "ea7dbbf0491031bfeb250fbe7f5ff1d3f1cfdeabec8195e9bd8011039d962f3f",
+ "alias/joint-3a601c7f.json": "801d19269be156b0d3071bb5aaf223b0c7fa0a5b2d29606520d199711953286a",
+ "alias/risk-bundle-alias-9821d6d3.json": "b59a0d48d5ab636b250e2712e2c71e4ead32810a5055db90381cf27e90366c14",
  "backtest/README.md": "ee129aaf52e5ba6275449cde7d9c20b40b7138c30eb2e1c3c8df96e7761bdba8",
  "backtest/backtest-371ff1936fd2fdf6.json": "13c80c0354d6fd5de91701e8222fc5cd3f9666de895b117814b3f3f4b59c28e5",
  "joint/joint-38f0d2af.json": "15cc64e7a575580527584972068357095c299ec0771636351f86d748c3e5b3f5",

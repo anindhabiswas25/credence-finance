@@ -1,0 +1,62 @@
+{
+ "format": "credence.risk-bundle/v1",
+ "jointSet": "joint-3a601c7f.json",
+ "meta": {
+  "adr": "ADR-0120",
+  "aliases": {
+   "RHTSLA:XNAS": "TSLA:XNAS"
+  },
+  "equityBundle": "risk-bundle-cfbb86cb.json",
+  "note": "Alias assets: the underlying's sets, \u03c3, floors and joint column under the alias key. Load AFTER the equity bundle."
+ },
+ "params": {
+  "alpha": "1000000000000000",
+  "beta": "975000000000000000",
+  "costOfCap": "150000000000000000",
+  "eta": "4000000000000000000",
+  "kStress": 256,
+  "kappa": "30000000000000000",
+  "minPremium": "500000",
+  "theta": "1000000000000000000",
+  "uMax": "500000000000000000"
+ },
+ "scenarioSets": [
+  "RHTSLA-XNAS-1-1a88dcc4.json",
+  "RHTSLA-XNAS-2-fac8ae70.json",
+  "RHTSLA-XNAS-3-90aa3bed.json"
+ ],
+ "sigmaFloors": {
+  "assetIds": [
+   "0xfb68229259484f219ab984404ec6b471e43f7df67b1dfd9118b56f3af39392ae",
+   "0xfb68229259484f219ab984404ec6b471e43f7df67b1dfd9118b56f3af39392ae",
+   "0xfb68229259484f219ab984404ec6b471e43f7df67b1dfd9118b56f3af39392ae"
+  ],
+  "closureTypes": [
+   1,
+   2,
+   3
+  ],
+  "floors": [
+   "14483963000000000",
+   "17771848000000000",
+   "21683546000000000"
+  ]
+ },
+ "sigmas": {
+  "assetIds": [
+   "0xfb68229259484f219ab984404ec6b471e43f7df67b1dfd9118b56f3af39392ae",
+   "0xfb68229259484f219ab984404ec6b471e43f7df67b1dfd9118b56f3af39392ae",
+   "0xfb68229259484f219ab984404ec6b471e43f7df67b1dfd9118b56f3af39392ae"
+  ],
+  "closureTypes": [
+   1,
+   2,
+   3
+  ],
+  "values": [
+   "15496672000000000",
+   "17771848000000000",
+   "21683546000000000"
+  ]
+ }
+}

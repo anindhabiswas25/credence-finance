@@ -267,8 +267,15 @@ def stage_nav(c: Ctx) -> None:
     nav.stage(c.out)
 
 
+def stage_alias(c: Ctx) -> None:
+    """Alias assets (ADR-0120): the underlying's risk data under a second collateral token's asset key."""
+    from . import alias
+
+    alias.stage(c.out)
+
+
 STAGES = {"gaps": stage_gaps, "sigma": stage_sigma, "sets": stage_sets, "validation": stage_validation,
-          "backtest": stage_backtest, "proposal": stage_proposal, "nav": stage_nav}
+          "backtest": stage_backtest, "proposal": stage_proposal, "nav": stage_nav, "alias": stage_alias}
 CORE = ("gaps", "sigma", "sets", "validation")  # fast; the CI sample check runs these
 
 
