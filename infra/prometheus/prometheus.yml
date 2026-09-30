@@ -1,4 +1,5 @@
-# Prometheus for the local stack (Build Guide §16.1). Owner: BE-backend. `make obs-up`.
+# Prometheus for the local dev stack (Build Guide §16.1). Owner: DevOps (charter §2c). `make obs-up`.
+# The testnet stack on this machine has its own config: infra/prod/prometheus/prometheus.yml.
 # Services run either on the host (`make relayer-dev`, `keeper-dev`, …: host.docker.internal) or as
 # compose containers (`--profile services`: service names). A target that is not running is simply down.
 global:
@@ -19,9 +20,9 @@ scrape_configs:
   - job_name: notifier
     static_configs:
       - targets: ["host.docker.internal:9103"]
-  - job_name: api
+  - job_name: api # the API's metrics listener (API_METRICS_ADDR, OFF-08); /metrics on :8787 is a 404
     static_configs:
-      - targets: ["host.docker.internal:8787"]
+      - targets: ["host.docker.internal:9104"]
   - job_name: indexer # Ponder serves /metrics on its HTTP port (42069 by default)
     static_configs:
       - targets: ["host.docker.internal:42069"]
