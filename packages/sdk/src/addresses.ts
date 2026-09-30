@@ -30,7 +30,14 @@ export const AddressBookSchema = z.object({
       sigmaOracle: address.optional(),
       sequencerHealth: address.optional(),
     })
-    .partial({ timelock: true, guardian: true, oracle: true, feedB: true }),
+    // A NAV-only book (421614, ADR-0014) has feedNav and no equity feeds.
+    .partial({
+      timelock: true,
+      guardian: true,
+      oracle: true,
+      feedA: true,
+      feedB: true,
+    }),
   equity: z
     .object({
       market: address,
@@ -85,7 +92,10 @@ export function normalizeAddressBook(json: unknown): unknown {
     sequencerHealth: pick("sequencerHealth"),
   };
   const tokens = Object.fromEntries(
-    Object.entries(j).filter(([k, v]) => typeof v === "string" && (/^t[A-Z]+$/.test(k) || k === "usdc")),
+    Object.entries(j).filter(
+      ([k, v]) =>
+        typeof v === "string" && (/^t[A-Z]+$/.test(k) || k === "usdc"),
+    ),
   );
   const markets = Object.fromEntries(
     Object.entries(j)
@@ -96,17 +106,24 @@ export function normalizeAddressBook(json: unknown): unknown {
     chainId: Number(j.chainId),
     startBlock: Number(j.startBlock ?? 0),
     release: "local",
-    shared: Object.fromEntries(Object.entries(shared).filter(([, v]) => v !== undefined)),
+    shared: Object.fromEntries(
+      Object.entries(shared).filter(([, v]) => v !== undefined),
+    ),
     tokens,
     assetIds: markets,
   };
 }
 
 /** Validate and normalise (checksum) an address book. Throws with every problem listed. */
-export function parseAddressBook(json: unknown, expectChainId?: number): AddressBook {
+export function parseAddressBook(
+  json: unknown,
+  expectChainId?: number,
+): AddressBook {
   const book = AddressBookSchema.parse(normalizeAddressBook(json));
   if (expectChainId !== undefined && book.chainId !== expectChainId) {
-    throw new Error(`address book is for chain ${book.chainId}, expected ${expectChainId}`);
+    throw new Error(
+      `address book is for chain ${book.chainId}, expected ${expectChainId}`,
+    );
   }
   return book;
 }

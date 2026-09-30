@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { getAddress } from "viem";
 import { parseAddressBook } from "../src/addresses.js";
 import { assetId, venueId } from "../src/eip712.js";
 import { ClockState, clockStateName } from "../src/types.js";
@@ -9,6 +10,9 @@ import {
   ICredencePriceFeedAbi,
   IAssetClockAbi,
   ISeniorVaultAbi,
+  AssetClockAbi,
+  IOracleAdapterAbi,
+  IScaledUIAmountAbi,
 } from "../src/generated/abis.js";
 
 const book = {
@@ -76,7 +80,7 @@ describe("ids and enums", () => {
   });
 });
 
-describe("ABIs (deployments/abis/v3)", () => {
+describe("ABIs (deployments/abis/v4)", () => {
   it("exposes the price feed and clock", () => {
     const names = (
       ICredencePriceFeedAbi as readonly { type: string; name?: string }[]
@@ -89,7 +93,23 @@ describe("ABIs (deployments/abis/v3)", () => {
       ),
     ).toBe(true);
     expect(Object.keys(abis).length).toBeGreaterThanOrEqual(37);
-    expect(ABI_VERSION).toBe("v3");
+    expect(ABI_VERSION).toBe("v4");
+  });
+
+  it("v4 carries the ERC-8056 multiplier the API and notifier read (ADR-0119)", () => {
+    const names = (a: readonly unknown[]) =>
+      (a as readonly { name?: string }[]).map((x) => x.name);
+    expect(names(IOracleAdapterAbi)).toEqual(
+      expect.arrayContaining(["sharesPerToken", "multiplierState"]),
+    );
+    expect(names(AssetClockAbi)).toEqual(
+      expect.arrayContaining([
+        "multiplierAction",
+        "CorporateActionBegun",
+        "CorporateActionConfirmed",
+      ]),
+    );
+    expect(names(IScaledUIAmountAbi)).toContain("UIMultiplierUpdated");
   });
 
   it("ReportAccepted carries marketStatus (R-25) and the market/vault v1 views exist", () => {
@@ -178,5 +198,32 @@ describe("ABIs v3 (S4, ADR-0111): the NAV settlement stack", () => {
         "redemptionClaimsOutstanding",
       ]),
     );
+  });
+});
+
+describe("per-chain books (ADR-0014)", () => {
+  it("parses a NAV-only book (421614: feedNav, no equity feeds) and an equity-only one", () => {
+    const a = (n: number) => `0x${n.toString(16).padStart(40, "0")}`;
+    const nav = parseAddressBook({
+      chainId: 421614,
+      startBlock: 1,
+      shared: { clock: a(1), calendar: a(2), oracle: a(3), feedNav: a(4) },
+      nav: {
+        market: a(5),
+        settlement: a(6),
+        markets: { TBILL: `0x${"07".repeat(32)}` },
+      },
+      tokens: { loan: a(8), tTBILL: a(9) },
+    });
+    expect(nav.shared.feedA).toBeUndefined();
+    expect(nav.shared.feedNav).toBe(getAddress(a(4)));
+    const eq = parseAddressBook({
+      chainId: 46630,
+      startBlock: 1,
+      shared: { clock: a(1), calendar: a(2), feedA: a(3), feedB: a(4) },
+      equity: { market: a(5) },
+      tokens: { loan: a(8) },
+    });
+    expect(eq.nav).toBeUndefined();
   });
 });
