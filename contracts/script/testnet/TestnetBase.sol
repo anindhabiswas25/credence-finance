@@ -83,6 +83,18 @@ abstract contract TestnetBase is Script {
     function _safe(string memory stack, string memory name) internal returns (address) {
         address given = vm.envOr(string.concat("SAFE_", name, "_ADDRESS"), address(0));
         if (given != address(0)) return given;
+        (bytes memory init, uint256 nonce, address predicted) = _safePlan(stack, name);
+        if (predicted.code.length != 0) return predicted;
+        return ISafeProxyFactory(SAFE_FACTORY).createProxyWithNonce(SAFE_L2, init, nonce);
+    }
+
+    /// @notice The Safe `name` of `stack` from SAFE_<name>_OWNERS + SAFE_<name>_THRESHOLD: its setup call, salt nonce
+    ///         and the address the canonical factory gives it (the post-deploy check compares the book with it).
+    function _safePlan(string memory stack, string memory name)
+        internal
+        view
+        returns (bytes memory init, uint256 nonce, address predicted)
+    {
         string memory ownersKey = string.concat("SAFE_", name, "_OWNERS");
         _requireEnv(ownersKey);
         address[] memory owners = vm.envAddress(ownersKey, ",");
@@ -90,17 +102,15 @@ abstract contract TestnetBase is Script {
         if (owners.length == 0 || threshold == 0 || threshold > owners.length) {
             revert MissingConfig(ownersKey);
         }
-        bytes memory init = abi.encodeCall(
+        init = abi.encodeCall(
             ISafeSetup.setup,
             (owners, threshold, address(0), "", SAFE_FALLBACK, address(0), 0, payable(address(0)))
         );
-        uint256 nonce = uint256(keccak256(abi.encodePacked("credence", stack, name)));
-        address predicted = _predictSafe(init, nonce);
-        if (predicted.code.length != 0) return predicted;
-        return ISafeProxyFactory(SAFE_FACTORY).createProxyWithNonce(SAFE_L2, init, nonce);
+        nonce = uint256(keccak256(abi.encodePacked("credence", stack, name)));
+        predicted = _predictSafe(init, nonce);
     }
 
-    function _predictSafe(bytes memory init, uint256 nonce) internal pure returns (address) {
+    function _predictSafe(bytes memory init, uint256 nonce) internal view returns (address) {
         bytes32 salt = keccak256(abi.encodePacked(keccak256(init), nonce));
         bytes memory code =
             abi.encodePacked(ISafeProxyFactory(SAFE_FACTORY).proxyCreationCode(), uint256(uint160(SAFE_L2)));

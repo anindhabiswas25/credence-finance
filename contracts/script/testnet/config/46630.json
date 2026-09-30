@@ -22,9 +22,10 @@
   "relayers": { "feedA": [], "feedB": [], "threshold": 2 },
   "sigma": { "signers": [], "threshold": 2 },
   "safes": {
-    "gov": { "owners": [], "threshold": 3 },
-    "guardian": { "owners": [], "threshold": 2 },
-    "ops": { "owners": [], "threshold": 2 }
+    "_fill": "USER INPUT: the Safe owner addresses (checksummed; no keys). The same owners on both chains is fine for testnet (PM, 2026-09-30). Created through the canonical Safe v1.4.1 factory; the deploy refuses to start while a list is empty or shorter than its threshold.",
+    "gov": { "_owners": "5 addresses (timelock proposer and canceller, 3-of-5)", "owners": [], "threshold": 3 },
+    "guardian": { "_owners": "4 addresses (pause and restrictions, 2-of-4)", "owners": [], "threshold": 2 },
+    "ops": { "_owners": "the Ops / Issuer owners (test-token issuer, vault allocator, faucet owner); set the threshold", "owners": [], "threshold": 2 }
   },
   "verify": { "verifier": "blockscout", "url": "https://explorer.testnet.chain.robinhood.com/api/" }
 }

@@ -21,7 +21,8 @@ echo "== contracts"
 OUT="$(mktemp)"
 (cd "$ROOT/contracts" && forge script script/testnet/PostDeployCheck.s.sol:PostDeployCheck --rpc-url "$RPC" > "$OUT" 2>&1) \
   || fail=1
-grep -E "post-deploy checks|MISMATCH|OK:|Error|revert" "$OUT" || cat "$OUT"
+grep -E "post-deploy checks|MISMATCH|OK:|Error|revert" "$OUT" | grep -vE "console::log|[├└]─" \
+  | sed 's/ | MISMATCH /\n  MISMATCH /g' | awk '!seen[$0]++' || cat "$OUT"
 rm -f "$OUT"
 
 echo "== engine"

@@ -35,6 +35,21 @@ interface IAllocated {
     function enabledMarkets() external view returns (bytes32[] memory);
 }
 
+interface IWiredOnce {
+    function clock() external view returns (address);
+    function market() external view returns (address);
+    function pool() external view returns (address);
+    function engine() external view returns (address);
+    function oracle() external view returns (address);
+    function wired() external view returns (bool);
+    function isPayer(address) external view returns (bool);
+}
+
+interface IErc20Meta {
+    function symbol() external view returns (string memory);
+    function decimals() external view returns (uint8);
+}
+
 interface IFaucetView {
     function dripAmount(address token) external view returns (uint256);
 }
@@ -47,7 +62,8 @@ interface IRouterView {
 
 /// @title `make testnet-postdeploy-check`, the Solidity half (ADR-0122; Build Guide §13.3). Read-only.
 /// @notice Checks a finalized stack against its config: timelock roles and delay, the Safes (owners, threshold), every
-///         contract's timelock, the guardian's Safe, the vault allocator, the faucet / registry owners and token issuers
+///         contract's timelock, the guardian's Safe, the Safes' singleton / fallback handler / factory address, every
+///         deployer-only one-shot wiring done (so the deployer has no power left), the vault allocator, the faucet / registry owners and token issuers
 ///         (no deployer anywhere), the calendar and its coverage, the feed and σ committees, the markets (params, caps,
 ///         vault caps, engine = the router, not the listing stand-in), the oracle wiring (the stack's own feeds: no
 ///         Chainlink source, no mock), and the faucet limits. Prints every mismatch, then reverts if there was any.
@@ -65,15 +81,23 @@ contract PostDeployCheck is TestnetBase {
         string memory j = vm.readFile(vm.envString("BOOK"));
         address deployer = vm.envAddress("DEPLOYER");
         _governance(j, deployer);
+        _safes(j, stack);
         _calendar(j);
         _committees(j);
         _markets(j, stack);
+        _tokens(j);
+        _wired(j);
         _roles(j, deployer);
         console2.log("post-deploy checks:", checks);
         for (uint256 i; i < fails.length; ++i) {
             console2.log("MISMATCH", fails[i]);
         }
-        require(fails.length == 0, string.concat(vm.toString(fails.length), " post-deploy mismatch(es)"));
+        // forge drops console output when a script reverts, so the revert reason carries every mismatch
+        string memory all = string.concat(vm.toString(fails.length), " post-deploy mismatch(es)");
+        for (uint256 i; i < fails.length; ++i) {
+            all = string.concat(all, " | MISMATCH ", fails[i]);
+        }
+        require(fails.length == 0, all);
         console2.log("OK: every check passed");
     }
 
@@ -106,9 +130,11 @@ contract PostDeployCheck is TestnetBase {
             _ok(s.code.length != 0, string.concat(names[i], " Safe has no code"));
             string memory ok = string.concat("SAFE_", names[i], "_OWNERS");
             if (s.code.length == 0 || bytes(vm.envOr(ok, string(""))).length == 0) continue;
+            // a proxy with another singleton may answer nothing (an undecodable, uncatchable return): read owners only
+            // behind the canonical singleton; `_safes` reports the singleton itself
+            if (address(uint160(uint256(vm.load(s, 0)))) != SAFE_L2) continue;
             address[] memory want = vm.envAddress(ok, ",");
-            address[] memory got = ISafeSetup(s).getOwners();
-            _ok(_sameSet(want, got), string.concat(names[i], " Safe owners"));
+            _ok(_sameSet(want, ISafeSetup(s).getOwners()), string.concat(names[i], " Safe owners"));
             _ok(
                 ISafeSetup(s).getThreshold() == vm.envUint(string.concat("SAFE_", names[i], "_THRESHOLD")),
                 string.concat(names[i], " Safe threshold")
@@ -135,6 +161,81 @@ contract PostDeployCheck is TestnetBase {
             vm.parseJsonAddress(j, ".safes.guardian"),
             "guardian Safe"
         );
+    }
+
+    /// @dev Each Safe is a SafeProxy of the canonical factory: singleton (slot 0) = Safe L2 v1.4.1, the canonical
+    ///      fallback handler, and (when the deploy created it) the CREATE2 address the factory gives its owners.
+    function _safes(string memory j, string memory stack) internal {
+        _ok(SAFE_FACTORY.code.length != 0, "canonical Safe factory has no code");
+        string[3] memory names = ["GOV", "GUARDIAN", "OPS"];
+        string[3] memory keys = [".safes.gov", ".safes.guardian", ".safes.ops"];
+        bytes32 handlerSlot = keccak256("fallback_manager.handler.address");
+        for (uint256 i; i < 3; ++i) {
+            address s = vm.parseJsonAddress(j, keys[i]);
+            _eqA(address(uint160(uint256(vm.load(s, 0)))), SAFE_L2, string.concat(names[i], " Safe singleton"));
+            _eqA(
+                address(uint160(uint256(vm.load(s, handlerSlot)))),
+                SAFE_FALLBACK,
+                string.concat(names[i], " Safe fallback handler")
+            );
+            if (vm.envOr(string.concat("SAFE_", names[i], "_ADDRESS"), address(0)) != address(0)) continue;
+            (,, address predicted) = _safePlan(stack, names[i]);
+            _eqA(s, predicted, string.concat(names[i], " Safe address (canonical factory, configured owners)"));
+        }
+    }
+
+    /// @dev The loan token is the configured one (an address) or the stack's own test stablecoin (tUSDG on 46630),
+    ///      and every configured existing collateral token (the official Robinhood test TSLA) is the one listed.
+    function _tokens(string memory j) internal {
+        address loan = vm.parseJsonAddress(j, ".tokens.loan");
+        address want = vm.envOr("LOAN_TOKEN", address(0));
+        if (want != address(0)) {
+            _eqA(loan, want, "loan token (configured address)");
+        } else {
+            _ok(
+                keccak256(bytes(IErc20Meta(loan).symbol())) == keccak256(bytes(vm.envString("LOAN_SYMBOL"))),
+                string.concat("loan token symbol != ", vm.envString("LOAN_SYMBOL"))
+            );
+            _ok(IErc20Meta(loan).decimals() == vm.envUint("LOAN_DECIMALS"), "loan token decimals");
+        }
+        string[] memory tickers = vm.envString("ASSETS", ",");
+        string[] memory tok = vm.envString("ASSET_TOKENS", ",");
+        bool dry = vm.envOr("DRY_RUN", false);
+        for (uint256 i; i < tickers.length; ++i) {
+            if (keccak256(bytes(tok[i])) == keccak256("new")) continue;
+            address got = vm.parseJsonAddress(j, string.concat(".tokens.t", tickers[i]));
+            _ok(got.code.length != 0, string.concat(tickers[i], " token has no code"));
+            // the dry run lists a behavioural copy of the official token (it does not exist on plain anvil)
+            if (!dry) _eqA(got, vm.parseAddress(tok[i]), string.concat(tickers[i], " token (configured address)"));
+        }
+    }
+
+    /// @dev Every deployer-only, one-shot initializer has run, so the deployer's `immutable deployer` gate is dead.
+    function _wired(string memory j) internal {
+        string memory sk = nav ? ".nav" : ".equity";
+        address clock = vm.parseJsonAddress(j, ".shared.clock");
+        address oracle = vm.parseJsonAddress(j, ".shared.oracle");
+        address market = vm.parseJsonAddress(j, string.concat(sk, ".market"));
+        address pool = vm.parseJsonAddress(j, string.concat(sk, ".pool"));
+        address tips = vm.parseJsonAddress(j, string.concat(sk, ".tips"));
+        _eqA(IWiredOnce(vm.parseJsonAddress(j, ".shared.sequencerHealth")).clock(), clock, "sequencer health clock");
+        _ok(IWiredOnce(clock).wired(), "clock not wired");
+        _eqA(IWiredOnce(clock).oracle(), oracle, "clock oracle");
+        _eqA(IWiredOnce(oracle).clock(), clock, "oracle clock");
+        _eqA(IWiredOnce(vm.parseJsonAddress(j, ".shared.guardian")).clock(), clock, "guardian clock");
+        _eqA(
+            IWiredOnce(vm.parseJsonAddress(j, ".shared.sigmaOracle")).engine(),
+            vm.parseJsonAddress(j, ".shared.riskEngine"),
+            "sigma oracle engine"
+        );
+        _eqA(IWiredOnce(vm.parseJsonAddress(j, string.concat(sk, ".reserve"))).market(), market, "reserve market");
+        _eqA(IWiredOnce(pool).market(), market, "pool market");
+        address third = vm.parseJsonAddress(j, string.concat(sk, nav ? ".settlement" : ".auctionHouse"));
+        _eqA(IWiredOnce(third).market(), market, nav ? "settlement market" : "auction house market");
+        _eqA(IWiredOnce(third).pool(), pool, nav ? "settlement pool" : "auction house pool");
+        _ok(IWiredOnce(tips).isPayer(market), "tips: market is not a payer");
+        _ok(IWiredOnce(tips).isPayer(pool), "tips: pool is not a payer");
+        _ok(IWiredOnce(tips).isPayer(third), "tips: auction house / settlement is not a payer");
     }
 
     function _calendar(string memory j) internal {

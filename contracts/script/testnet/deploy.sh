@@ -16,6 +16,11 @@ STACK="${1:?usage: deploy.sh equity|nav}"
 # shellcheck source=env.sh
 source "$ROOT/contracts/script/testnet/env.sh"
 say() { echo "[$(date +%H:%M:%S)] $*"; }
+# a deployed stack is never deployed twice: refuse before anything is sent (or copied, in the dry run)
+refuse_if_deployed() {
+  [ -f "$BOOK" ] && { echo "refusing: $BOOK exists (a stack is deployed; a re-run would make a second one)" >&2; exit 1; }
+  return 0
+}
 
 if [ "${DRY_RUN:-0}" = 1 ]; then
   if ! cast chain-id --rpc-url "$RPC" >/dev/null 2>&1; then
@@ -25,10 +30,13 @@ if [ "${DRY_RUN:-0}" = 1 ]; then
     rm -f "$BOOK"   # a fresh anvil: the old dry-run book describes nothing
   fi
   [ "$(cast chain-id --rpc-url "$RPC")" = 31337 ] || { echo "DRY_RPC is not plain anvil (31337)" >&2; exit 1; }
+  refuse_if_deployed
   REAL_RPC="$(cfg .rpc)"
   for a in 0x4e1DCf7AD4e460CfD30791CCC4F9c8a4f820ec67 0x29fcB43b46531BcA003ddC8FCB67FFE91900C762 \
-           0xfd0732Dc9E303f09fCEf3a7388Ad10A83459Ec99; do
-    cast rpc --rpc-url "$RPC" anvil_setCode "$a" "$(cast code "$a" --rpc-url "$REAL_RPC")" >/dev/null
+           0xfd0732Dc9E303f09fCEf3a7388Ad10A83459Ec99; do   # read-only; a public RPC that hangs fails the dry run
+    code="$(timeout 60 cast code "$a" --rpc-url "$REAL_RPC")" && [ "${#code}" -gt 2 ] \
+      || { echo "could not read the canonical Safe contract $a from $REAL_RPC" >&2; exit 1; }
+    cast rpc --rpc-url "$RPC" anvil_setCode "$a" "$code" >/dev/null
   done
   KEY=(--private-key "$PRIVATE_KEY")
   if [ "$STACK" = equity ]; then   # the official Robinhood test TSLA does not exist on anvil: its behavioural copy
@@ -41,12 +49,12 @@ if [ "${DRY_RUN:-0}" = 1 ]; then
   fi
 else
   [ "$(cast chain-id --rpc-url "$RPC")" = "$CID" ] || { echo "RPC is not chain $CID" >&2; exit 1; }
+  refuse_if_deployed
   : "${DEPLOYER_ACCOUNT:?a cast keystore account (cast wallet import <name> --interactive)}"
   : "${DEPLOYER_PASSWORD_FILE:?the keystore password file}"
   export DEPLOYER="$(cast wallet address --account "$DEPLOYER_ACCOUNT" --password-file "$DEPLOYER_PASSWORD_FILE")"
   KEY=(--account "$DEPLOYER_ACCOUNT" --password-file "$DEPLOYER_PASSWORD_FILE")
 fi
-[ -f "$BOOK" ] && { echo "refusing: $BOOK exists (a stack is deployed; a re-run would make a second one)" >&2; exit 1; }
 send() { cast send --rpc-url "$RPC" "${KEY[@]}" "$@" --json | jq -e '.status == "0x1"' >/dev/null; }
 
 say "1/6 DeployTestnet ($STACK, chain $(cast chain-id --rpc-url "$RPC"), deployer $DEPLOYER)"

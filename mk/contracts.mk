@@ -31,7 +31,7 @@ ABI_IMPLS ?= CalendarStore AssetClock CredencePriceFeed OracleAdapter SequencerH
 
 .PHONY: abis-check local-deploy-clock contracts-deps contracts-build contracts-test contracts-invariant contracts-coverage contracts-fmt \
   contracts-fmt-check contracts-snapshot contracts-clean abis-export risk-build risk-test risk-lint risk-fmt stylus-test stylus-abi-check \
-  stylus-check stylus-export-abi devnode-up devnode-down devnode-deploy-engine stylus-diff risk-validate-set risk-load-set risk-py-develop risk-py-test risk-wasm risk-wasm-test local-deploy-core stylus-repro devnode-integration devnode-gas
+  stylus-check stylus-export-abi devnode-up devnode-down devnode-deploy-engine stylus-diff risk-validate-set risk-load-set risk-py-develop risk-py-test risk-wasm risk-wasm-test local-deploy-core stylus-repro devnode-integration devnode-gas testnet-deploy testnet-dry-run testnet-postdeploy-check
 
 contracts-deps: ## Install pinned Solidity deps into contracts/lib (OZ, forge-std, solady) if missing
 	@cd $(CONTRACTS_DIR) && \
@@ -160,6 +160,17 @@ else
 	  RELAYER_B_SIGNERS=$(RELAYER_B_SIGNERS) XNYS_CALENDAR=../$(XNYS_CALENDAR) USBANK_CALENDAR=../$(USBANK_CALENDAR) \
 	  forge script script/DeployCoreLocal.s.sol:DeployCoreLocal --rpc-url $(LOCAL_RPC) --broadcast --slow
 endif
+
+# Testnet deploy (ADR-0122, Amendment 1): equity → Robinhood Chain testnet 46630, nav → Arbitrum Sepolia 421614.
+# Real chains need DEPLOYER_ACCOUNT (a cast keystore) + DEPLOYER_PASSWORD_FILE and the user inputs in config/<chainId>.json.
+testnet-deploy: contracts-build ## Deploy one testnet stack: STACK=equity|nav (refuses a re-run, a missing input, another chain)
+	bash $(CONTRACTS_DIR)/script/testnet/deploy.sh $(STACK)
+
+testnet-dry-run: contracts-build ## Both testnet stacks end to end on a fresh plain anvil each (DRY_RUN=1), post-deploy check included
+	@for s in equity nav; do rm -f deployments/31337.$$s.dryrun.json; DRY_RUN=1 bash $(CONTRACTS_DIR)/script/testnet/deploy.sh $$s || exit 1; done
+
+testnet-postdeploy-check: ## Post-deploy check of both testnet books (46630.json, 421614.json); DRY_RUN=1 checks the dry-run books; STACK= for one
+	@for s in $(or $(STACK),equity nav); do bash $(CONTRACTS_DIR)/script/testnet/postdeploy_check.sh $$s || exit 1; done
 
 devnode-up: ## Ensure a local nitro-devnode answers on :8547 (delegates to `make infra-up`)
 	@bash $(STYLUS_DIR)/scripts/devnode.sh up
