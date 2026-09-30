@@ -12,7 +12,12 @@ import { writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import postgres from "postgres";
 import { parseAbi, parseEther, type Address } from "viem";
-import { ICredenceMarketAbi } from "@credence/sdk";
+import {
+  ClockState,
+  IAssetClockAbi,
+  ICredenceMarketAbi,
+  ISettlementAdapterAbi,
+} from "@credence/sdk";
 import {
   OUT,
   actor,
@@ -76,6 +81,58 @@ await send(dev, {
 });
 
 await strike({ price: "1" });
+await ensureRegular();
+
+/** A fresh book's TBILL reads HALTED until its first NAV print; the print moves it to REOPEN, and a borrow is
+ * refused until the reopen completes (queue of 120 s after the open print, then `completeReopen`). The keeper
+ * does this too, but it starts after the seed. Ends with the clock at REGULAR, or throws. */
+async function ensureRegular() {
+  const clock = book.shared.clock as Address;
+  const asset = book.assetIds.TBILL as `0x${string}`;
+  const state = async () =>
+    Number(
+      await pub.readContract({
+        abi: IAssetClockAbi,
+        address: clock,
+        functionName: "previewState",
+        args: [asset],
+      }),
+    );
+  await send(dev, {
+    abi: IAssetClockAbi,
+    address: clock,
+    functionName: "poke",
+    args: [asset],
+  });
+  const deadline = Date.now() + 5 * 60_000;
+  while ((await state()) === ClockState.REOPEN) {
+    if (Date.now() > deadline)
+      throw new Error("TBILL still in REOPEN after 5 min");
+    try {
+      await send(dev, {
+        abi: ISettlementAdapterAbi,
+        address: book.nav.settlement,
+        functionName: "completeReopen",
+        args: [asset],
+      });
+    } catch (e) {
+      if (!/TooEarly|ReopenNotOver/.test(String(e))) throw e;
+      // the 120-s queue after the open print. An idle devnode estimates at its last block's time, so mine a
+      // fresh block (a poke) before trying again.
+      await new Promise((r) => setTimeout(r, 10_000));
+      await send(dev, {
+        abi: IAssetClockAbi,
+        address: clock,
+        functionName: "poke",
+        args: [asset],
+      });
+    }
+  }
+  const s = await state();
+  if (s !== ClockState.REGULAR)
+    throw new Error(`TBILL clock is ${s}, not REGULAR: is USBANK in session?`);
+  console.log("TBILL clock REGULAR");
+}
 
 async function borrower(a: typeof who.nia, debt: bigint) {
   const w = wallet(a);
