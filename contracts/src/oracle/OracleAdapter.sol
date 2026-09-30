@@ -17,6 +17,7 @@ import {INavSource} from "../interfaces/INavSource.sol";
 import {ITwapSource} from "../interfaces/ITwapSource.sol";
 import {IAssetClock} from "../interfaces/IAssetClock.sol";
 import {ICollateralToken} from "../interfaces/ICollateralToken.sol";
+import {IScaledUIAmount} from "../interfaces/IScaledUIAmount.sol";
 import {INavFund} from "../interfaces/INavFund.sol";
 import {ICalendarStore} from "../interfaces/ICalendarStore.sol";
 import {GasGuard} from "../libraries/GasGuard.sol";
@@ -48,6 +49,14 @@ contract OracleAdapter is IOracleAdapter {
     uint32 public constant DEX_TWAP = 1 hours;
     uint256 public constant STRESS_RATIO = 0.9e18;
     uint256 public constant MAX_RATIO_CHANGE = 10;
+    /// @notice ERC-8056 (ADR-0119): a multiplier step up to 2 % (a dividend) is applied at the next sync; a larger one is
+    ///         a corporate action.
+    uint256 public constant MULTIPLIER_AUTO_STEP = 0.02e18;
+    /// @notice A scheduled large multiplier update puts the asset in CORP_ACTION this long before its `effectiveAt`.
+    uint256 public constant MULTIPLIER_LEAD = 1 days;
+    /// @notice A large step is cached only if the token price it implies stays within half the step (at most this) of
+    ///         the corporate-action closure's reference: a print that still carries the old share price fails it.
+    uint256 public constant MULTIPLIER_MAX_GAP = 0.25e18;
 
     address public immutable timelock;
     address public immutable deployer;
@@ -89,7 +98,7 @@ contract OracleAdapter is IOracleAdapter {
         OracleConfig storage c = _config[assetId];
         if (c.listed && (c.kind != kind || c.token != token)) revert InvalidParam();
         if (!c.listed) {
-            uint256 spt = ICollateralToken(token).sharesPerToken();
+            (uint256 spt,,,) = _tokenMultiplier(token, 0);
             if (spt == 0 || spt > type(uint128).max) revert InvalidParam();
             c.sharesPerToken = uint128(spt);
             c.listed = true;
@@ -114,6 +123,120 @@ contract OracleAdapter is IOracleAdapter {
         ) revert SharesPerTokenChangeTooLarge(cur, newSharesPerToken);
         c.sharesPerToken = uint128(newSharesPerToken);
         emit SharesPerTokenChanged(assetId, cur, newSharesPerToken);
+    }
+
+    // ───────────────────────────── ERC-8056 multiplier (ADR-0119) ─────────────────────────────
+
+    /// @inheritdoc IOracleAdapter
+    function multiplierState(bytes32 assetId)
+        external
+        view
+        returns (uint256 cached, uint256 live, uint256 next, uint256 at, bool corporateAction)
+    {
+        OracleConfig storage c = _cfg(assetId);
+        return _multiplierState(c);
+    }
+
+    /// @inheritdoc IOracleAdapter
+    function syncMultiplier(bytes32 assetId) external returns (bool corporateAction) {
+        OracleConfig storage c = _cfg(assetId);
+        uint256 cached;
+        uint256 live;
+        uint256 at;
+        (cached, live,, at, corporateAction) = _multiplierState(c);
+        if (live == cached) return corporateAction;
+        // a small step at once; a large one only after it took effect and both feeds printed since (price and
+        // multiplier switch together); a large jump nobody scheduled waits for the timelock (confirmCorporateAction)
+        bool ok = !_large(live, cached)
+            || (at != 0
+                && at <= block.timestamp
+                && live <= cached * MAX_RATIO_CHANGE
+                && live * MAX_RATIO_CHANGE >= cached
+                && _printedSince(assetId, c, at)
+                && _continuous(assetId, c, live, cached));
+        if (!ok) return corporateAction;
+        c.sharesPerToken = uint128(live);
+        emit SharesPerTokenChanged(assetId, cached, live);
+        (,,,, corporateAction) = _multiplierState(c);
+    }
+
+    function _multiplierState(OracleConfig storage c)
+        internal
+        view
+        returns (uint256 cached, uint256 live, uint256 next, uint256 at, bool corporateAction)
+    {
+        cached = c.sharesPerToken;
+        if (c.kind == MarketKind.NAV) return (cached, cached, 0, 0, false);
+        (live, next, at,) = _tokenMultiplier(c.token, cached);
+        corporateAction = _large(live, cached)
+            || (next != 0
+                && at > block.timestamp
+                && at <= block.timestamp + MULTIPLIER_LEAD
+                && _large(next, live));
+    }
+
+    /// @dev The token's multiplier: ERC-8056 `uiMultiplier` (else the v0 `sharesPerToken`, else `fallback_`), and its
+    ///      pending update when the token has one. `ok` is false when the token exposes no multiplier.
+    function _tokenMultiplier(address token, uint256 fallback_)
+        internal
+        view
+        returns (uint256 live, uint256 next, uint256 at, bool ok)
+    {
+        live = fallback_;
+        uint256 g = gasleft();
+        try IScaledUIAmount(token).uiMultiplier() returns (uint256 m) {
+            (live, ok) = (m, true);
+        } catch {
+            GasGuard.check(g);
+            g = gasleft();
+            try ICollateralToken(token).sharesPerToken() returns (uint256 m) {
+                (live, ok) = (m, true);
+            } catch {
+                GasGuard.check(g);
+            }
+        }
+        if (live == 0 || live > type(uint128).max) revert InvalidParam();
+        g = gasleft();
+        try IScaledUIAmount(token).newUIMultiplier() returns (uint256 m) {
+            next = m;
+        } catch {
+            GasGuard.check(g);
+            return (live, 0, 0, ok);
+        }
+        g = gasleft();
+        try IScaledUIAmount(token).effectiveAt() returns (uint256 t) {
+            at = t;
+        } catch {
+            GasGuard.check(g);
+            next = 0;
+        }
+    }
+
+    function _large(uint256 x, uint256 ref) internal pure returns (bool) {
+        return x.relDiffUp(ref) > MULTIPLIER_AUTO_STEP;
+    }
+
+    /// @dev Both feeds' latest share prices × the new multiplier are within min(|Δ multiplier| / 2, 25 %) of the
+    ///      reference (per token, old multiplier) of the closure the corporate action holds.
+    function _continuous(bytes32 assetId, OracleConfig storage c, uint256 live, uint256 cached)
+        internal
+        view
+        returns (bool)
+    {
+        uint256 ref = IAssetClock(clock).closureInfo(assetId).refPrice;
+        if (ref == 0) return false;
+        uint256 tol = live.relDiffUp(cached) / 2;
+        if (tol > MULTIPLIER_MAX_GAP) tol = MULTIPLIER_MAX_GAP;
+        (uint256 p1,,) = IPriceSource(c.primary).latest(assetId);
+        (uint256 p2,,) = IPriceSource(c.secondary).latest(assetId);
+        return p1.mulWadDown(live).relDiffUp(ref) <= tol && p2.mulWadDown(live).relDiffUp(ref) <= tol;
+    }
+
+    /// @dev Both feeds hold a live print observed at or after `t`.
+    function _printedSince(bytes32 assetId, OracleConfig storage c, uint256 t) internal view returns (bool) {
+        (uint256 p1, uint40 t1,) = IPriceSource(c.primary).latest(assetId);
+        (uint256 p2, uint40 t2,) = IPriceSource(c.secondary).latest(assetId);
+        return p1 != 0 && p2 != 0 && t1 >= t && t2 >= t;
     }
 
     // ───────────────────────────── valuation ─────────────────────────────

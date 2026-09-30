@@ -28,8 +28,23 @@ interface IOracleAdapter is IOracleAdapterEvents, ICredenceErrors {
     function feedHealth(bytes32 assetId) external view returns (FeedHealth memory);
     /// @notice dexTwap(1h) < 90% × refPrice while CLOSED or HALTED.
     function stressFlag(bytes32 assetId) external view returns (bool);
-    /// @notice WAD shares per token, cached; changes only through a confirmed corporate action.
+    /// @notice WAD shares per token (the token's ERC-8056 multiplier), cached: a step ≤ `MULTIPLIER_AUTO_STEP` through
+    ///         `syncMultiplier`, a larger one through `syncMultiplier` after it took effect or a confirmed corporate action.
     function sharesPerToken(bytes32 assetId) external view returns (uint256);
+    /// @notice ERC-8056 (ADR-0119): the cached multiplier, the token's live one, its pending update (`next`, `at`), and
+    ///         whether a corporate action is due: the live multiplier is more than 2 % off the cached one, or an update
+    ///         of more than 2 % takes effect within `MULTIPLIER_LEAD`. Always false for a NAV asset.
+    function multiplierState(bytes32 assetId)
+        external
+        view
+        returns (uint256 cached, uint256 live, uint256 next, uint256 at, bool corporateAction);
+    /// @notice Permissionless (the clock calls it on every poke). Caches the token's multiplier when the step is ≤ 2 %,
+    ///         or when a larger scheduled update took effect, both feeds have printed since `effectiveAt`, and those prints
+    ///         × the new multiplier are within min(half the step, `MULTIPLIER_MAX_GAP`) of the corporate-action closure's
+    ///         reference (price and multiplier switch together; a print carrying the old share price fails it; capped
+    ///         ×10 / ÷10). Never reverts for a step it cannot take yet. Returns
+    ///         `multiplierState(..).corporateAction` after the sync.
+    function syncMultiplier(bytes32 assetId) external returns (bool corporateAction);
     /// @notice Conservative reference for a HALT closure: min(last regular close, last primary / secondary print).
     function haltReferencePrice(bytes32 assetId) external view returns (uint256 p, uint40 t);
     /// @notice The 1-hour DEX TWAP in token terms, and whether it is usable (configured, ok, deep enough).

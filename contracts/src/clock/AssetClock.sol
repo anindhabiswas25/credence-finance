@@ -50,6 +50,9 @@ contract AssetClock is IAssetClock {
     mapping(bytes32 asset => ClockData) internal _data;
     mapping(bytes32 asset => uint40) public closedUntil;
     mapping(bytes32 asset => uint40) public haltedUntil;
+    /// @notice The asset's corporate action was opened by its ERC-8056 multiplier (ADR-0119), so it also ends by itself
+    ///         once `OracleAdapter.syncMultiplier` has cached the new multiplier. A guardian / timelock one does not.
+    mapping(bytes32 asset => bool) public multiplierAction;
 
     constructor(address timelock_, address guardian_, address calendar_, address sequencerHealth_) {
         if (
@@ -147,6 +150,7 @@ contract AssetClock is IAssetClock {
         if (!d.corporateAction) revert CorporateActionNotActive(assetId);
         IOracleAdapter(_oracle()).setSharesPerToken(assetId, newSharesPerToken);
         d.corporateAction = false;
+        multiplierAction[assetId] = false;
         emit CorporateActionConfirmed(assetId, newSharesPerToken);
         _poke(assetId);
     }
@@ -223,6 +227,10 @@ contract AssetClock is IAssetClock {
         }
         _refreshReference(a, cfg.kind, orc, d, c);
 
+        // 3b. ERC-8056 multiplier (ADR-0119): a small step is cached now; a large one opens (and later ends) a
+        //     corporate action, so no price is ever valued with a multiplier from the other side of the action.
+        if (cfg.kind == MarketKind.EQUITY) _syncMultiplier(a, orc, d);
+
         // 4–6. Oracle, guardian and corporate-action inputs; the most restrictive wins (INV-FAIL-01).
         ClockState target = _target(
             a,
@@ -268,6 +276,26 @@ contract AssetClock is IAssetClock {
         d.bellWindowAt = nextClose == 0 ? 0 : nextClose - BELL_WINDOW;
         d.bellAt = nextClose == 0 ? 0 : nextClose - BELL_DEADLINE;
         return target;
+    }
+
+    function _syncMultiplier(bytes32 a, IOracleAdapter orc, ClockData storage d) internal {
+        bool due;
+        uint256 g = gasleft();
+        try orc.syncMultiplier(a) returns (bool x) {
+            due = x;
+        } catch {
+            GasGuard.check(g);
+            return; // a token that stops answering is caught by the oracle's issuer probe (HALTED)
+        }
+        if (due && !d.corporateAction) {
+            d.corporateAction = true;
+            multiplierAction[a] = true;
+            emit CorporateActionBegun(a, d.closureId);
+        } else if (!due && multiplierAction[a]) {
+            d.corporateAction = false;
+            multiplierAction[a] = false;
+            emit CorporateActionConfirmed(a, orc.sharesPerToken(a));
+        }
     }
 
     function _openScheduledClosure(
@@ -410,6 +438,19 @@ contract AssetClock is IAssetClock {
         } else {
             if (h.navInvalid || h.issuerFrozen) return ClockState.HALTED;
             if (h.stale) s = s.mostRestrictive(ClockState.CLOSED);
+        }
+    }
+
+    /// @dev previewState's view of step 3b, before any sync: a large step still previews as CORP_ACTION until a poke
+    ///      has cached it (conservative); a small one previews as not due.
+    function _multiplierDue(bytes32 a, MarketKind kind, IOracleAdapter orc) internal view returns (bool) {
+        if (kind != MarketKind.EQUITY) return false;
+        uint256 g = gasleft();
+        try orc.multiplierState(a) returns (uint256, uint256, uint256, uint256, bool due) {
+            return due;
+        } catch {
+            GasGuard.check(g);
+            return false;
         }
     }
 
@@ -565,7 +606,7 @@ contract AssetClock is IAssetClock {
             orc,
             d.reopenPending && _scheduled(d.closureType),
             d.refPrice,
-            d.corporateAction,
+            d.corporateAction || _multiplierDue(assetId, cfg.kind, orc),
             calState
         );
         if (!d.reopenPending && target.rank() >= ClockState.CLOSED.rank()) {

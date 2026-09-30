@@ -10,7 +10,7 @@ import {ICollateralTokenEvents} from "../libraries/Events.sol";
 interface ICollateralToken is IERC20Metadata, ICollateralTokenEvents, ICredenceErrors {
     /// @notice The issuer (testnet: the Credence ops multisig).
     function issuer() external view returns (address);
-    /// @notice WAD underlying shares per token (1e18 at launch).
+    /// @notice WAD underlying shares per token (1e18 at launch): the ERC-8056 `uiMultiplier` (ADR-0119).
     function sharesPerToken() external view returns (uint256);
     /// @notice True while the issuer has frozen the token (the oracle reports issuerFrozen).
     function frozen() external view returns (bool);
@@ -22,7 +22,7 @@ interface ICollateralToken is IERC20Metadata, ICollateralTokenEvents, ICredenceE
     // issuer operations (testnet)
     /// @notice onlyIssuer or a capped minter: mint tokens.
     function mint(address to, uint256 amount) external;
-    /// @notice onlyIssuer: the issuer ratio; emits RatioChanged, which triggers the CORP_ACTION runbook.
+    /// @notice onlyIssuer: set the multiplier, effective at once (ERC-8056 `scheduleUIMultiplier(r, now)`).
     function setSharesPerToken(uint256 r) external;
     /// @notice onlyIssuer: freeze or unfreeze every transfer.
     function setFrozen(bool f) external;

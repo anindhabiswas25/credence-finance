@@ -5,14 +5,18 @@ import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import {ERC20Permit} from "@openzeppelin/contracts/token/ERC20/extensions/ERC20Permit.sol";
 import {ICollateralToken} from "../interfaces/ICollateralToken.sol";
+import {IScaledUIAmount} from "../interfaces/IScaledUIAmount.sol";
 import {ICompliance} from "../interfaces/ICompliance.sol";
 import {IssuerRoles} from "./IssuerRoles.sol";
 
 /// @title CredenceStockToken: testnet stand-in for a Robinhood Stock Token (tNVDA, tAAPL, …) (Build Guide §8.12, R-02).
-/// @notice Implements what the real token needs from Credence's side: an issuer ratio (`sharesPerToken`), an issuer
-///         freeze, and a compliance hook. Prices are real; the token is labelled "Testnet asset" in the app.
-contract CredenceStockToken is ICollateralToken, IssuerRoles, ERC20, ERC20Permit {
-    uint256 public sharesPerToken = 1e18;
+/// @notice Implements what the real token needs from Credence's side: the ERC-8056 multiplier of a Robinhood Stock Token
+///         (`uiMultiplier`, with a scheduled `newUIMultiplier` / `effectiveAt`; ADR-0119), an issuer freeze, and a
+///         compliance hook. Prices are real; the token is labelled "Testnet asset" in the app.
+contract CredenceStockToken is ICollateralToken, IScaledUIAmount, IssuerRoles, ERC20, ERC20Permit {
+    uint256 internal _multiplier = 1e18;
+    uint256 internal _next;
+    uint256 internal _at;
     bool public frozen;
     /// @inheritdoc ICollateralToken
     address public compliance;
@@ -32,13 +36,49 @@ contract CredenceStockToken is ICollateralToken, IssuerRoles, ERC20, ERC20Permit
         _mint(to, amount);
     }
 
+    /// @inheritdoc IScaledUIAmount
+    function uiMultiplier() public view returns (uint256) {
+        return _at != 0 && block.timestamp >= _at ? _next : _multiplier;
+    }
+
+    /// @inheritdoc IScaledUIAmount
+    function newUIMultiplier() external view returns (uint256) {
+        return _next;
+    }
+
+    /// @inheritdoc IScaledUIAmount
+    function effectiveAt() external view returns (uint256) {
+        return _at;
+    }
+
     /// @inheritdoc ICollateralToken
-    /// @dev Emits RatioChanged, which triggers the CORP_ACTION runbook; Credence reads the new ratio only through
-    ///      `AssetClock.confirmCorporateAction` (capped ×10 / ÷10).
+    /// @dev The ERC-8056 multiplier under its v0 name.
+    function sharesPerToken() external view returns (uint256) {
+        return uiMultiplier();
+    }
+
+    /// @notice onlyIssuer: schedule the multiplier `m` from `at` (`at == block.timestamp` applies it at once). Replaces
+    ///         a pending update; an update that already took effect becomes the base first.
+    function scheduleUIMultiplier(uint256 m, uint256 at) public onlyIssuer {
+        if (m == 0 || at < block.timestamp) revert InvalidParam();
+        uint256 cur = uiMultiplier();
+        _multiplier = cur;
+        (_next, _at) = (m, at);
+        emit UIMultiplierUpdated(cur, m, at);
+        emit RatioChanged(cur, m);
+    }
+
+    /// @notice onlyIssuer: cancel an update that has not taken effect yet.
+    function cancelUIMultiplierUpdate() external onlyIssuer {
+        if (_at == 0 || block.timestamp >= _at) revert InvalidParam();
+        emit UIMultiplierUpdateCancelled(_next, _at);
+        (_next, _at) = (0, 0);
+    }
+
+    /// @inheritdoc ICollateralToken
+    /// @dev The v0 setter: the new multiplier takes effect at once.
     function setSharesPerToken(uint256 r) external onlyIssuer {
-        if (r == 0) revert InvalidParam();
-        emit RatioChanged(sharesPerToken, r);
-        sharesPerToken = r;
+        scheduleUIMultiplier(r, block.timestamp);
     }
 
     /// @inheritdoc ICollateralToken
