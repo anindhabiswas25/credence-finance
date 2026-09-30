@@ -402,7 +402,9 @@ async fn core_jobs_match_the_contracts() {
     let url = credence_common::db::scratch_database(&admin, "credence_keeper_core_e2e")
         .await
         .unwrap();
-    let pool_db: PgPool = credence_common::db::connect(&url, 4).await.unwrap();
+    let pool_db: PgPool = credence_common::db::connect_chain(&url, 4, 31_337)
+        .await
+        .unwrap();
     sqlx::raw_sql("create schema if not exists ix; create table if not exists ix.position (market_id text, owner text, borrow_shares numeric)").execute(&pool_db).await.unwrap();
     sqlx::query("insert into ix.position values ($1, $2, 1)")
         .bind(id.to_string())

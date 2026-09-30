@@ -465,7 +465,9 @@ pub async fn deploy(db_name: &str) -> Stack {
     let url = credence_common::db::scratch_database(&admin, db_name)
         .await
         .unwrap();
-    let db: PgPool = credence_common::db::connect(&url, 4).await.unwrap();
+    let db: PgPool = credence_common::db::connect_chain(&url, 4, 31_337)
+        .await
+        .unwrap();
     sqlx::raw_sql("create schema if not exists ix; create table if not exists ix.position (market_id text, owner text, borrow_shares numeric)")
         .execute(&db)
         .await

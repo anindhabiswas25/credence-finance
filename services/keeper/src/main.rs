@@ -92,7 +92,7 @@ async fn main() -> Result<()> {
     if actual != cfg.chain_id {
         bail!("RPC chain id {actual} != CHAIN_ID {}", cfg.chain_id);
     }
-    let pool = credence_common::db::connect(&cfg.database_url, 4).await?;
+    let pool = credence_common::db::connect_chain(&cfg.database_url, 4, cfg.chain_id).await?;
     let tx = TxManager::new(
         rpc.clone(),
         signer.wallet(),

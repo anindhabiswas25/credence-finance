@@ -592,7 +592,7 @@ impl Keeper {
     ) -> Result<()> {
         let prefix = format!("J3:{}:{}", m.id, ctx.upcoming_closure_id);
         let pending: Vec<String> = sqlx::query_scalar(
-            "select key from ops.keeper_job where key like $1 and status = 'submitted'",
+            "select key from ops.keeper_job where chain_id = ops.chain() and key like $1 and status = 'submitted'",
         )
         .bind(format!("{prefix}:%"))
         .fetch_all(&mut *conn)

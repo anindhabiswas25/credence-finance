@@ -204,7 +204,9 @@ async fn db(name: &str) -> (String, PgPool) {
     let url = credence_common::db::scratch_database(&admin, name)
         .await
         .unwrap();
-    let pool = credence_common::db::connect(&url, 4).await.unwrap();
+    let pool = credence_common::db::connect_chain(&url, 4, 31_337)
+        .await
+        .unwrap();
     (url, pool)
 }
 

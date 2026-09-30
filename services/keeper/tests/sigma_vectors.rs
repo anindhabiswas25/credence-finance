@@ -122,9 +122,9 @@ fn publish_rule_matches() {
 #[test]
 fn snapshot_resumes_to_its_own_sigma() {
     let snap =
-        Snapshot::load(&repo().join("calibration/out/sigma/sigma-84d3ee7a661db5f3.json")).unwrap();
+        Snapshot::load(&repo().join("calibration/out/sigma/sigma-ea391d6a1d0303cd.json")).unwrap();
     assert_eq!(snap.data_grade, "free-2016");
-    assert_eq!(snap.assets.len(), 6);
+    assert_eq!(snap.assets.len(), 8); // the testnet six (+ GOOGL, AMZN since cb15c51) and COIN, SPY
     for a in &snap.assets {
         for t in TYPES {
             let i = t as usize - 1;
@@ -145,7 +145,7 @@ fn snapshot_resumes_to_its_own_sigma() {
 #[test]
 fn resume_applies_only_gaps_after_as_of_in_order() {
     let snap =
-        Snapshot::load(&repo().join("calibration/out/sigma/sigma-84d3ee7a661db5f3.json")).unwrap();
+        Snapshot::load(&repo().join("calibration/out/sigma/sigma-ea391d6a1d0303cd.json")).unwrap();
     let base: AssetSigma = snap
         .assets
         .iter()
@@ -196,7 +196,7 @@ fn resume_applies_only_gaps_after_as_of_in_order() {
 fn plan_respects_rate_limit_floor_and_idempotency() {
     use credence_keeper::sigma_job::{as_of_day, plan, OnChainSigma};
     let snap =
-        Snapshot::load(&repo().join("calibration/out/sigma/sigma-84d3ee7a661db5f3.json")).unwrap();
+        Snapshot::load(&repo().join("calibration/out/sigma/sigma-ea391d6a1d0303cd.json")).unwrap();
     let mut a = snap
         .assets
         .iter()

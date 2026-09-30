@@ -41,7 +41,7 @@ impl PgStore {
 impl ReportStore for PgStore {
     async fn max_seqs(&self, feed: &str) -> Result<HashMap<B256, u64>> {
         let rows: Vec<(Vec<u8>, i64)> = sqlx::query_as(
-            "select asset_id, max(seq) from ops.relayer_report where feed = $1 group by asset_id",
+            "select asset_id, max(seq) from ops.relayer_report where chain_id = ops.chain() and feed = $1 group by asset_id",
         )
         .bind(feed)
         .fetch_all(&self.pool)
@@ -67,7 +67,7 @@ impl ReportStore for PgStore {
                 "insert into ops.relayer_report
                    (feed, asset_id, seq, kind, price, observed_at, session_date, market_status, signers, status)
                  values ($1, $2, $3, $4, $5::numeric, to_timestamp($6), $7, $8, $9, 'signed')
-                 on conflict (feed, asset_id, seq) do nothing",
+                 on conflict (chain_id, feed, asset_id, seq) do nothing",
             )
             .bind(feed)
             .bind(d.asset_id.as_slice())
@@ -97,7 +97,7 @@ impl ReportStore for PgStore {
         sqlx::query(
             "update ops.relayer_report r set status = $2, tx_hash = coalesce($3, r.tx_hash)
                from unnest($4::bytea[], $5::bigint[]) as u(asset_id, seq)
-              where r.feed = $1 and r.asset_id = u.asset_id and r.seq = u.seq",
+              where r.chain_id = ops.chain() and r.feed = $1 and r.asset_id = u.asset_id and r.seq = u.seq",
         )
         .bind(feed)
         .bind(status)

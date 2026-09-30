@@ -53,7 +53,7 @@ fn bytecode(a: &serde_json::Value) -> Vec<u8> {
 }
 
 fn snapshot() -> Snapshot {
-    Snapshot::load(&repo().join("calibration/out/sigma/sigma-84d3ee7a661db5f3.json")).unwrap()
+    Snapshot::load(&repo().join("calibration/out/sigma/sigma-ea391d6a1d0303cd.json")).unwrap()
 }
 
 async fn provider(rpc: &str, key: &str) -> DynProvider {

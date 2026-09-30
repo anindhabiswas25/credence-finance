@@ -2,8 +2,11 @@
 //! dbmate (`infra/db/migrations`, ADR-0001); tests apply the same files to a scratch database.
 
 use anyhow::{Context, Result};
-use sqlx::{postgres::PgPoolOptions, PgPool};
-use std::{path::Path, time::Duration};
+use sqlx::{
+    postgres::{PgConnectOptions, PgPoolOptions},
+    PgPool,
+};
+use std::{path::Path, str::FromStr, time::Duration};
 
 pub async fn connect(url: &str, max_connections: u32) -> Result<PgPool> {
     let backoff = crate::retry::Backoff {
@@ -16,6 +19,32 @@ pub async fn connect(url: &str, max_connections: u32) -> Result<PgPool> {
                 .max_connections(max_connections)
                 .acquire_timeout(Duration::from_secs(5))
                 .connect(url)
+        })
+        .await
+        .context("connecting to postgres")
+}
+
+/// Connection options for a chain-bound service (ADR-0014): every connection carries `credence.chain_id`, which
+/// `ops.chain()` reads, so the service's ops rows (keeper jobs and txs, relayer reports) are its chain's only.
+pub fn chain_options(url: &str, chain_id: u64) -> Result<PgConnectOptions> {
+    Ok(PgConnectOptions::from_str(url)
+        .context("DATABASE_URL")?
+        .options([("credence.chain_id", chain_id.to_string())]))
+}
+
+/// A retrying pool whose connections are scoped to `chain_id` (see `chain_options`).
+pub async fn connect_chain(url: &str, max_connections: u32, chain_id: u64) -> Result<PgPool> {
+    let opts = chain_options(url, chain_id)?;
+    let backoff = crate::retry::Backoff {
+        attempts: 10,
+        ..Default::default()
+    };
+    backoff
+        .retry("postgres connect", || {
+            PgPoolOptions::new()
+                .max_connections(max_connections)
+                .acquire_timeout(Duration::from_secs(5))
+                .connect_with(opts.clone())
         })
         .await
         .context("connecting to postgres")

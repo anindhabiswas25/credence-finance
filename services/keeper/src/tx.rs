@@ -204,7 +204,7 @@ impl TxManager {
             .await
             .context("write-ahead keeper_tx")?;
             sqlx::query(
-                "update ops.keeper_job set status = 'submitted', updated_at = now() where key = $1",
+                "update ops.keeper_job set status = 'submitted', updated_at = now() where chain_id = ops.chain() and key = $1",
             )
             .bind(job_key)
             .execute(&mut *conn)
@@ -361,7 +361,7 @@ impl TxManager {
         job_key: &str,
     ) -> Result<Reconciled> {
         let rows: Vec<(Vec<u8>,)> = sqlx::query_as(
-            "select hash from ops.keeper_tx where job_key = $1 order by submitted_at",
+            "select hash from ops.keeper_tx where chain_id = ops.chain() and job_key = $1 order by submitted_at",
         )
         .bind(job_key)
         .fetch_all(&mut *conn)
@@ -376,7 +376,7 @@ impl TxManager {
         }
         let r = self.reconcile_hashes(conn, &hashes).await?;
         if r == Reconciled::Dropped {
-            sqlx::query("update ops.keeper_tx set status = 'dropped' where job_key = $1 and status = 'pending'")
+            sqlx::query("update ops.keeper_tx set status = 'dropped' where chain_id = ops.chain() and job_key = $1 and status = 'pending'")
                 .bind(job_key)
                 .execute(&mut *conn)
                 .await?;

@@ -61,7 +61,9 @@ async fn j12_reads_program_time_left_from_the_address_book() {
     let url = credence_common::db::scratch_database(&admin, "credence_keeper_j12")
         .await
         .unwrap();
-    let pool = credence_common::db::connect(&url, 2).await.unwrap();
+    let pool = credence_common::db::connect_chain(&url, 2, 412_346)
+        .await
+        .unwrap();
 
     // the precompile directly, for the expected values: the router is not a program, its two targets are
     let p = alloy::providers::ProviderBuilder::new().connect_http(rpc_url.parse().unwrap());
@@ -115,7 +117,9 @@ async fn j12_reads_program_time_left_from_the_address_book() {
     let url2 = credence_common::db::scratch_database(&admin, "credence_keeper_j12b")
         .await
         .unwrap();
-    let pool2 = credence_common::db::connect(&url2, 2).await.unwrap();
+    let pool2 = credence_common::db::connect_chain(&url2, 2, 412_346)
+        .await
+        .unwrap();
     let metrics2 = Metrics::detached();
     let k2 = keeper(
         &rpc_url,

@@ -217,7 +217,7 @@ impl Keeper {
                 Err(e) => {
                     // a tx that timed out stays `submitted` and is reconciled next tick
                     let submitted: bool = sqlx::query_scalar(
-                        "select status = 'submitted' from ops.keeper_job where key = $1",
+                        "select status = 'submitted' from ops.keeper_job where chain_id = ops.chain() and key = $1",
                     )
                     .bind(&primary.1)
                     .fetch_one(&mut *conn)

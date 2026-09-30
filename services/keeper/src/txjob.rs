@@ -80,7 +80,7 @@ impl Keeper {
         rep: &mut TickReport,
     ) -> Result<()> {
         let keys: Vec<String> = sqlx::query_scalar(
-            "select key from ops.keeper_job where status = 'submitted' order by updated_at limit 50",
+            "select key from ops.keeper_job where chain_id = ops.chain() and status = 'submitted' order by updated_at limit 50",
         )
         .fetch_all(&mut *conn)
         .await?;

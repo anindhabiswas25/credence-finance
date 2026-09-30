@@ -31,7 +31,7 @@ pub async fn claim(
     let row: Option<(String, i32)> = sqlx::query_as(
         "insert into ops.keeper_job (key, job, status, attempts, next_run_at, payload, claimed_by, updated_at)
          values ($1, $2, 'running', 1, now(), $3, $4, now())
-         on conflict (key) do update
+         on conflict (chain_id, key) do update
            set status = 'running', attempts = ops.keeper_job.attempts + 1, claimed_by = $4, updated_at = now()
          where (ops.keeper_job.status in ('pending', 'failed') and ops.keeper_job.attempts < $5
                 and coalesce(ops.keeper_job.next_run_at, now()) <= now())
@@ -48,11 +48,12 @@ pub async fn claim(
     if let Some((_, attempts)) = row {
         return Ok(Claim::Run { attempts });
     }
-    let status: Option<String> =
-        sqlx::query_scalar("select status from ops.keeper_job where key = $1")
-            .bind(key)
-            .fetch_optional(&mut *conn)
-            .await?;
+    let status: Option<String> = sqlx::query_scalar(
+        "select status from ops.keeper_job where chain_id = ops.chain() and key = $1",
+    )
+    .bind(key)
+    .fetch_optional(&mut *conn)
+    .await?;
     Ok(if status.as_deref() == Some("submitted") {
         Claim::Reconcile
     } else {
@@ -65,7 +66,7 @@ pub async fn claim(
 /// jobs stay as they are: their recorded tx is reconciled, never re-sent blindly.
 pub async fn release_orphans(conn: &mut PgConnection) -> Result<u64> {
     Ok(sqlx::query(
-        "update ops.keeper_job set status = 'pending', updated_at = now() where status = 'running'",
+        "update ops.keeper_job set status = 'pending', updated_at = now() where chain_id = ops.chain() and status = 'running'",
     )
     .execute(&mut *conn)
     .await?
@@ -73,12 +74,12 @@ pub async fn release_orphans(conn: &mut PgConnection) -> Result<u64> {
 }
 
 pub async fn status(conn: &mut PgConnection, key: &str) -> Result<Option<String>> {
-    Ok(
-        sqlx::query_scalar("select status from ops.keeper_job where key = $1")
-            .bind(key)
-            .fetch_optional(&mut *conn)
-            .await?,
+    Ok(sqlx::query_scalar(
+        "select status from ops.keeper_job where chain_id = ops.chain() and key = $1",
     )
+    .bind(key)
+    .fetch_optional(&mut *conn)
+    .await?)
 }
 
 pub async fn mark(
@@ -90,7 +91,7 @@ pub async fn mark(
     sqlx::query(
         "update ops.keeper_job set status = $2, last_error = $3, updated_at = now(),
                 next_run_at = case when $2 = 'failed' then now() + make_interval(secs => least(300, 5 * power(2, attempts))) else next_run_at end
-          where key = $1",
+          where chain_id = ops.chain() and key = $1",
     )
     .bind(key)
     .bind(status)
@@ -112,7 +113,7 @@ pub async fn mark_covered(
         sqlx::query(
             "insert into ops.keeper_job (key, job, status, attempts, payload, claimed_by, updated_at)
              values ($1, $2, 'done', 0, jsonb_build_object('coveredBy', $3::text), $4, now())
-             on conflict (key) do nothing",
+             on conflict (chain_id, key) do nothing",
         )
         .bind(k)
         .bind(job)
@@ -126,7 +127,7 @@ pub async fn mark_covered(
 
 pub async fn exists(conn: &mut PgConnection, key: &str) -> Result<bool> {
     Ok(sqlx::query_scalar::<_, i64>(
-        "select count(*) from ops.keeper_job where key = $1 and status in ('done', 'skipped')",
+        "select count(*) from ops.keeper_job where chain_id = ops.chain() and key = $1 and status in ('done', 'skipped')",
     )
     .bind(key)
     .fetch_one(&mut *conn)
@@ -141,7 +142,7 @@ pub async fn set_payload(
     payload: &serde_json::Value,
 ) -> Result<()> {
     sqlx::query(
-        "update ops.keeper_job set payload = payload || $2, updated_at = now() where key = $1",
+        "update ops.keeper_job set payload = payload || $2, updated_at = now() where chain_id = ops.chain() and key = $1",
     )
     .bind(key)
     .bind(payload)

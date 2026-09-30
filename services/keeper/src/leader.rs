@@ -101,9 +101,12 @@ impl Leader {
         .execute(&self.pool)
         .await?;
 
-        let mut c = PgConnection::connect(&self.url)
-            .await
-            .context("leader connection")?;
+        let mut c = PgConnection::connect_with(&credence_common::db::chain_options(
+            &self.url,
+            self.chain_id,
+        )?)
+        .await
+        .context("leader connection")?;
         let got: bool = sqlx::query_scalar("select pg_try_advisory_lock($1)")
             .bind(self.key)
             .fetch_one(&mut c)

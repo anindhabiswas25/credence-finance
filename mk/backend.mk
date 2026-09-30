@@ -213,6 +213,7 @@ backend-edge-infra: contracts-build ## S4 H edge cases, infra half (needs infra-
 	TEST_DATABASE_URL=$(TEST_DATABASE_URL) $(CARGO) test --locked -p credence-keeper --test keeper_e2e -- --ignored --test-threads=1
 	TEST_DATABASE_URL=$(TEST_DATABASE_URL) $(CARGO) test --locked -p credence-keeper --test core_e2e -- --ignored --nocapture
 	TEST_DATABASE_URL=$(TEST_DATABASE_URL) $(CARGO) test --locked -p credence-keeper --test edge_restart -- --ignored --nocapture
+	TEST_DATABASE_URL=$(TEST_DATABASE_URL) $(CARGO) test --locked -p credence-keeper --test chain_scope -- --ignored
 	TEST_DATABASE_URL=$(TEST_DATABASE_URL) $(CARGO) test --locked -p credence-keeper --test edge_keeper -- --ignored --test-threads=3
 	TEST_DATABASE_URL=$(TEST_DATABASE_URL) RISK_CLI=$(abspath $(BACKEND_TARGET_DIR))/debug/risk-cli $(PNPM) --filter @credence/notifier e2e
 

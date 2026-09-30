@@ -178,10 +178,10 @@ fn rpc_urls() -> Result<Vec<String>> {
     Ok(v)
 }
 
-async fn store() -> Result<Arc<dyn ReportStore>> {
+async fn store(chain_id: u64) -> Result<Arc<dyn ReportStore>> {
     match env::optional("DATABASE_URL") {
         Some(url) => Ok(Arc::new(PgStore::new(
-            credence_common::db::connect(&url, 4).await?,
+            credence_common::db::connect_chain(&url, 4, chain_id).await?,
         ))),
         None => {
             tracing::warn!("DATABASE_URL not set: reports are kept in memory only");
@@ -238,7 +238,7 @@ async fn aggregator(
     };
     let _ = ops;
     let chain: Arc<dyn FeedChain> = Arc::new(chain);
-    let mut agg = Aggregator::new(cfg, nodes, chain, store().await?, metrics);
+    let mut agg = Aggregator::new(cfg, nodes, chain, store(common.chain_id).await?, metrics);
     agg.sync_seqs().await?;
     Ok(agg)
 }

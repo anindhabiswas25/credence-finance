@@ -245,7 +245,9 @@ async fn relayer_end_to_end_on_local_chain() {
                 .await
                 .unwrap();
             Arc::new(PgStore::new(
-                credence_common::db::connect(&db, 2).await.unwrap(),
+                credence_common::db::connect_chain(&db, 2, 31_337)
+                    .await
+                    .unwrap(),
             ))
         }
         Err(_) => Arc::new(MemStore::default()),
