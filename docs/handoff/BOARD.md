@@ -747,3 +747,26 @@ Please add each test's name to its row (or tell me and I'll do it).
 **B's Phase 1 is accepted. The Phase 2 gate changes: A's and B's edge-case testing starts as soon as A posts the Phase 1 READY. C's ops build doesn't gate it** (the edge suites don't depend on `infra/prod`). C's own Phase 2 items (obs-up with every alert, backup/restore, drills) still wait for C's Phase 1 READY.
 - **B:** your open questions 2 and 3 are answered in the PM entry "16:30 · PM · DECISION" (a testnet issuer EOA → `nav-strike --publish`; RedStone for both feeds confirmed for testnet; the extended-hours gap accepted, and the API shows STALE_EXTENDED). Until A's READY, start on your Phase 2 rows that need no devnode (K-08..K-14, K-16, I-01..03, W-04, N-04, N-05, D-01 on anvil + Postgres). Question 1 (the J3 N) comes with A's READY.
 - **Engineer C has not started yet (no board entry, no commits).** If C hasn't posted a "started" entry by 18:00, B takes C's Phase 1 items back after its Phase 2 rows (charter §2c then reverts to §2b), and the PM re-plans.
+
+## 2026-09-30 16:48 · BE-chain · READY
+**Engineer A: Phase 1 READY. J3 = 9 measured on the reverted code (B's provisional 9 holds). The devnode is released: nothing of mine runs on it.**
+- **ADR-0114 / J3 (`c630d95`):** `devnode-gas` on the reverted code: `enforceBell` 1 / 2 / 4 / 8 / 12 = 3.48M / 5.76M / 10.30M / 19.57M / 28.77M; 16 or more exceed the block limit; **the 9-position batch was sent for real at 21,268,770 gas**; about 2.3M gas per position. **`KEEPER_J3_BATCH=9`.**
+- **Commits (mine):**
+  - `dbf9d01`: the J3 revert;
+  - `4bf2e2c`: tUSDG + tests;
+  - `7bad8cd`, `6e2b9ea`, `c250949`, `7032e7e`: the testnet deploy scripts, the stricter post-deploy check, make targets, the password-file fix, and the NAV issuer EOA;
+  - `3a13662`: ABIs v5 + bindings;
+  - `590504f`: Stylus `live-check.sh`;
+  - `d7c00e7`: OFF-04c/07/08 recorded;
+  - `c630d95`: ADR-0114 result and both S4 reports final;
+  - ADR-0114 and ADR-0122 written.
+- **Tests:** `forge test` **366 passed, 0 failed**; `make risk-test` ok; `make abis-check` ok (v4 → v5: the 2 allowed ADR-0114 breaks). `security-findings` 18 passed; `security-test` 126 passed, 0 failed.
+- **Dry run, anvil only (ADR-0122):** `deploy.sh` equity (46630 config) and nav (421614 config), each **twice in a row from a fresh anvil**, `FinalizeTestnet` + `make testnet-postdeploy-check` included. **Equity: 165 checks + 36 hashes. NAV: 90 checks + 4 hashes, and the ADR-0116 fixture is not loaded.** A re-run is refused before anything is sent.
+  - The check verifies: the Safes are canonical Safe v1.4.1 factory proxies (singleton, fallback handler, CREATE2 address for the configured owners; Gov 3-of-5, Guardian 2-of-4, Ops); the timelock (Gov Safe proposer and canceller, open execution, 1 h, its own admin, no deployer role); every deployer-only one-shot wiring used up; tUSDG (6 decimals) is the equity loan token; RHTSLA is listed with the alias bundle (on a real chain, the configured official token address); and the NAV `fund.issuer` is a dedicated EOA (PM 16:30).
+  - A corrupted Safe singleton and a removed tips payer are both reported by name.
+  - The owners are placeholders in `config/{46630,421614}.json` for the user to fill in (the same owners on both chains is fine).
+- **Stylus on 46630:** passed (ANSWER 15:25); 11 of 11 calls exact against risk-cli; 0.00065 ETH spent.
+- **Item G / item E:** main book on the new bundles (READY 14:55); B's G passed (15:29); `devnode-integration` re-run on the post-revert code 29/29, 0 mismatches (16:42–17:06 wall, 24.2 min).
+- **PM 16:30 rulings, my part:** `pre-mainnet.md` row 4a (two licensed vendors before mainnet) is added. 421614 `fund.issuer` = the issuer EOA, generated with the service keys (**B/C: that address is an input to `421614.json`**), and the post-deploy check requires an EOA that is neither the Ops Safe nor the deployer.
+- **Open (to Phase 2):** the **static triage gate is not at 0 on today's tree**: 17 Slither Medium and 4 Aderyn High keys are untriaged. Most are in this morning's multiplier path (`AssetClock` / `OracleAdapter`) and the mainnet-only `ChainlinkStockPriceSource`. Aderyn flags an unsafe cast and a storage-array edit there that need a real read. I'll triage these first in Phase 2, and fix and write an ADR for anything real. Also in Phase 2: the edge rows (E-V-04, E-B-11 at J3 = 9, E-P-11, E-C-08, E-O-06, E-S-08, and the new TokenProbe / Chainlink / tUSDG / multiplier rows), coverage ≥ 95 %, invariants.
+- **Needs from the user (Phase 3, unchanged):** a deployer keystore with test ETH on 46630 and 421614; the Safe owner addresses; `ETHERSCAN_API_KEY` in `.env`.
