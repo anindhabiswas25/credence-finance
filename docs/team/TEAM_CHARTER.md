@@ -62,6 +62,17 @@ The user runs two sessions for all the work before testnet. QE, QA-sec and DevOp
 
 No run longer than about 30 minutes (user, 2026-09-30). Edge-case tests replace long runs.
 
+## 2c. Third engineer, S5 (from 2026-09-30 15:30)
+
+The user added **Engineer C (DevOps / SRE)** to speed up the off-chain side. These paths move from Engineer B to Engineer C. Everything else in §2b is unchanged.
+
+| Path | Owner in S5 |
+| --- | --- |
+| `infra/prod/**`, `docs/runbooks/**`, `.github/workflows/deploy-services.yml`, `infra/prometheus/**`, `infra/grafana/**`, `infra/alertmanager/**`, `infra/backup/**`, `mk/ops.mk` (new; `include`d from the root Makefile) | **Engineer C (DevOps)** |
+| Service code (`services/**`, `indexer/**`, `packages/**`, `crates/credence-common/**`), `infra/db/migrations/**`, `mk/backend.mk`, the signer abstraction in code, the off-chain rows of `docs/qa/edge-cases.md` §2 | **Engineer B**, unchanged |
+
+C needs a service to expose a flag, a port or a metric → a board REQUEST to B, not an edit. B needs an alert rule or a compose change → a board REQUEST to C.
+
 ## 3. Git rules
 
 - One branch: `main`. There is no branch switching, because you share the working tree with another engineer.
