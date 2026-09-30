@@ -313,6 +313,19 @@ pub async fn borrow(s: &Stack, key: &str, qty: u128, debt: u64) -> Address {
     who.address()
 }
 
+/// A fresh borrower key with 10 ETH on anvil.
+pub async fn funded_key(s: &Stack) -> String {
+    let k = PrivateKeySigner::random();
+    let _: serde_json::Value =
+        s.d.raw_request(
+            "anvil_setBalance".into(),
+            (k.address(), U256::from(10u128 * WAD)),
+        )
+        .await
+        .unwrap();
+    format!("{:#x}", k.to_bytes())
+}
+
 /// Anvil + DeployCoreLocal + the stand-in engine + a scratch database named `db_name`.
 pub async fn deploy(db_name: &str) -> Stack {
     std::env::set_current_dir(repo()).unwrap();
@@ -350,7 +363,7 @@ pub async fn deploy(db_name: &str) -> Stack {
 
     // ── DeployCoreLocal on the real calendars ──
     let out = repo().join(format!(
-        "deployments/31337.edge-restart-{}.local.json",
+        "deployments/31337.{db_name}-{}.local.json",
         std::process::id()
     ));
     let committee = COMMITTEE

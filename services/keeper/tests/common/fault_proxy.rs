@@ -5,6 +5,8 @@
 //! * `Mode::Down` answers every request with HTTP 503 (an outage);
 //! * `Mode::FrozenHead(n)` forwards everything but reports `eth_blockNumber = n` (a node stuck behind);
 //! * `fail(method, n)` fails the next `n` calls of `method` with a JSON-RPC error, after forwarding nothing;
+//! * `lose(method, skip)` lets `skip` calls of `method` through, then forwards the next one but answers it with
+//!   HTTP 502: the node got it (a tx is broadcast) and the caller never hears so;
 //! * `gate(method)` holds the next call of `method` until the test releases it, so the test can change the chain
 //!   between the caller's pre-check and its tx (K-06).
 //!
@@ -31,6 +33,7 @@ pub enum Mode {
 struct Inner {
     mode: Mode,
     fail: HashMap<String, usize>,
+    lose: HashMap<String, usize>,
     gate: Option<(String, mpsc::UnboundedSender<oneshot::Sender<()>>)>,
     calls: HashMap<String, usize>,
 }
@@ -53,6 +56,7 @@ impl FaultProxy {
             inner: Arc::new(Mutex::new(Inner {
                 mode: Mode::Up,
                 fail: HashMap::new(),
+                lose: HashMap::new(),
                 gate: None,
                 calls: HashMap::new(),
             })),
@@ -69,6 +73,15 @@ impl FaultProxy {
 
     pub fn fail(&self, method: &str, n: usize) {
         self.inner.lock().unwrap().fail.insert(method.into(), n);
+    }
+
+    /// Forward the `skip + 1`-th next call of `method` and lose its response.
+    pub fn lose(&self, method: &str, skip: usize) {
+        self.inner
+            .lock()
+            .unwrap()
+            .lose
+            .insert(method.into(), skip + 1);
     }
 
     /// Hold the next call of `method`; the receiver yields one release handle per held call.
@@ -91,7 +104,7 @@ async fn handle(State(p): State<FaultProxy>, body: Bytes) -> axum::response::Res
     // alloy sends single requests; a batch is forwarded as is (only Down applies to it)
     let method = req["method"].as_str().unwrap_or("").to_string();
     let id = req["id"].clone();
-    let (mode, fail, gate) = {
+    let (mode, fail, lose, gate) = {
         let mut g = p.inner.lock().unwrap();
         *g.calls.entry(method.clone()).or_default() += 1;
         let fail = match g.fail.get_mut(&method) {
@@ -101,11 +114,18 @@ async fn handle(State(p): State<FaultProxy>, body: Bytes) -> axum::response::Res
             }
             _ => false,
         };
+        let lose = match g.lose.get_mut(&method) {
+            Some(n) if *n > 0 => {
+                *n -= 1;
+                *n == 0
+            }
+            _ => false,
+        };
         let gate = match &g.gate {
             Some((m, _)) if *m == method => g.gate.take().map(|(_, tx)| tx),
             _ => None,
         };
-        (g.mode.clone(), fail, gate)
+        (g.mode.clone(), fail, lose, gate)
     };
     if mode == Mode::Down {
         return (StatusCode::SERVICE_UNAVAILABLE, "down").into_response();
@@ -131,6 +151,7 @@ async fn handle(State(p): State<FaultProxy>, body: Bytes) -> axum::response::Res
         .send()
         .await
     {
+        Ok(_) if lose => (StatusCode::BAD_GATEWAY, "fault proxy: response lost").into_response(),
         Ok(r) => {
             let status =
                 StatusCode::from_u16(r.status().as_u16()).unwrap_or(StatusCode::BAD_GATEWAY);

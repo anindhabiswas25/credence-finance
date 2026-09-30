@@ -72,6 +72,13 @@ pub fn bump_fees(max_fee: u128, tip: u128, cap: Option<u128>) -> (u128, u128) {
     (f, t)
 }
 
+/// A node's nonce complaint anywhere in the error chain (`with_failover` wraps the node's message in a context, so
+/// the top-level `to_string()` alone never shows it).
+pub fn is_nonce_error(e: &anyhow::Error) -> bool {
+    let msg = format!("{e:#}");
+    msg.contains("nonce too low") || msg.contains("nonce too high")
+}
+
 impl TxManager {
     pub fn new(
         rpc: Arc<Rpc>,
@@ -217,8 +224,7 @@ impl TxManager {
                 })
                 .await;
             if let Err(e) = sent {
-                let msg = e.to_string();
-                if msg.contains("nonce too low") || msg.contains("nonce too high") {
+                if is_nonce_error(&e) {
                     // maybe a previous tx at this nonce already mined: reconcile, then resync
                     if let Reconciled::Mined(m) = self.reconcile_hashes(conn, &hashes).await? {
                         self.bump_nonce(nonce).await;
@@ -228,6 +234,16 @@ impl TxManager {
                 }
                 self.metrics.txs.with_label_values(&["send_error"]).inc();
                 return Err(e);
+            }
+            // count the blocks from after the broadcast: a slow broadcast must not make a fresh tx look stuck
+            if let Ok(bn) = self
+                .rpc
+                .with_failover("block number", |p| async move {
+                    Ok(p.get_block_number().await?)
+                })
+                .await
+            {
+                last_broadcast_block = last_broadcast_block.max(bn);
             }
 
             // wait for a receipt; replace after N blocks
@@ -255,6 +271,15 @@ impl TxManager {
                     })
                     .await?;
                 if bn >= last_broadcast_block + self.replace_after_blocks {
+                    // mined while we slept? never replace a tx that is already in a block
+                    if let Reconciled::Mined(m) = self.reconcile_hashes(conn, &hashes).await? {
+                        self.bump_nonce(nonce).await;
+                        self.metrics
+                            .txs
+                            .with_label_values(&[if m.success { "mined" } else { "reverted" }])
+                            .inc();
+                        return Ok(m);
+                    }
                     last_broadcast_block = bn;
                     let (f, t) = bump_fees(max_fee, tip, self.max_fee_cap_wei);
                     if (f, t) == (max_fee, tip) {
@@ -362,6 +387,21 @@ impl TxManager {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn edge_k05_a_wrapped_nonce_error_is_recognised() {
+        let node =
+            anyhow::anyhow!("server returned an error response: error code -32003: nonce too low");
+        let wrapped = node.context("send_raw_transaction: every RPC failed");
+        assert!(
+            !wrapped.to_string().contains("nonce too low"),
+            "the top level hides it"
+        );
+        assert!(super::is_nonce_error(&wrapped));
+        assert!(!super::is_nonce_error(&anyhow::anyhow!(
+            "insufficient funds"
+        )));
+    }
+
     #[test]
     fn off09_replacement_fees_stop_at_the_cap() {
         assert_eq!(super::bump_fees(100, 10, None), (121, 13));
