@@ -1,0 +1,30 @@
+{
+  "_comment": "Equity stack on Robinhood Chain testnet (ADR-0122, Amendment 1). Empty lists are user / Engineer B inputs: the deploy refuses to start while any is empty.",
+  "stack": "equity",
+  "chainId": 46630,
+  "rpc": "https://rpc.testnet.chain.robinhood.com",
+  "release": "v0.1.0-testnet",
+  "timelockDelay": 3600,
+  "calendar": "calibration/out/calendars/XNYS-20261001-20271031.json",
+  "riskBundles": ["calibration/out/risk-bundle-cfbb86cb.json", "calibration/out/alias/risk-bundle-alias-9821d6d3.json"],
+  "loanToken": { "name": "Credence Test USDG", "symbol": "tUSDG", "decimals": 6, "faucet": 1000 },
+  "minBid": 100,
+  "assets": [
+    { "ticker": "NVDA", "token": "new", "supplyCap": 2000000, "borrowCap": 1400000, "vaultCap": 2000000, "faucet": 50 },
+    { "ticker": "AAPL", "token": "new", "supplyCap": 2000000, "borrowCap": 1400000, "vaultCap": 2000000, "faucet": 50 },
+    { "ticker": "TSLA", "token": "new", "supplyCap": 2000000, "borrowCap": 1400000, "vaultCap": 2000000, "faucet": 50 },
+    { "ticker": "MSFT", "token": "new", "supplyCap": 2000000, "borrowCap": 1400000, "vaultCap": 2000000, "faucet": 50 },
+    { "ticker": "GOOGL", "token": "new", "supplyCap": 2000000, "borrowCap": 1400000, "vaultCap": 2000000, "faucet": 50 },
+    { "ticker": "AMZN", "token": "new", "supplyCap": 2000000, "borrowCap": 1400000, "vaultCap": 2000000, "faucet": 50 },
+    { "_comment": "the official Robinhood test TSLA (ADR-0120): capped low, no faucet (Robinhood's own faucet gives 5 a day)",
+      "ticker": "RHTSLA", "token": "0xC9f9c86933092BbbfFF3CCb4b105A4A94bf3Bd4E", "supplyCap": 25000, "borrowCap": 15000, "vaultCap": 25000, "faucet": 0 }
+  ],
+  "relayers": { "feedA": [], "feedB": [], "threshold": 2 },
+  "sigma": { "signers": [], "threshold": 2 },
+  "safes": {
+    "gov": { "owners": [], "threshold": 3 },
+    "guardian": { "owners": [], "threshold": 2 },
+    "ops": { "owners": [], "threshold": 2 }
+  },
+  "verify": { "verifier": "blockscout", "url": "https://explorer.testnet.chain.robinhood.com/api/" }
+}

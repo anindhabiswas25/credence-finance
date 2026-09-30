@@ -1,3 +1,7 @@
 # local deployments (anvil / devnode) are ephemeral
 *.local.json
 devnode.*.json
+# testnet deploy (ADR-0122): dry-run books and bundle plans are local
+31337.*
+*.risk-plan.*
+.check-plan.*

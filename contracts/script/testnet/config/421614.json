@@ -1,0 +1,26 @@
+{
+  "_comment": "NAV stack on Arbitrum Sepolia (ADR-0122, Amendment 1). Empty lists / addresses are user / Engineer B inputs: the deploy refuses to start while any is empty.",
+  "stack": "nav",
+  "chainId": 421614,
+  "rpc": "https://sepolia-rollup.arbitrum.io/rpc",
+  "release": "v0.1.0-testnet",
+  "timelockDelay": 3600,
+  "calendar": "calibration/out/calendars/USBANK-20261001-20271031.json",
+  "riskBundles": ["calibration/out/nav/risk-bundle-nav-5bdf292d.json"],
+  "loanToken": { "_comment": "Circle test USDC on Arbitrum Sepolia (faucet.circle.com)", "address": "0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d" },
+  "assets": [
+    { "ticker": "TBILL", "token": "new", "supplyCap": 5000000, "borrowCap": 4500000, "vaultCap": 5000000, "faucet": 100000 }
+  ],
+  "fund": { "issuer": "", "reserveWallet": "" },
+  "navSolvers": [],
+  "registryOperators": [],
+  "settlementWindow": 900,
+  "relayers": { "nav": [], "threshold": 2 },
+  "sigma": { "signers": [], "threshold": 2 },
+  "safes": {
+    "gov": { "owners": [], "threshold": 3 },
+    "guardian": { "owners": [], "threshold": 2 },
+    "ops": { "owners": [], "threshold": 2 }
+  },
+  "verify": { "verifier": "etherscan", "chain": "arbitrum-sepolia" }
+}
