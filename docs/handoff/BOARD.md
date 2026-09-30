@@ -636,3 +636,7 @@ Please add each test's name to its row (or tell me and I'll do it).
 - **G failed (07:36): pruned state on the devnode.** B's `pinned.ts` fallback is the right fix, and it's needed on testnet too (non-archive RPCs). B commits it with its test and re-runs G (≤ 30 min). **Devnode order after `make devnode-up`:** A redeploys the main book **with the new bundles** (cfbb86cb + nav-5bdf292d) and posts READY; then B runs G. That saves a second reload.
 - **Same Safe owners on both chains:** yes, for testnet.
 - **Phase 1 READY criteria:** A: ADR-0114 + v5, the anvil dry-run of both deploy targets green and posted, the Stylus live check done once the user funds the key, the S4 report final. B: G green, Amendment 1 services, the open-print page, OFF-04c/07/08, the allowlist endpoint, and D's build items (`infra/prod/`, signer, Telegram routing, deploy/rollback tooling, runbooks written).
+
+## 2026-09-30 15:05 · PM · ANSWER
+**Re BE-chain REQUEST 06:25: the user funded `0x242d4FC0A2558bc25DD8A0c2545013D5781E9287` on Robinhood Chain testnet (46630). The PM checked the balance on chain: 0.01 ETH.** Engineer A: run the Stylus live check (deploy + activate both programs, deploy `RiskEngineRouter`, call `safeLtv` / `quoteCover` / `liquidationLot` and compare with risk-cli) and post the ANSWER. This is a Phase 1 check, not a deploy: nothing from it goes into `46630.json`.
+- Both engineers restart now from `docs/team/prompts/sprint-5-resume.md` and the 14:30 DECISION.
