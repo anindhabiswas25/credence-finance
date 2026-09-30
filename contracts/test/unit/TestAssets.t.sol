@@ -8,6 +8,7 @@ import {ComplianceRegistry} from "../../src/testnet/ComplianceRegistry.sol";
 import {CredenceStockToken} from "../../src/testnet/CredenceStockToken.sol";
 import {CredenceTreasuryFund} from "../../src/testnet/CredenceTreasuryFund.sol";
 import {Faucet} from "../../src/testnet/Faucet.sol";
+import {TestStablecoin} from "../../src/testnet/TestStablecoin.sol";
 import {MockERC20} from "../mocks/MockERC20.sol";
 
 contract TestAssetsTest is Test, ICollateralTokenEvents, INavFundEvents, IFaucetEvents {
@@ -331,5 +332,59 @@ contract TestAssetsTest is Test, ICollateralTokenEvents, INavFundEvents, IFaucet
         vm.prank(alice);
         if (wait < 24 hours) vm.expectRevert();
         faucet.drip(address(stock));
+    }
+
+    // ───────────── TestStablecoin (tUSDG, ADR-0120) ─────────────
+
+    function test_testStablecoin() public {
+        TestStablecoin t = new TestStablecoin("Credence Test USDG", "tUSDG", 6, issuer);
+        assertEq(t.decimals(), 6);
+        assertEq(t.issuer(), issuer);
+        assertEq(t.symbol(), "tUSDG");
+        vm.expectRevert(ICredenceErrors.Unauthorized.selector);
+        t.mint(alice, 1);
+        vm.prank(issuer);
+        t.mint(alice, 5e6);
+        vm.prank(issuer);
+        t.setMinter(address(faucet), 100e6);
+        faucet.configure(address(t), 50e6, false);
+        vm.prank(bob);
+        faucet.drip(address(t));
+        assertEq(t.balanceOf(bob), 50e6);
+        assertEq(t.balanceOf(alice), 5e6);
+    }
+
+    // ───────────── CredenceStockToken ERC-8056 (ADR-0119) ─────────────
+
+    function test_stockUIMultiplierSchedule() public {
+        assertEq(stock.uiMultiplier(), 1e18);
+        assertEq(stock.newUIMultiplier(), 0);
+        assertEq(stock.effectiveAt(), 0);
+        vm.expectRevert(ICredenceErrors.Unauthorized.selector);
+        stock.scheduleUIMultiplier(2e18, block.timestamp + 1);
+        vm.startPrank(issuer);
+        vm.expectRevert(ICredenceErrors.InvalidParam.selector);
+        stock.scheduleUIMultiplier(0, block.timestamp + 1);
+        vm.expectRevert(ICredenceErrors.InvalidParam.selector);
+        stock.scheduleUIMultiplier(2e18, block.timestamp - 1);
+        vm.expectRevert(ICredenceErrors.InvalidParam.selector);
+        stock.cancelUIMultiplierUpdate(); // nothing pending
+        stock.scheduleUIMultiplier(2e18, block.timestamp + 1 days);
+        assertEq(stock.uiMultiplier(), 1e18, "not yet");
+        assertEq(stock.sharesPerToken(), 1e18);
+        stock.cancelUIMultiplierUpdate();
+        assertEq(stock.effectiveAt(), 0);
+        stock.scheduleUIMultiplier(3e18, block.timestamp + 1 hours);
+        vm.stopPrank();
+        vm.warp(block.timestamp + 1 hours);
+        assertEq(stock.uiMultiplier(), 3e18, "took effect");
+        vm.prank(issuer);
+        vm.expectRevert(ICredenceErrors.InvalidParam.selector);
+        stock.cancelUIMultiplierUpdate(); // already effective
+        vm.prank(issuer);
+        stock.scheduleUIMultiplier(1.5e18, block.timestamp + 2 hours); // the effective one becomes the base
+        assertEq(stock.uiMultiplier(), 3e18);
+        vm.warp(block.timestamp + 2 hours);
+        assertEq(stock.uiMultiplier(), 1.5e18);
     }
 }
