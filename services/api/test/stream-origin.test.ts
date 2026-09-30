@@ -1,6 +1,12 @@
 // OFF-04 (QA-sec): the /v1/stream upgrade refuses cross-site origins; subscribe messages are small.
 import { describe, expect, it } from "vitest";
-import { MAX_MESSAGE_BYTES, originAllowed } from "../src/stream.ts";
+import { Hono } from "hono";
+import {
+  MAX_MESSAGE_BYTES,
+  attachStream,
+  originAllowed,
+  type StreamHub,
+} from "../src/stream.ts";
 
 describe("stream origin", () => {
   const allowed = ["https://app.credence.finance", "http://localhost:3000"];
@@ -19,10 +25,8 @@ describe("stream origin", () => {
 
 describe("stream chain (ADR-0014)", () => {
   it("a socket opens on a served chain only (?chain=, optional with one chain)", async () => {
-    const { Hono } = await import("hono");
-    const { attachStream } = await import("../src/stream.ts");
     const app = new Hono();
-    const hub = {} as import("../src/stream.ts").StreamHub;
+    const hub = {} as StreamHub;
     await attachStream(app, (chain) => (chain === "46630" ? hub : undefined));
     expect((await app.request("/v1/stream?chain=1")).status).toBe(400);
     expect((await app.request("/v1/stream")).status).toBe(400);
