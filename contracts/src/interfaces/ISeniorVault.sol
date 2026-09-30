@@ -55,4 +55,12 @@ interface ISeniorVault is IERC4626, ISeniorVaultEvents, ICredenceErrors {
     function pendingRedeemShares() external view returns (uint256);
     /// @notice Assets set aside for processed, unclaimed requests (excluded from totalAssets).
     function claimableAssets() external view returns (uint256);
+
+    // ── S5 additions (QA-11, ADR-0117) ──
+    /// @notice onlyTimelock. Remove a market with nothing supplied from the vault: its cap, its slot in the
+    ///         MAX_QUEUE list and both queues. Reverts `MarketNotEmpty` while the market holds any supply.
+    ///         `setCap` enables it again.
+    function disable(bytes32 marketId) external;
+    /// @notice The enabled markets (every market with a cap that was not disabled since).
+    function enabledMarkets() external view returns (bytes32[] memory);
 }

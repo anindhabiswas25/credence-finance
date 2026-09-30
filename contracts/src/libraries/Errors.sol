@@ -97,6 +97,7 @@ interface ICredenceErrors {
     error RequestAlreadyClaimed(uint256 requestId);
     error UnknownMarket(bytes32 id);
     error QueueTooLong(uint256 n, uint256 max);
+    error MarketNotEmpty(bytes32 id, uint256 supplied);
 
     // ── auctions / settlement (S3–S4) ──
     error PhaseClosed(uint8 phase);

@@ -32,7 +32,7 @@ contract SeniorVault is ERC4626, ISeniorVault, ReentrancyGuardTransient {
     address public allocator;
 
     mapping(bytes32 id => uint256) public cap;
-    /// @dev Every market that ever had a cap (totalAssets iterates over it).
+    /// @dev Every market with a cap that was not disabled since (totalAssets iterates over it).
     bytes32[] internal _enabled;
     mapping(bytes32 id => bool) internal _isEnabled;
     bytes32[] internal _supplyQueue;
@@ -88,6 +88,28 @@ contract SeniorVault is ERC4626, ISeniorVault, ReentrancyGuardTransient {
         }
         cap[id] = cap_;
         emit CapSet(id, cap_);
+    }
+
+    /// @inheritdoc ISeniorVault
+    /// @dev QA-11: without it the list is append-only and the 33rd market could never be supplied. The market must
+    ///      hold no supply at all: `totalAssets` counts every enabled market, so a disabled one with money in it would
+    ///      drop that money from the share price.
+    function disable(bytes32 id) external {
+        if (msg.sender != timelock) revert Unauthorized();
+        if (!_isEnabled[id]) revert UnknownMarket(id);
+        uint256 s = _supplied(id);
+        if (s != 0) revert MarketNotEmpty(id, s);
+        _isEnabled[id] = false;
+        delete cap[id];
+        _remove(_enabled, id);
+        _remove(_supplyQueue, id);
+        _remove(_withdrawQueue, id);
+        emit MarketDisabled(id);
+    }
+
+    /// @inheritdoc ISeniorVault
+    function enabledMarkets() external view returns (bytes32[] memory) {
+        return _enabled;
     }
 
     /// @inheritdoc ISeniorVault
@@ -330,6 +352,19 @@ contract SeniorVault is ERC4626, ISeniorVault, ReentrancyGuardTransient {
             emit Allocated(id, -int256(amt));
         }
         if (need != 0) revert InsufficientLiquidity(assets, assets - need);
+    }
+
+    /// @dev Remove `id` from `arr` if present, keeping the order of the rest (queue order is the allocator's policy).
+    function _remove(bytes32[] storage arr, bytes32 id) internal {
+        uint256 n = arr.length;
+        for (uint256 i; i < n; ++i) {
+            if (arr[i] != id) continue;
+            for (uint256 j = i + 1; j < n; ++j) {
+                arr[j - 1] = arr[j];
+            }
+            arr.pop();
+            return;
+        }
     }
 
     function _checkQueue(bytes32[] calldata ids) internal view {

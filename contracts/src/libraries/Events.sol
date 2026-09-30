@@ -140,6 +140,8 @@ interface ISeniorVaultEvents {
     event WithdrawQueueSet(bytes32[] ids);
     // v1 additions (S2)
     event AllocatorSet(address allocator);
+    // S5 (QA-11, ADR-0117)
+    event MarketDisabled(bytes32 indexed id);
 }
 
 /// @dev v2 (S3, ADR-0110): every pool state change the indexer projects carries its result, so handlers need no
