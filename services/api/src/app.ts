@@ -65,6 +65,26 @@ export interface Deps {
   rt?: RiskTransferRepo;
   /** NAV settlements and redemption claims (S4); mounted only when present. */
   settlement?: SettlementRepo;
+  /** ADR-0014: one API serves several chains through one app per chain; they share these windows, so a client
+   * gets one quota whatever chain it asks for. */
+  limiters?: Limiters;
+}
+
+export interface Limiters {
+  general: FixedWindow;
+  auth: FixedWindow;
+  allowlist: FixedWindow;
+}
+
+export function newLimiters(
+  config: Config,
+  now: () => number = Date.now,
+): Limiters {
+  return {
+    general: new FixedWindow(config.rateLimitPerMin, 60_000, now),
+    auth: new FixedWindow(config.rateLimitAuthPerMin, 60_000, now),
+    allowlist: new FixedWindow(config.allowlistPerIpPerHour, 3600_000, now),
+  };
 }
 
 // ── schemas ──────────────────────────────────────────────────────────────────────────────────────
@@ -202,8 +222,9 @@ export function createApp(deps: Deps) {
     }
     return clientIp(c.req.raw.headers, remote, config.trustedProxies);
   };
-  const general = new FixedWindow(config.rateLimitPerMin, 60_000, now);
-  const authLimiter = new FixedWindow(config.rateLimitAuthPerMin, 60_000, now);
+  const limiters = deps.limiters ?? newLimiters(config, now);
+  const general = limiters.general;
+  const authLimiter = limiters.auth;
   app.use(
     "/v1/*",
     rateLimit(general, (c) => {
@@ -369,6 +390,7 @@ export function createApp(deps: Deps) {
       allowlistEnabled: config.allowlistEnabled,
       allowlistChains: config.allowlistChains ?? [config.chainId],
       allowlistPerIpPerHour: config.allowlistPerIpPerHour,
+      allowlistLimiter: limiters.allowlist,
       ipOf,
     });
   }

@@ -360,7 +360,8 @@ export function originAllowed(
 export async function attachStream(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   app: Hono<any, any, any>,
-  hub: StreamHub,
+  /** One hub, or (ADR-0014) the hub of the `?chain=` the socket opens with (undefined: refused with 400). */
+  hubs: StreamHub | ((chain: string | undefined) => StreamHub | undefined),
   /** The SIWE session's address for the upgrade request's cookie header, if valid. */
   sessionOwner: (
     cookieHeader: string | undefined,
@@ -370,6 +371,7 @@ export async function attachStream(
 ) {
   const { createNodeWebSocket } = await import("@hono/node-ws");
   const { injectWebSocket, upgradeWebSocket } = createNodeWebSocket({ app });
+  const hubOf = typeof hubs === "function" ? hubs : () => hubs;
   const sockets = new WeakMap<object, Socket>();
   const of = (ws: {
     raw?: unknown;
@@ -393,9 +395,15 @@ export async function attachStream(
           { error: "forbidden", message: "origin not allowed" },
           403,
         );
+      if (!hubOf(c.req.query("chain")))
+        return c.json(
+          { error: "bad_request", message: "unknown or missing chain" },
+          400,
+        );
       await next();
     },
     upgradeWebSocket(async (c) => {
+      const hub = hubOf(c.req.query("chain"))!;
       const owner = await sessionOwner(c.req.header("cookie")).catch(
         () => undefined,
       );

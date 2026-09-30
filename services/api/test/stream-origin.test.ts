@@ -16,3 +16,18 @@ describe("stream origin", () => {
     expect(MAX_MESSAGE_BYTES).toBe(16_384);
   });
 });
+
+describe("stream chain (ADR-0014)", () => {
+  it("a socket opens on a served chain only (?chain=, optional with one chain)", async () => {
+    const { Hono } = await import("hono");
+    const { attachStream } = await import("../src/stream.ts");
+    const app = new Hono();
+    const hub = {} as import("../src/stream.ts").StreamHub;
+    await attachStream(app, (chain) => (chain === "46630" ? hub : undefined));
+    expect((await app.request("/v1/stream?chain=1")).status).toBe(400);
+    expect((await app.request("/v1/stream")).status).toBe(400);
+    expect((await app.request("/v1/stream?chain=46630")).status).not.toBe(
+      400,
+    );
+  });
+});

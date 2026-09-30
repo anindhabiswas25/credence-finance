@@ -120,6 +120,8 @@ export interface MeDeps {
   /** ADR-0014: the served testnet chains an attestation allowlists on (`?chain=` picks one). */
   allowlistChains: number[];
   allowlistPerIpPerHour: number;
+  /** Shared across the chains' apps (ADR-0014). */
+  allowlistLimiter?: FixedWindow;
   ipOf: (c: Context) => string;
 }
 
@@ -356,7 +358,9 @@ export function registerMeRoutes(app: OpenAPIHono, deps: MeDeps) {
     },
   );
 
-  const perIp = new FixedWindow(deps.allowlistPerIpPerHour, 3600_000, deps.now);
+  const perIp =
+    deps.allowlistLimiter ??
+    new FixedWindow(deps.allowlistPerIpPerHour, 3600_000, deps.now);
   app.openapi(
     createRoute({
       method: "post",
