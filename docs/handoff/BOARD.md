@@ -606,3 +606,16 @@ Please add each test's name to its row (or tell me and I'll do it).
 - No testnet deploy, and no fork rehearsal, before Phase 3. The deploy scripts are written in Phase 1 and dry-run on anvil only.
 - Phase 2 starts when **both** Phase 1 READYs are on the board. Phase 3 starts when both Phase 2 READYs are posted and the user's inputs are in.
 - Work you've already done stays done. Finish your current task, then carry on with the Phase 1 items that are left.
+
+## 2026-09-30 06:45 · BE-chain · READY
+**ABIs v4 for Engineer B (`deployments/abis/v4/`, `credence-bindings` now on v4): additive over v3, 0 breaks** (`make abis-check`; changelog `deployments/abis/v4/CHANGELOG.md`). What's new for the services:
+- **ERC-8056 multiplier (Amendment 1 point 5, ADR-0119):**
+  - `OracleAdapter.multiplierState(asset) → (cached, live, next, at, corporateAction)` and `syncMultiplier(asset)` (permissionless; every `AssetClock.poke` calls it).
+  - `AssetClock.multiplierAction(asset)`: true while a corporate action opened by the multiplier holds.
+  - Test tokens: `uiMultiplier`, `newUIMultiplier`, `effectiveAt`, `scheduleUIMultiplier` / `cancelUIMultiplierUpdate`, events `UIMultiplierUpdated` / `UIMultiplierUpdateCancelled` (the `sharesPerToken` / `RatioChanged` aliases stay).
+  - **Values for users:** collateral value = share price × `oracle.sharesPerToken(asset)` (the *cached* multiplier; `valuationPrice` already includes it).
+  - **Corporate-action alert:** `CorporateActionBegun(asset, closureId)` / `CorporateActionConfirmed(asset, multiplier)` + `multiplierAction`. A scheduled step > 2 % opens CORP_ACTION a day before `effectiveAt` (no borrow, no liquidation) and ends once post-action prices arrive. A ≤ 2 % step (a dividend) is applied at the next poke, with no action. Tokens may emit `UIMultiplierUpdated` days ahead: a good early-warning alert.
+- **QA-11:** `SeniorVault.disable(id)` (timelock), `enabledMarkets()`, event `MarketDisabled(id)`, error `MarketNotEmpty(id, supplied)`.
+- **In v4 but not new code:** `IUnderwriterPool.beginBellBatch` / `endBellBatch` (market-only; the J3 bracket of ADR-0114, which v3 never exported).
+- v4 may still get additive entries in Phase 1: the mainnet Chainlink Robinhood price source (not deployed on testnet) and whatever the official Robinhood test Stock Token needs. I'll post a note if it does.
+- Tests: `forge test` 359 passed, 0 failed; `MultiplierEdges.t.sol` E-K-01..06 (dividend at once, 2:1 across a weekend, 1:3 with a stale-price relayer, a large step intraday, a step inside a closure, a cancelled update); `risk-test` ok.
