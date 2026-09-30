@@ -44,12 +44,12 @@ NAV_BUNDLE="${NAV_RISK_BUNDLE:-$ROOT/contracts/test/fixtures/risk/tbill-local/bu
   RISK_BUNDLE_DIR="$(dirname "$NAV_BUNDLE")" bash contracts/script/load_risk_bundle.sh | tail -1)
 
 # 2. a synthetic calendar centred on the devnode's clock (it cannot be warped): today's session runs from now − 2 h
-#    to now + 2 h 24 min and is followed by a WEEKEND closure, so the market is in REGULAR with live prices. The pool
+#    to now + 2 h 12 min and is followed by a WEEKEND closure, so the market is in REGULAR with live prices. The pool
 #    is deployed BEFORE the Bell window (close − 2 h): a pool that starts inside a window sells cover from the next
 #    closure only (§8.6.3). Phase 5 waits for the window.
 mkdir -p "$FIX"
 python3 "$ROOT/contracts/script/synthetic_calendar.py" "$(cast block latest --field timestamp --rpc-url "$RPC")" "$FIX" \
-  --after 7 --regular-hours 2.4 >/dev/null
+  --after 7 --regular-hours 2.2 >/dev/null   # the Bell window opens 12 min in: the run stays under 30 min
 XNYS="$FIX/XNYS-synthetic.json"; USBANK="$FIX/USBANK-synthetic.json"
 (cd "$ROOT/contracts" && OUT="$BOOK" RISK_ENGINE="$ENGINE" PRIVATE_KEY="$KEY" RELAYER_A_SIGNERS="$SIGNERS" \
   RELAYER_B_SIGNERS="$SIGNERS" XNYS_CALENDAR="$XNYS" USBANK_CALENDAR="$USBANK" SEED_EQUITY=100000000000 \
