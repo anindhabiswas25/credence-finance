@@ -22,8 +22,14 @@ Pooling rule and its effect on the tail: ADR-0203. Tail floor (the more severe o
 | SPY | OVERNIGHT | 3000 | 24612 | -6276 | -5994 | -6276 | 7 | -10802 | 2051 | -4841 | -8421 | — | `SPY-XNAS-1-d5f23580.json` |
 | SPY | WEEKEND | 3000 | 5663 | -6276 | -6121 | -6276 | 1 | -11084 | 472 | -6121 | -6121 | — | `SPY-XNAS-2-d0f2e482.json` |
 | SPY | HOLIDAY_WEEKEND | 1104 | 1104 | -5311 | -4404 | -5311 | 4 | -7716 | 92 | -2913 | -2913 | — | `SPY-XNAS-3-9dbaae4c.json` |
+| GOOGL | OVERNIGHT | 3000 | 32816 | -11144 | -11144 | -6276 | 0 | -16430 | 2051 | -8833 | -16247 | — | `GOOGL-XNAS-1-45dec169.json` |
+| GOOGL | WEEKEND | 3000 | 7552 | -7208 | -7208 | -6276 | 1 | -10802 | 472 | -5222 | -5222 | — | `GOOGL-XNAS-2-d92031c0.json` |
+| GOOGL | HOLIDAY_WEEKEND | 1472 | 1472 | -5860 | -5021 | -5860 | 2 | -8502 | 92 | -4670 | -4670 | — | `GOOGL-XNAS-3-f4d2fca8.json` |
+| AMZN | OVERNIGHT | 3000 | 32816 | -11144 | -11144 | -6276 | 0 | -16430 | 2051 | -8347 | -13705 | — | `AMZN-XNAS-1-caed5bcf.json` |
+| AMZN | WEEKEND | 3000 | 7552 | -7208 | -7208 | -6276 | 1 | -10802 | 472 | -5488 | -5488 | — | `AMZN-XNAS-2-ce59d30d.json` |
+| AMZN | HOLIDAY_WEEKEND | 1472 | 1472 | -5860 | -5021 | -5860 | 2 | -8502 | 92 | -4491 | -4491 | — | `AMZN-XNAS-3-e6db72ad.json` |
 
-## Joint stress set (`joint-4dcad6d1.json`)
+## Joint stress set (`joint-38f0d2af.json`)
 
 K = 256 worst of 564 non-overnight closures (2016-04-25 → 2026-09-21), ranked by synthetic stress closures first (ADR-0204), then historical closures by equal-weighted mean z of the six assets, ascending (worst first). Back-fill: OLS through the origin of z_a on z_SPY over non-overnight closures where both exist.
 
@@ -34,25 +40,27 @@ K = 256 worst of 564 non-overnight closures (2016-04-25 → 2026-09-21), ranked 
 | TSLA | 0.539 | 0 |
 | COIN | 0.786 | 289 |
 | MSFT | 0.843 | 0 |
+| GOOGL | 0.853 | 0 |
+| AMZN | 0.824 | 0 |
 
-Synthetic stress closures (ADR-0204): POT/GPD return levels of the historical basket z; GPD over the worst 10% of basket z (57 exceedances, ξ = 0.2872, scale 0.6551, 54.2 closures/year, worst observed −6.7344). Shapes: the worst historical closure (2024-08-05) scaled, and all assets equal.
+Synthetic stress closures (ADR-0204): POT/GPD return levels of the historical basket z; GPD over the worst 10% of basket z (57 exceedances, ξ = 0.2745, scale 0.6706, 54.2 closures/year, worst observed −6.3894). Shapes: the worst historical closure (2024-08-05) scaled, and all assets equal.
 
 | Horizon | years | closures | basket z |
 | --- | ---: | ---: | ---: |
-| since2000 | 26.72 | 1448.2 | -8.16 |
-| 40y | 40.0 | 2167.9 | -9.33 |
+| since2000 | 26.72 | 1448.2 | -8.08 |
+| 40y | 40.0 | 2167.9 | -9.2 |
 
 Worst ten:
 
 | # | Reopen session | Closure | basket mean z |
 | ---: | --- | --- | ---: |
-| 1 | SYN-40y-worstHistorical | SYNTHETIC | -9.330 |
-| 2 | SYN-40y-uniform | SYNTHETIC | -9.330 |
-| 3 | SYN-since2000-worstHistorical | SYNTHETIC | -8.160 |
-| 4 | SYN-since2000-uniform | SYNTHETIC | -8.160 |
-| 5 | 2024-08-05 | WEEKEND | -6.734 |
-| 6 | 2020-02-24 | WEEKEND | -4.484 |
-| 7 | 2020-03-09 | WEEKEND | -4.237 |
-| 8 | 2020-09-08 | HOLIDAY_WEEKEND | -3.909 |
-| 9 | 2020-03-16 | WEEKEND | -3.593 |
-| 10 | 2020-01-27 | WEEKEND | -3.087 |
+| 1 | SYN-40y-worstHistorical | SYNTHETIC | -9.200 |
+| 2 | SYN-40y-uniform | SYNTHETIC | -9.200 |
+| 3 | SYN-since2000-worstHistorical | SYNTHETIC | -8.080 |
+| 4 | SYN-since2000-uniform | SYNTHETIC | -8.080 |
+| 5 | 2024-08-05 | WEEKEND | -6.389 |
+| 6 | 2020-02-24 | WEEKEND | -4.457 |
+| 7 | 2020-03-09 | WEEKEND | -4.380 |
+| 8 | 2020-09-08 | HOLIDAY_WEEKEND | -4.077 |
+| 9 | 2020-03-16 | WEEKEND | -3.670 |
+| 10 | 2020-01-27 | WEEKEND | -3.223 |

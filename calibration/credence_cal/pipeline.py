@@ -257,8 +257,18 @@ def stage_proposal(c: Ctx) -> None:
     print(f"proposal: {bpath.name}, {cpath.relative_to(c.out)}, proposal/{proposal.PROPOSAL_DATE}.md")
 
 
+def stage_nav(c: Ctx) -> None:
+    """TBILL:USBANK from the T-bill ETF proxies (ADR-0118): its own pinned manifest, so only for real vendor data."""
+    if c.vendor != "alpaca":
+        print(f"nav: skipped for vendor {c.vendor} (the proxies are pinned in manifests/data-alpaca-nav.json)")
+        return
+    from . import nav
+
+    nav.stage(c.out)
+
+
 STAGES = {"gaps": stage_gaps, "sigma": stage_sigma, "sets": stage_sets, "validation": stage_validation,
-          "backtest": stage_backtest, "proposal": stage_proposal}
+          "backtest": stage_backtest, "proposal": stage_proposal, "nav": stage_nav}
 CORE = ("gaps", "sigma", "sets", "validation")  # fast; the CI sample check runs these
 
 

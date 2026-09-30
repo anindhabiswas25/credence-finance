@@ -47,6 +47,39 @@
      "rate": 0.002119,
      "trials": 472
     },
+    "AMZN:HOLIDAY_WEEKEND": {
+     "breaches": 0,
+     "ci95": [
+      0.0,
+      0.039303
+     ],
+     "expected": 0.092,
+     "kupiecP": 0.6679,
+     "rate": 0.0,
+     "trials": 92
+    },
+    "AMZN:OVERNIGHT": {
+     "breaches": 0,
+     "ci95": [
+      0.0,
+      0.001797
+     ],
+     "expected": 2.051,
+     "kupiecP": 0.0428,
+     "rate": 0.0,
+     "trials": 2051
+    },
+    "AMZN:WEEKEND": {
+     "breaches": 0,
+     "ci95": [
+      0.0,
+      0.007785
+     ],
+     "expected": 0.472,
+     "kupiecP": 0.3311,
+     "rate": 0.0,
+     "trials": 472
+    },
     "COIN:HOLIDAY_WEEKEND": {
      "breaches": 0,
      "ci95": [
@@ -79,6 +112,39 @@
      "kupiecP": 0.2386,
      "rate": 0.00431,
      "trials": 232
+    },
+    "GOOGL:HOLIDAY_WEEKEND": {
+     "breaches": 0,
+     "ci95": [
+      0.0,
+      0.039303
+     ],
+     "expected": 0.092,
+     "kupiecP": 0.6679,
+     "rate": 0.0,
+     "trials": 92
+    },
+    "GOOGL:OVERNIGHT": {
+     "breaches": 0,
+     "ci95": [
+      0.0,
+      0.001797
+     ],
+     "expected": 2.051,
+     "kupiecP": 0.0428,
+     "rate": 0.0,
+     "trials": 2051
+    },
+    "GOOGL:WEEKEND": {
+     "breaches": 0,
+     "ci95": [
+      0.0,
+      0.007785
+     ],
+     "expected": 0.472,
+     "kupiecP": 0.3311,
+     "rate": 0.0,
+     "trials": 472
     },
     "MSFT:HOLIDAY_WEEKEND": {
      "breaches": 0,
@@ -218,46 +284,46 @@
      "breaches": 0,
      "ci95": [
       0.0,
-      0.007307
+      0.005355
      ],
-     "expected": 0.503,
-     "kupiecP": 0.3157,
+     "expected": 0.687,
+     "kupiecP": 0.241,
      "rate": 0.0,
-     "trials": 503
+     "trials": 687
     },
     "OVERNIGHT": {
      "breaches": 3,
      "ci95": [
-      5.5e-05,
-      0.000778
+      4e-05,
+      0.00057
      ],
-     "expected": 11.266,
-     "kupiecP": 0.0034,
-     "rate": 0.000266,
-     "trials": 11266
+     "expected": 15.368,
+     "kupiecP": 0.0001,
+     "rate": 0.000195,
+     "trials": 15368
     },
     "WEEKEND": {
      "breaches": 3,
      "ci95": [
-      0.000239,
-      0.003379
+      0.000175,
+      0.002477
      ],
-     "expected": 2.592,
-     "kupiecP": 0.8047,
-     "rate": 0.001157,
-     "trials": 2592
+     "expected": 3.536,
+     "kupiecP": 0.7696,
+     "rate": 0.000848,
+     "trials": 3536
     }
    },
    "total": {
     "breaches": 6,
     "ci95": [
-     0.000153,
-     0.000909
+     0.000112,
+     0.000666
     ],
-    "expected": 14.361,
-    "kupiecP": 0.0124,
-    "rate": 0.000418,
-    "trials": 14361
+    "expected": 19.591,
+    "kupiecP": 0.0003,
+    "rate": 0.000306,
+    "trials": 19591
    }
   },
   "breachEvents": [
@@ -312,67 +378,67 @@
   ],
   "from": "2016-04-22",
   "pool": {
-   "annualReturnOnJ0": 0.0815,
-   "capacityBindingRate": 0.0038,
-   "capacityBindingRateNonOvernight": 0.0124,
-   "coverRefused": 411,
-   "coverRequests": 178415,
+   "annualReturnOnJ0": 0.0997,
+   "capacityBindingRate": 0.0065,
+   "capacityBindingRateNonOvernight": 0.016,
+   "coverRefused": 632,
+   "coverRequests": 241910,
    "epochs": 2615,
    "equityUsd": 2000000.0,
-   "liquidations": 1286,
-   "meanEpochPnlUsd": 685.56,
+   "liquidations": 1578,
+   "meanEpochPnlUsd": 838.72,
    "premiumsByType": {
     "HOLIDAY_WEEKEND": {
-     "perPolicyUsd": 1.66,
-     "policies": 6090,
-     "usd": 10097.35
+     "perPolicyUsd": 1.36,
+     "policies": 8298,
+     "usd": 11288.11
     },
     "OVERNIGHT": {
-     "perPolicyUsd": 5.94,
-     "policies": 140685,
-     "usd": 835465.9
+     "perPolicyUsd": 5.02,
+     "policies": 190637,
+     "usd": 957000.21
     },
     "WEEKEND": {
-     "perPolicyUsd": 3.33,
-     "policies": 31640,
-     "usd": 105259.37
+     "perPolicyUsd": 2.59,
+     "policies": 42975,
+     "usd": 111105.72
     }
    },
-   "premiumsUsd": 950822.62,
+   "premiumsUsd": 1079394.04,
    "quantilesUsd": {
-    "0.001": 177.06,
-    "0.01": 177.06,
-    "0.05": 177.06,
-    "0.5": 404.88,
-    "0.95": 2401.85
+    "0.001": 247.89,
+    "0.01": 247.89,
+    "0.05": 247.89,
+    "0.5": 510.26,
+    "0.95": 2694.57
    },
-   "sdEpochPnlUsd": 1072.73,
+   "sdEpochPnlUsd": 1228.88,
    "shortfallsUsd": 12483.38,
-   "totalPnlUsd": 1792739.67,
+   "totalPnlUsd": 2193259.64,
    "worstEpoch": {
     "date": "2022-05-11",
-    "pnlUsd": -7975.91,
-    "shareOfJ0": 0.004,
+    "pnlUsd": -7735.67,
+    "shareOfJ0": 0.0039,
     "shortfallUsd": 12483.38,
     "type": "OVERNIGHT"
    },
    "worstYear": {
     "note": "full calendar years only",
-    "pnlUsd": 66565.09,
+    "pnlUsd": 90954.75,
     "year": "2017"
    },
    "yearly": {
-    "2016": 60089.26,
-    "2017": 66565.09,
-    "2018": 114365.93,
-    "2019": 102047.52,
-    "2020": 278105.9,
-    "2021": 89774.5,
-    "2022": 393397.56,
-    "2023": 250296.86,
-    "2024": 192838.19,
-    "2025": 155720.68,
-    "2026": 89538.18
+    "2016": 77786.22,
+    "2017": 90954.75,
+    "2018": 143776.17,
+    "2019": 130023.39,
+    "2020": 328840.06,
+    "2021": 116793.81,
+    "2022": 467479.99,
+    "2023": 288290.9,
+    "2024": 231304.12,
+    "2025": 198690.13,
+    "2026": 119320.11
    }
   },
   "seniorLossEvents": [],
@@ -395,7 +461,9 @@
   "lam": 0.03,
   "lt": {
    "AAPL": 0.8,
+   "AMZN": 0.8,
    "COIN": 0.8,
+   "GOOGL": 0.8,
    "MSFT": 0.8,
    "NVDA": 0.8,
    "SPY": 0.85,
@@ -403,7 +471,9 @@
   },
   "max_ltv": {
    "AAPL": 0.75,
+   "AMZN": 0.75,
    "COIN": 0.75,
+   "GOOGL": 0.75,
    "MSFT": 0.75,
    "NVDA": 0.75,
    "SPY": 0.8,
@@ -418,247 +488,247 @@
  },
  "sensitivity": [
   {
-   "annualReturnOnJ0": 0.1244,
-   "breachRate": 0.000163,
-   "breaches": 2,
-   "capacityBindingRate": 0.0018,
+   "annualReturnOnJ0": 0.1447,
+   "breachRate": 0.00018,
+   "breaches": 3,
+   "capacityBindingRate": 0.0023,
    "param": "alpha",
-   "premiumsUsd": 1502622.54,
+   "premiumsUsd": 1631212.37,
    "seniorLossEvents": 0,
    "shortfallsUsd": 12409.15,
-   "trials": 12261,
+   "trials": 16651,
    "value": 0.0005,
-   "worstEpochUsd": -9261.73,
-   "worstYearUsd": 121997.17
+   "worstEpochUsd": -9007.74,
+   "worstYearUsd": 149066.67
   },
   {
-   "annualReturnOnJ0": 0.1186,
-   "breachRate": 0.000489,
-   "breaches": 6,
-   "capacityBindingRate": 0.0027,
+   "annualReturnOnJ0": 0.1388,
+   "breachRate": 0.00042,
+   "breaches": 7,
+   "capacityBindingRate": 0.0032,
    "param": "alpha",
-   "premiumsUsd": 1395259.48,
+   "premiumsUsd": 1522463.8,
    "seniorLossEvents": 0,
    "shortfallsUsd": 13653.5,
-   "trials": 12261,
+   "trials": 16651,
    "value": 0.001,
-   "worstEpochUsd": -10611.81,
-   "worstYearUsd": 114885.33
+   "worstEpochUsd": -10382.79,
+   "worstYearUsd": 141903.41
   },
   {
-   "annualReturnOnJ0": 0.1161,
-   "breachRate": 0.001387,
-   "breaches": 17,
-   "capacityBindingRate": 0.0036,
+   "annualReturnOnJ0": 0.1366,
+   "breachRate": 0.001441,
+   "breaches": 24,
+   "capacityBindingRate": 0.005,
    "param": "alpha",
-   "premiumsUsd": 1347437.93,
+   "premiumsUsd": 1478807.63,
    "seniorLossEvents": 0,
    "shortfallsUsd": 13653.5,
-   "trials": 12261,
+   "trials": 16651,
    "value": 0.002,
-   "worstEpochUsd": -10618.43,
-   "worstYearUsd": 112534.76
+   "worstEpochUsd": -10398.58,
+   "worstYearUsd": 139543.53
   },
   {
-   "annualReturnOnJ0": 0.1105,
-   "breachRate": 0.004812,
-   "breaches": 59,
-   "capacityBindingRate": 0.0137,
+   "annualReturnOnJ0": 0.1299,
+   "breachRate": 0.005465,
+   "breaches": 91,
+   "capacityBindingRate": 0.0159,
    "param": "alpha",
-   "premiumsUsd": 1244323.63,
+   "premiumsUsd": 1356726.39,
    "seniorLossEvents": 0,
    "shortfallsUsd": 13653.5,
-   "trials": 12261,
+   "trials": 16651,
    "value": 0.005,
-   "worstEpochUsd": -10618.43,
-   "worstYearUsd": 112152.11
+   "worstEpochUsd": -10398.58,
+   "worstYearUsd": 139154.46
   },
   {
-   "annualReturnOnJ0": 0.1145,
-   "breachRate": 0.000489,
-   "breaches": 6,
-   "capacityBindingRate": 0.0023,
+   "annualReturnOnJ0": 0.134,
+   "breachRate": 0.00042,
+   "breaches": 7,
+   "capacityBindingRate": 0.0027,
    "param": "kappa",
-   "premiumsUsd": 1321047.56,
+   "premiumsUsd": 1437687.25,
    "seniorLossEvents": 0,
    "shortfallsUsd": 8471.38,
-   "trials": 12261,
+   "trials": 16651,
    "value": 0.02,
-   "worstEpochUsd": -5507.91,
-   "worstYearUsd": 112159.19
+   "worstEpochUsd": -5289.98,
+   "worstYearUsd": 139007.55
   },
   {
-   "annualReturnOnJ0": 0.1186,
-   "breachRate": 0.000489,
-   "breaches": 6,
-   "capacityBindingRate": 0.0027,
+   "annualReturnOnJ0": 0.1388,
+   "breachRate": 0.00042,
+   "breaches": 7,
+   "capacityBindingRate": 0.0032,
    "param": "kappa",
-   "premiumsUsd": 1395259.48,
+   "premiumsUsd": 1522463.8,
    "seniorLossEvents": 0,
    "shortfallsUsd": 13653.5,
-   "trials": 12261,
+   "trials": 16651,
    "value": 0.03,
-   "worstEpochUsd": -10611.81,
-   "worstYearUsd": 114885.33
+   "worstEpochUsd": -10382.79,
+   "worstYearUsd": 141903.41
   },
   {
-   "annualReturnOnJ0": 0.1231,
-   "breachRate": 0.000489,
-   "breaches": 6,
-   "capacityBindingRate": 0.0027,
+   "annualReturnOnJ0": 0.1441,
+   "breachRate": 0.00042,
+   "breaches": 7,
+   "capacityBindingRate": 0.0032,
    "param": "kappa",
-   "premiumsUsd": 1477718.64,
+   "premiumsUsd": 1616594.9,
    "seniorLossEvents": 0,
    "shortfallsUsd": 18926.25,
-   "trials": 12261,
+   "trials": 16651,
    "value": 0.04,
-   "worstEpochUsd": -15794.62,
-   "worstYearUsd": 117851.63
+   "worstEpochUsd": -15542.65,
+   "worstYearUsd": 145068.59
   },
   {
-   "annualReturnOnJ0": 0.1279,
-   "breachRate": 0.000489,
-   "breaches": 6,
-   "capacityBindingRate": 0.0027,
+   "annualReturnOnJ0": 0.1498,
+   "breachRate": 0.00042,
+   "breaches": 7,
+   "capacityBindingRate": 0.0032,
    "param": "kappa",
-   "premiumsUsd": 1570358.26,
+   "premiumsUsd": 1723363.13,
    "seniorLossEvents": 0,
    "shortfallsUsd": 25922.29,
-   "trials": 12261,
+   "trials": 16651,
    "value": 0.05,
-   "worstEpochUsd": -21098.56,
-   "worstYearUsd": 121519.86
+   "worstEpochUsd": -20829.22,
+   "worstYearUsd": 148967.97
   },
   {
-   "annualReturnOnJ0": 0.1,
-   "breachRate": 0.000489,
-   "breaches": 6,
-   "capacityBindingRate": 0.0027,
+   "annualReturnOnJ0": 0.1187,
+   "breachRate": 0.00042,
+   "breaches": 7,
+   "capacityBindingRate": 0.0032,
    "param": "theta",
-   "premiumsUsd": 1060342.78,
+   "premiumsUsd": 1160629.77,
    "seniorLossEvents": 0,
    "shortfallsUsd": 13653.5,
-   "trials": 12261,
+   "trials": 16651,
    "value": 0.5,
-   "worstEpochUsd": -10662.63,
-   "worstYearUsd": 103336.99
+   "worstEpochUsd": -10474.34,
+   "worstYearUsd": 130200.86
   },
   {
-   "annualReturnOnJ0": 0.1186,
-   "breachRate": 0.000489,
-   "breaches": 6,
-   "capacityBindingRate": 0.0027,
+   "annualReturnOnJ0": 0.1388,
+   "breachRate": 0.00042,
+   "breaches": 7,
+   "capacityBindingRate": 0.0032,
    "param": "theta",
-   "premiumsUsd": 1395259.48,
+   "premiumsUsd": 1522463.8,
    "seniorLossEvents": 0,
    "shortfallsUsd": 13653.5,
-   "trials": 12261,
+   "trials": 16651,
    "value": 1.0,
-   "worstEpochUsd": -10611.81,
-   "worstYearUsd": 114885.33
+   "worstEpochUsd": -10382.79,
+   "worstYearUsd": 141903.41
   },
   {
-   "annualReturnOnJ0": 0.1372,
-   "breachRate": 0.000489,
-   "breaches": 6,
-   "capacityBindingRate": 0.0027,
+   "annualReturnOnJ0": 0.1589,
+   "breachRate": 0.00042,
+   "breaches": 7,
+   "capacityBindingRate": 0.0032,
    "param": "theta",
-   "premiumsUsd": 1730377.35,
+   "premiumsUsd": 1884584.78,
    "seniorLossEvents": 0,
    "shortfallsUsd": 13653.5,
-   "trials": 12261,
+   "trials": 16651,
    "value": 1.5,
-   "worstEpochUsd": -10561.0,
-   "worstYearUsd": 126440.94
+   "worstEpochUsd": -10291.25,
+   "worstYearUsd": 153616.98
   },
   {
-   "annualReturnOnJ0": 0.1183,
-   "breachRate": 0.000489,
-   "breaches": 6,
-   "capacityBindingRate": 0.0041,
+   "annualReturnOnJ0": 0.1382,
+   "breachRate": 0.00042,
+   "breaches": 7,
+   "capacityBindingRate": 0.0055,
    "param": "u_max",
-   "premiumsUsd": 1391282.13,
+   "premiumsUsd": 1518107.31,
    "seniorLossEvents": 0,
    "shortfallsUsd": 13653.5,
-   "trials": 12261,
+   "trials": 16651,
    "value": 0.4,
-   "worstEpochUsd": -10611.81,
-   "worstYearUsd": 114885.33
+   "worstEpochUsd": -10382.79,
+   "worstYearUsd": 141903.41
   },
   {
-   "annualReturnOnJ0": 0.1186,
-   "breachRate": 0.000489,
-   "breaches": 6,
-   "capacityBindingRate": 0.0027,
+   "annualReturnOnJ0": 0.1388,
+   "breachRate": 0.00042,
+   "breaches": 7,
+   "capacityBindingRate": 0.0032,
    "param": "u_max",
-   "premiumsUsd": 1395259.48,
+   "premiumsUsd": 1522463.8,
    "seniorLossEvents": 0,
    "shortfallsUsd": 13653.5,
-   "trials": 12261,
+   "trials": 16651,
    "value": 0.5,
-   "worstEpochUsd": -10611.81,
-   "worstYearUsd": 114885.33
+   "worstEpochUsd": -10382.79,
+   "worstYearUsd": 141903.41
   },
   {
-   "annualReturnOnJ0": 0.119,
-   "breachRate": 0.000489,
-   "breaches": 6,
+   "annualReturnOnJ0": 0.1392,
+   "breachRate": 0.00042,
+   "breaches": 7,
    "capacityBindingRate": 0.0018,
    "param": "u_max",
-   "premiumsUsd": 1401876.55,
+   "premiumsUsd": 1529368.34,
    "seniorLossEvents": 0,
    "shortfallsUsd": 13653.5,
-   "trials": 12261,
+   "trials": 16651,
    "value": 0.6,
-   "worstEpochUsd": -10611.81,
-   "worstYearUsd": 114885.33
+   "worstEpochUsd": -10382.79,
+   "worstYearUsd": 141903.41
   },
   {
-   "annualReturnOnJ0": 0.1171,
-   "breachRate": 0.000489,
-   "breaches": 6,
-   "capacityBindingRate": 0.0027,
+   "annualReturnOnJ0": 0.1367,
+   "breachRate": 0.00042,
+   "breaches": 7,
+   "capacityBindingRate": 0.0032,
    "param": "eta",
-   "premiumsUsd": 1367482.45,
+   "premiumsUsd": 1484609.88,
    "seniorLossEvents": 0,
    "shortfallsUsd": 13653.5,
-   "trials": 12261,
+   "trials": 16651,
    "value": 2.0,
-   "worstEpochUsd": -10611.82,
-   "worstYearUsd": 114863.7
+   "worstEpochUsd": -10382.8,
+   "worstYearUsd": 141883.87
   },
   {
-   "annualReturnOnJ0": 0.1186,
-   "breachRate": 0.000489,
-   "breaches": 6,
-   "capacityBindingRate": 0.0027,
+   "annualReturnOnJ0": 0.1388,
+   "breachRate": 0.00042,
+   "breaches": 7,
+   "capacityBindingRate": 0.0032,
    "param": "eta",
-   "premiumsUsd": 1395259.48,
+   "premiumsUsd": 1522463.8,
    "seniorLossEvents": 0,
    "shortfallsUsd": 13653.5,
-   "trials": 12261,
+   "trials": 16651,
    "value": 4.0,
-   "worstEpochUsd": -10611.81,
-   "worstYearUsd": 114885.33
+   "worstEpochUsd": -10382.79,
+   "worstYearUsd": 141903.41
   },
   {
-   "annualReturnOnJ0": 0.1201,
-   "breachRate": 0.000489,
-   "breaches": 6,
-   "capacityBindingRate": 0.0027,
+   "annualReturnOnJ0": 0.1409,
+   "breachRate": 0.00042,
+   "breaches": 7,
+   "capacityBindingRate": 0.0032,
    "param": "eta",
-   "premiumsUsd": 1423038.29,
+   "premiumsUsd": 1560323.26,
    "seniorLossEvents": 0,
    "shortfallsUsd": 13653.5,
-   "trials": 12261,
+   "trials": 16651,
    "value": 6.0,
-   "worstEpochUsd": -10611.81,
-   "worstYearUsd": 114906.95
+   "worstEpochUsd": -10382.79,
+   "worstYearUsd": 141922.96
   }
  ],
  "syntheticStressLevels": {
-  "40y": -9.33,
-  "since2000": -8.16
+  "40y": -9.2,
+  "since2000": -8.08
  },
  "vendor": "alpaca",
  "walkForward": {
@@ -697,6 +767,39 @@
      "rate": 0.002532,
      "trials": 395
     },
+    "AMZN:HOLIDAY_WEEKEND": {
+     "breaches": 0,
+     "ci95": [
+      0.0,
+      0.04247
+     ],
+     "expected": 0.085,
+     "kupiecP": 0.68,
+     "rate": 0.0,
+     "trials": 85
+    },
+    "AMZN:OVERNIGHT": {
+     "breaches": 0,
+     "ci95": [
+      0.0,
+      0.002149
+     ],
+     "expected": 1.715,
+     "kupiecP": 0.064,
+     "rate": 0.0,
+     "trials": 1715
+    },
+    "AMZN:WEEKEND": {
+     "breaches": 0,
+     "ci95": [
+      0.0,
+      0.009295
+     ],
+     "expected": 0.395,
+     "kupiecP": 0.374,
+     "rate": 0.0,
+     "trials": 395
+    },
     "COIN:HOLIDAY_WEEKEND": {
      "breaches": 0,
      "ci95": [
@@ -729,6 +832,39 @@
      "kupiecP": 0.2386,
      "rate": 0.00431,
      "trials": 232
+    },
+    "GOOGL:HOLIDAY_WEEKEND": {
+     "breaches": 0,
+     "ci95": [
+      0.0,
+      0.04247
+     ],
+     "expected": 0.085,
+     "kupiecP": 0.68,
+     "rate": 0.0,
+     "trials": 85
+    },
+    "GOOGL:OVERNIGHT": {
+     "breaches": 1,
+     "ci95": [
+      1.5e-05,
+      0.003244
+     ],
+     "expected": 1.715,
+     "kupiecP": 0.5533,
+     "rate": 0.000583,
+     "trials": 1715
+    },
+    "GOOGL:WEEKEND": {
+     "breaches": 0,
+     "ci95": [
+      0.0,
+      0.009295
+     ],
+     "expected": 0.395,
+     "kupiecP": 0.374,
+     "rate": 0.0,
+     "trials": 395
     },
     "MSFT:HOLIDAY_WEEKEND": {
      "breaches": 0,
@@ -868,46 +1004,46 @@
      "breaches": 0,
      "ci95": [
       0.0,
-      0.007851
+      0.005765
      ],
-     "expected": 0.468,
-     "kupiecP": 0.3332,
+     "expected": 0.638,
+     "kupiecP": 0.2585,
      "rate": 0.0,
-     "trials": 468
+     "trials": 638
     },
     "OVERNIGHT": {
-     "breaches": 2,
+     "breaches": 3,
      "ci95": [
-      2.5e-05,
-      0.000753
+      4.8e-05,
+      0.000673
      ],
-     "expected": 9.586,
-     "kupiecP": 0.0028,
-     "rate": 0.000209,
-     "trials": 9586
+     "expected": 13.016,
+     "kupiecP": 0.0008,
+     "rate": 0.00023,
+     "trials": 13016
     },
     "WEEKEND": {
      "breaches": 4,
      "ci95": [
-      0.000494,
-      0.004634
+      0.000364,
+      0.003414
      ],
-     "expected": 2.207,
-     "kupiecP": 0.2788,
-     "rate": 0.001812,
-     "trials": 2207
+     "expected": 2.997,
+     "kupiecP": 0.5815,
+     "rate": 0.001335,
+     "trials": 2997
     }
    },
    "total": {
-    "breaches": 6,
+    "breaches": 7,
     "ci95": [
-     0.00018,
-     0.001065
+     0.000169,
+     0.000866
     ],
-    "expected": 12.261,
-    "kupiecP": 0.0469,
-    "rate": 0.000489,
-    "trials": 12261
+    "expected": 16.651,
+    "kupiecP": 0.0074,
+    "rate": 0.00042,
+    "trials": 16651
    }
   },
   "breachEvents": [
@@ -926,6 +1062,14 @@
     "r": -0.147362,
     "sigma": 0.017338,
     "type": "WEEKEND"
+   },
+   {
+    "asset": "GOOGL",
+    "date": "2019-04-30",
+    "gAlpha": "915733720089920000",
+    "r": -0.081446,
+    "sigma": 0.00502,
+    "type": "OVERNIGHT"
    },
    {
     "asset": "SPY",
@@ -962,65 +1106,65 @@
   ],
   "from": "2018-01-01",
   "pool": {
-   "annualReturnOnJ0": 0.1186,
-   "capacityBindingRate": 0.0027,
-   "capacityBindingRateNonOvernight": 0.0125,
-   "coverRefused": 397,
-   "coverRequests": 155797,
+   "annualReturnOnJ0": 0.1388,
+   "capacityBindingRate": 0.0032,
+   "capacityBindingRateNonOvernight": 0.0146,
+   "coverRefused": 641,
+   "coverRequests": 209169,
    "epochs": 2195,
    "equityUsd": 2000000.0,
-   "liquidations": 1207,
-   "meanEpochPnlUsd": 972.57,
+   "liquidations": 1495,
+   "meanEpochPnlUsd": 1138.39,
    "premiumsByType": {
     "HOLIDAY_WEEKEND": {
-     "perPolicyUsd": 1.38,
-     "policies": 5641,
-     "usd": 7787.62
+     "perPolicyUsd": 1.15,
+     "policies": 7685,
+     "usd": 8800.74
     },
     "OVERNIGHT": {
-     "perPolicyUsd": 10.58,
-     "policies": 123050,
-     "usd": 1302224.24
+     "perPolicyUsd": 8.64,
+     "policies": 164883,
+     "usd": 1423838.93
     },
     "WEEKEND": {
-     "perPolicyUsd": 3.14,
-     "policies": 27106,
-     "usd": 85247.62
+     "perPolicyUsd": 2.45,
+     "policies": 36601,
+     "usd": 89824.12
     }
    },
-   "premiumsUsd": 1395259.48,
+   "premiumsUsd": 1522463.8,
    "quantilesUsd": {
-    "0.001": 186.15,
-    "0.01": 214.88,
-    "0.05": 263.55,
-    "0.5": 600.36,
-    "0.95": 3012.42
+    "0.001": 256.97,
+    "0.01": 285.84,
+    "0.05": 336.65,
+    "0.5": 754.2,
+    "0.95": 3354.57
    },
-   "sdEpochPnlUsd": 1239.33,
+   "sdEpochPnlUsd": 1405.09,
    "shortfallsUsd": 13653.5,
-   "totalPnlUsd": 2134785.15,
+   "totalPnlUsd": 2498756.26,
    "worstEpoch": {
     "date": "2022-05-11",
-    "pnlUsd": -10611.81,
-    "shareOfJ0": 0.0053,
+    "pnlUsd": -10382.79,
+    "shareOfJ0": 0.0052,
     "shortfallUsd": 13653.5,
     "type": "OVERNIGHT"
    },
    "worstYear": {
     "note": "full calendar years only",
-    "pnlUsd": 114885.33,
+    "pnlUsd": 141903.41,
     "year": "2021"
    },
    "yearly": {
-    "2018": 145382.17,
-    "2019": 133437.13,
-    "2020": 422535.69,
-    "2021": 114885.33,
-    "2022": 355177.4,
-    "2023": 454735.65,
-    "2024": 254359.26,
-    "2025": 162352.9,
-    "2026": 91919.64
+    "2018": 182721.88,
+    "2019": 161943.12,
+    "2020": 485495.73,
+    "2021": 141903.41,
+    "2022": 415937.47,
+    "2023": 491736.0,
+    "2024": 291679.96,
+    "2025": 205939.66,
+    "2026": 121399.03
    }
   },
   "seniorLossEvents": [],

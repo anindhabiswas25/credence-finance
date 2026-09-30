@@ -1,0 +1,31 @@
+{
+ "asset": "TBILL:USBANK",
+ "licence": {
+  "grade": "free-2016",
+  "terms": "Alpaca Basic (free) market data, SIP daily bars from 2016-01-04: personal, non-professional licence. Accepted by the user for the S2 testnet calibration; the PM re-opens licensing before mainnet (ADR-0204)."
+ },
+ "pulledAt": "2026-09-30T00:27:02Z",
+ "symbols": {
+  "BIL": {
+   "contentSha256": "e2766688258e67a7a7098e5d9ddabd176d354088562a30cb347a3193ae6a9d22",
+   "dividends": 95,
+   "first": "2016-01-04",
+   "last": "2026-09-25",
+   "rows": 2698,
+   "splits": 1
+  },
+  "SGOV": {
+   "contentSha256": "938be0c22b1785d94e510083d40337989deee13db4530ef9a4c92478586365aa",
+   "dividends": 74,
+   "first": "2020-05-28",
+   "last": "2026-09-25",
+   "rows": 1591,
+   "splits": 0
+  }
+ },
+ "vendor": "alpaca",
+ "window": {
+  "end": "2026-09-25",
+  "start": "2016-01-01"
+ }
+}

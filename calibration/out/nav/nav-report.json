@@ -1,0 +1,242 @@
+{
+ "alpha": 0.001,
+ "asset": "TBILL:USBANK",
+ "assetId": "0x5264b60e27ff3d5f95d3aaa26e44d735125be863529f81767f41a4148c9f2586",
+ "bundle": "risk-bundle-nav-5bdf292d.json",
+ "end": "2026-09-25",
+ "floorWad": {
+  "HOLIDAY_WEEKEND": "147485000000000",
+  "OVERNIGHT": "128265000000000",
+  "WEEKEND": "118559000000000"
+ },
+ "joint": {
+  "candidates": 551,
+  "file": "joint-f75706dc.json",
+  "k": 256,
+  "navMaxDrop": {
+   "drop": 0.005,
+   "sigmaWeekend": 0.00013584867996098294
+  },
+  "worstRows": [
+   {
+    "row": "navMaxDrop",
+    "type": "SYNTHETIC",
+    "z": -32767
+   },
+   {
+    "row": "setAlpha",
+    "type": "SYNTHETIC",
+    "z": -6276
+   },
+   {
+    "date": "2021-06-07",
+    "type": "WEEKEND",
+    "z": -2.7952
+   },
+   {
+    "date": "2016-09-12",
+    "type": "WEEKEND",
+    "z": -2.6727
+   },
+   {
+    "date": "2021-08-16",
+    "type": "WEEKEND",
+    "z": -2.621
+   },
+   {
+    "date": "2020-12-07",
+    "type": "WEEKEND",
+    "z": -2.6024
+   },
+   {
+    "date": "2021-08-23",
+    "type": "WEEKEND",
+    "z": -2.333
+   },
+   {
+    "date": "2017-05-30",
+    "type": "HOLIDAY_WEEKEND",
+    "z": -2.2866
+   }
+  ]
+ },
+ "kind": "credence.nav-calibration.v1",
+ "priceVsNav": {
+  "BIL": {
+   "dailyStdBp": 1.625,
+   "lag1Autocorrelation": -0.0596,
+   "noiseShareOfVariance": 0.1191
+  },
+  "SGOV": {
+   "dailyStdBp": 1.489,
+   "lag1Autocorrelation": 0.0915,
+   "noiseShareOfVariance": 0.0
+  }
+ },
+ "quality": {
+  "BIL": {
+   "firstBar": "2016-01-04",
+   "n": {
+    "HOLIDAY_WEEKEND": 107,
+    "OVERNIGHT": 2090,
+    "WEEKEND": 466
+   },
+   "spansDropped": [
+    "2016-03-25",
+    "2017-04-14",
+    "2018-03-30",
+    "2018-12-05",
+    "2019-04-19",
+    "2020-04-10",
+    "2020-07-03",
+    "2021-04-02",
+    "2021-12-24",
+    "2022-04-15",
+    "2023-04-07",
+    "2024-03-29",
+    "2025-01-09",
+    "2025-04-18",
+    "2026-04-03",
+    "2026-07-03"
+   ],
+   "symbol": "BIL"
+  },
+  "SGOV": {
+   "firstBar": "2020-05-28",
+   "n": {
+    "HOLIDAY_WEEKEND": 64,
+    "OVERNIGHT": 1231,
+    "WEEKEND": 274
+   },
+   "spansDropped": [
+    "2020-07-03",
+    "2021-04-02",
+    "2021-12-24",
+    "2022-04-15",
+    "2023-04-07",
+    "2024-03-29",
+    "2025-01-09",
+    "2025-04-18",
+    "2026-04-03",
+    "2026-07-03"
+   ],
+   "symbol": "SGOV"
+  }
+ },
+ "sets": [
+  {
+   "closureType": "OVERNIGHT",
+   "contributors": {
+    "BIL": 2030,
+    "SGOV": 1171
+   },
+   "file": "TBILL-USBANK-1-9c17c08f.json",
+   "n": 3000,
+   "paddedWith": {},
+   "poolSize": 3201,
+   "scenarioHash": "0x61b29745e1e06aeef4afb10fa45f96dd1c864ad8492af2f1abdbd8fd7fff0311",
+   "tail": {
+    "iStar": 2,
+    "t3FloorValuesMoved": 75,
+    "zAlpha": -6276,
+    "zAlphaHistory": -2928,
+    "zMin": -10802
+   }
+  },
+  {
+   "closureType": "WEEKEND",
+   "contributors": {
+    "BIL": 454,
+    "SGOV": 260
+   },
+   "file": "TBILL-USBANK-2-facc2f1e.json",
+   "n": 3000,
+   "paddedWith": {
+    "OVERNIGHT": 3201,
+    "ksOvernight": 0.0922
+   },
+   "poolSize": 3915,
+   "scenarioHash": "0x6baa2ae728807e02e4d188f3a94fe4442196d0b03ebb0f5ded16f488f272f6b2",
+   "tail": {
+    "iStar": 2,
+    "t3FloorValuesMoved": 75,
+    "zAlpha": -6276,
+    "zAlphaHistory": -2796,
+    "zMin": -10802
+   }
+  },
+  {
+   "closureType": "HOLIDAY_WEEKEND",
+   "contributors": {
+    "BIL": 97,
+    "SGOV": 54
+   },
+   "file": "TBILL-USBANK-3-8e79e05f.json",
+   "n": 3000,
+   "paddedWith": {
+    "OVERNIGHT": 3201,
+    "WEEKEND": 714,
+    "ksOvernight": 0.0877,
+    "ksWeekend": 0.066
+   },
+   "poolSize": 4066,
+   "scenarioHash": "0x937b0b85f228c99337b849603863860c6ae7d98c46879127bb44de18702733c9",
+   "tail": {
+    "iStar": 2,
+    "t3FloorValuesMoved": 75,
+    "zAlpha": -6276,
+    "zAlphaHistory": -2796,
+    "zMin": -10802
+   }
+  }
+ ],
+ "sigmaWad": {
+  "HOLIDAY_WEEKEND": "187402000000000",
+  "OVERNIGHT": "207250000000000",
+  "WEEKEND": "135849000000000"
+ },
+ "validation": {
+  "HOLIDAY_WEEKEND": {
+   "BIL": {
+    "belowZAlpha": 0,
+    "n": 97,
+    "share": 0.0,
+    "worstZ": -2.287
+   },
+   "SGOV": {
+    "belowZAlpha": 0,
+    "n": 54,
+    "share": 0.0,
+    "worstZ": -1.563
+   }
+  },
+  "OVERNIGHT": {
+   "BIL": {
+    "belowZAlpha": 0,
+    "n": 2030,
+    "share": 0.0,
+    "worstZ": -2.928
+   },
+   "SGOV": {
+    "belowZAlpha": 0,
+    "n": 1171,
+    "share": 0.0,
+    "worstZ": -4.891
+   }
+  },
+  "WEEKEND": {
+   "BIL": {
+    "belowZAlpha": 0,
+    "n": 454,
+    "share": 0.0,
+    "worstZ": -2.795
+   },
+   "SGOV": {
+    "belowZAlpha": 0,
+    "n": 260,
+    "share": 0.0,
+    "worstZ": -2.52
+   }
+  }
+ }
+}

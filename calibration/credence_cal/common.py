@@ -18,7 +18,10 @@ OUT = ROOT / "out"  # committed: content-addressed outputs
 MANIFESTS = ROOT / "manifests"  # committed: data manifests (source, pull date, rows, checksums)
 SAMPLE = ROOT / "sample"  # committed: synthetic CI sample (no vendor data)
 
-# The six listed markets (Build Guide §1.3). Asset ids are keccak256("<SYMBOL>:<VENUE>") (ADR-0101).
+# The calibrated equity markets. Asset ids are keccak256("<SYMBOL>:<VENUE>") (ADR-0101). The six of Build Guide §1.3,
+# plus GOOGL and AMZN: RedStone carries neither COIN nor SPY, so the testnet lists NVDA AAPL TSLA MSFT GOOGL AMZN
+# (ADR-0009 D2, PM default 2026-09-30). COIN and SPY stay calibrated so they can come back; which six a deploy lists
+# is the deploy config's choice, not this table's.
 LISTED = {
     "NVDA": "XNAS",
     "AAPL": "XNAS",
@@ -26,6 +29,8 @@ LISTED = {
     "COIN": "XNAS",
     "MSFT": "XNAS",
     "SPY": "XNAS",  # sic: DeployClockLocal.s.sol derives every listing as "<TICKER>:XNAS"; follow the chain
+    "GOOGL": "XNAS",
+    "AMZN": "XNAS",
 }
 INDEX = "SPY"  # back-fill reference (§10.6 step 5)
 
@@ -36,7 +41,7 @@ GROUPS: dict[str, list[str]] = {
     "HIGH_VOL": ["TSLA", "COIN", "MSTR", "MARA", "RIOT", "HOOD", "PLTR", "SHOP", "ROKU", "AMD", "NFLX"],
     "INDEX_ETF": ["SPY", "QQQ", "IWM", "DIA", "XLK", "XLF", "XLE", "XLV", "XLI", "XLY", "XLP", "XLU"],
 }
-ASSET_GROUP = {"NVDA": "MEGA_TECH", "AAPL": "MEGA_TECH", "MSFT": "MEGA_TECH",
+ASSET_GROUP = {"NVDA": "MEGA_TECH", "AAPL": "MEGA_TECH", "MSFT": "MEGA_TECH", "GOOGL": "MEGA_TECH", "AMZN": "MEGA_TECH",
                "TSLA": "HIGH_VOL", "COIN": "HIGH_VOL", "SPY": "INDEX_ETF"}
 
 

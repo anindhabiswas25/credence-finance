@@ -1,0 +1,61 @@
+{
+ "format": "credence.risk-bundle/v1",
+ "jointSet": "joint-f75706dc.json",
+ "meta": {
+  "adr": "ADR-0118",
+  "asset": "TBILL:USBANK",
+  "dataGrade": "free-2016",
+  "note": "TBILL:USBANK for the NAV stack, loaded AFTER the equity bundle; params are a copy of risk-bundle-cfbb86cb.json (reloading them changes nothing). Replaces the ADR-0116 local fixture.",
+  "sigmaAsOf": "2026-09-25"
+ },
+ "params": {
+  "alpha": "1000000000000000",
+  "beta": "975000000000000000",
+  "costOfCap": "150000000000000000",
+  "eta": "4000000000000000000",
+  "kStress": 256,
+  "kappa": "30000000000000000",
+  "minPremium": "500000",
+  "theta": "1000000000000000000",
+  "uMax": "500000000000000000"
+ },
+ "scenarioSets": [
+  "TBILL-USBANK-1-9c17c08f.json",
+  "TBILL-USBANK-2-facc2f1e.json",
+  "TBILL-USBANK-3-8e79e05f.json"
+ ],
+ "sigmaFloors": {
+  "assetIds": [
+   "0x5264b60e27ff3d5f95d3aaa26e44d735125be863529f81767f41a4148c9f2586",
+   "0x5264b60e27ff3d5f95d3aaa26e44d735125be863529f81767f41a4148c9f2586",
+   "0x5264b60e27ff3d5f95d3aaa26e44d735125be863529f81767f41a4148c9f2586"
+  ],
+  "closureTypes": [
+   1,
+   2,
+   3
+  ],
+  "floors": [
+   "128265000000000",
+   "118559000000000",
+   "147485000000000"
+  ]
+ },
+ "sigmas": {
+  "assetIds": [
+   "0x5264b60e27ff3d5f95d3aaa26e44d735125be863529f81767f41a4148c9f2586",
+   "0x5264b60e27ff3d5f95d3aaa26e44d735125be863529f81767f41a4148c9f2586",
+   "0x5264b60e27ff3d5f95d3aaa26e44d735125be863529f81767f41a4148c9f2586"
+  ],
+  "closureTypes": [
+   1,
+   2,
+   3
+  ],
+  "values": [
+   "207250000000000",
+   "135849000000000",
+   "187402000000000"
+  ]
+ }
+}

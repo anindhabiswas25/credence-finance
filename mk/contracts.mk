@@ -134,9 +134,9 @@ local-deploy-clock: contracts-build ## Deploy the clock + price stack and test a
 # SYNTH_ARGS='--regular-minutes 140 --closure-minutes 15 --session-minutes 20'.
 # The default (CALENDAR=real) uses the calibration calendars and is unchanged.
 CALENDAR        ?= real
-QE_BUNDLE       ?= calibration/out/risk-bundle-889d50e4.json
-# QE's bundle has no NAV asset: TBILL's sets and σ are a local-only fixture until QE calibrates TBILL (ADR-0116)
-NAV_LOCAL_BUNDLE ?= $(CONTRACTS_DIR)/test/fixtures/risk/tbill-local/bundle.json
+QE_BUNDLE       ?= calibration/out/risk-bundle-cfbb86cb.json
+# TBILL:USBANK has its own bundle (ADR-0118; it replaces the ADR-0116 fixture), loaded after the equity one
+NAV_LOCAL_BUNDLE ?= calibration/out/nav/risk-bundle-nav-5bdf292d.json
 SYNTH_CAL_DIR   := $(CONTRACTS_DIR)/test/fixtures/devnode
 
 local-deploy-core: contracts-build ## Deploy the whole protocol (clock, 6 equity markets + TBILL, vaults seeded) to LOCAL_RPC; writes deployments/<chainId>.local.json. CALENDAR=synthetic: calendar centred on chain time + QE bundle

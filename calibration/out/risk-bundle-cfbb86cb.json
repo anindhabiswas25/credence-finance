@@ -1,6 +1,6 @@
 {
  "format": "credence.risk-bundle/v1",
- "jointSet": "joint/joint-4dcad6d1.json",
+ "jointSet": "joint/joint-38f0d2af.json",
  "meta": {
   "dataGrade": "free-2016",
   "note": "S2 testnet proposal (final for S2, ADR-0204). sigmas = the published \u03c3 at the data end; on a live chain \u03c3 goes through SigmaOracle / keeper J7.",
@@ -22,9 +22,15 @@
   "scenarios/AAPL-XNAS-1-93475757.json",
   "scenarios/AAPL-XNAS-2-d8db8648.json",
   "scenarios/AAPL-XNAS-3-d7a70435.json",
+  "scenarios/AMZN-XNAS-1-caed5bcf.json",
+  "scenarios/AMZN-XNAS-2-ce59d30d.json",
+  "scenarios/AMZN-XNAS-3-e6db72ad.json",
   "scenarios/COIN-XNAS-1-bd858cee.json",
   "scenarios/COIN-XNAS-2-70d84c92.json",
   "scenarios/COIN-XNAS-3-f59992c4.json",
+  "scenarios/GOOGL-XNAS-1-45dec169.json",
+  "scenarios/GOOGL-XNAS-2-d92031c0.json",
+  "scenarios/GOOGL-XNAS-3-f4d2fca8.json",
   "scenarios/MSFT-XNAS-1-08f68241.json",
   "scenarios/MSFT-XNAS-2-9267c3c4.json",
   "scenarios/MSFT-XNAS-3-1f1f82ad.json",
@@ -57,9 +63,21 @@
    "0xb9b5377251807759235d71513fcf099c7cc6df22bc241ddaa666ad7e8a49b975",
    "0x690f88e35f73022ebfb37c4bc922b28bff4938791e5ea91186b8b2479cfae992",
    "0x690f88e35f73022ebfb37c4bc922b28bff4938791e5ea91186b8b2479cfae992",
-   "0x690f88e35f73022ebfb37c4bc922b28bff4938791e5ea91186b8b2479cfae992"
+   "0x690f88e35f73022ebfb37c4bc922b28bff4938791e5ea91186b8b2479cfae992",
+   "0x65e3c81dafe37692f32f313c3e2a6ff6ea80d3f6d560cbc1deb860e8924d9978",
+   "0x65e3c81dafe37692f32f313c3e2a6ff6ea80d3f6d560cbc1deb860e8924d9978",
+   "0x65e3c81dafe37692f32f313c3e2a6ff6ea80d3f6d560cbc1deb860e8924d9978",
+   "0x61a311babb2bf8dfac04085e8d4effa61dd6f4c3a3254beb8baf2a4257115c24",
+   "0x61a311babb2bf8dfac04085e8d4effa61dd6f4c3a3254beb8baf2a4257115c24",
+   "0x61a311babb2bf8dfac04085e8d4effa61dd6f4c3a3254beb8baf2a4257115c24"
   ],
   "closureTypes": [
+   1,
+   2,
+   3,
+   1,
+   2,
+   3,
    1,
    2,
    3,
@@ -97,7 +115,13 @@
    "7240279000000000",
    "3906271000000000",
    "5171517000000000",
-   "5283573000000000"
+   "5283573000000000",
+   "8002954000000000",
+   "7747167000000000",
+   "7768107000000000",
+   "8535286000000000",
+   "8316762000000000",
+   "9063917000000000"
   ]
  },
  "sigmas": {
@@ -119,9 +143,21 @@
    "0xb9b5377251807759235d71513fcf099c7cc6df22bc241ddaa666ad7e8a49b975",
    "0x690f88e35f73022ebfb37c4bc922b28bff4938791e5ea91186b8b2479cfae992",
    "0x690f88e35f73022ebfb37c4bc922b28bff4938791e5ea91186b8b2479cfae992",
-   "0x690f88e35f73022ebfb37c4bc922b28bff4938791e5ea91186b8b2479cfae992"
+   "0x690f88e35f73022ebfb37c4bc922b28bff4938791e5ea91186b8b2479cfae992",
+   "0x65e3c81dafe37692f32f313c3e2a6ff6ea80d3f6d560cbc1deb860e8924d9978",
+   "0x65e3c81dafe37692f32f313c3e2a6ff6ea80d3f6d560cbc1deb860e8924d9978",
+   "0x65e3c81dafe37692f32f313c3e2a6ff6ea80d3f6d560cbc1deb860e8924d9978",
+   "0x61a311babb2bf8dfac04085e8d4effa61dd6f4c3a3254beb8baf2a4257115c24",
+   "0x61a311babb2bf8dfac04085e8d4effa61dd6f4c3a3254beb8baf2a4257115c24",
+   "0x61a311babb2bf8dfac04085e8d4effa61dd6f4c3a3254beb8baf2a4257115c24"
   ],
   "closureTypes": [
+   1,
+   2,
+   3,
+   1,
+   2,
+   3,
    1,
    2,
    3,
@@ -159,7 +195,13 @@
    "9871634000000000",
    "4693445000000000",
    "6419879000000000",
-   "5451670000000000"
+   "5451670000000000",
+   "11602000000000000",
+   "11826328000000000",
+   "10935315000000000",
+   "15667115000000000",
+   "13268695000000000",
+   "11100237000000000"
   ]
  }
 }

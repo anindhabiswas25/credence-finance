@@ -17,7 +17,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 RPC="${LOCAL_RPC:-http://127.0.0.1:8547}"
 KEY="${PRIVATE_KEY:-0xb6b15c8cb491557369f3c7d2c287b053eb229daa9c22138887752191c9520659}"
-BUNDLE="${RISK_BUNDLE:-$ROOT/calibration/out/risk-bundle-889d50e4.json}"
+BUNDLE="${RISK_BUNDLE:-$ROOT/calibration/out/risk-bundle-cfbb86cb.json}"
 N="${N:-16}"; BIDS="${BIDS:-64}"; LIMIT=24000000
 PHASE="${PHASE:-all}"; STATE="${GAS_STATE:-$ROOT/target/chain/gas-state.sh}"
 CHAIN="$(cast chain-id --rpc-url "$RPC")"

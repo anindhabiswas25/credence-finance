@@ -17,6 +17,12 @@ cal-install: ## QE: sync the calibration env (uv), then build risk-py (credence_
 cal-data: ## QE: pull raw vendor data and rewrite the pinned manifest (VENDOR=alpaca|tiingo, END=YYYY-MM-DD)
 	$(CAL) python -m credence_cal.data pull --vendor $(VENDOR) $(if $(END),--end $(END))
 
+cal-nav-pull: ## TBILL proxies (BIL, SGOV) from Alpaca into data/raw/alpaca; rewrites manifests/data-alpaca-nav.json only (ADR-0118)
+	$(CAL) python -m credence_cal.nav pull
+
+cal-nav: ## TBILL:USBANK sets, σ, joint column and out/nav/risk-bundle-nav-*.json from the pinned proxies (needs the equity bundle)
+	$(CAL) python -m credence_cal.pipeline nav --vendor alpaca
+
 cal-verify: ## QE: check calibration/data/raw against the committed manifest
 	$(CAL) python -m credence_cal.data verify --vendor $(VENDOR)
 

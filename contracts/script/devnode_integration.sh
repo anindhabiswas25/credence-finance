@@ -12,7 +12,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 RPC="${LOCAL_RPC:-http://127.0.0.1:8547}"
 KEY="${PRIVATE_KEY:-0xb6b15c8cb491557369f3c7d2c287b053eb229daa9c22138887752191c9520659}"
-BUNDLE="${RISK_BUNDLE:-$ROOT/calibration/out/risk-bundle-889d50e4.json}"
+BUNDLE="${RISK_BUNDLE:-$ROOT/calibration/out/risk-bundle-cfbb86cb.json}"
 CLI="$ROOT/target/release/risk-cli"
 CHAIN="$(cast chain-id --rpc-url "$RPC")"
 case "$CHAIN" in 421614|42161) echo "local only" >&2; exit 1 ;; esac
@@ -38,8 +38,8 @@ ENGINE_BOOK="$BOOK" DEVNODE_RPC="$RPC" DEVNODE_KEY="$KEY" bash "$ROOT/stylus/ris
 ENGINE="$(jq -r .shared.riskEngine "$BOOK")"
 (cd "$ROOT" && RISK_ENGINE="$ENGINE" PRIVATE_KEY="$KEY" LOCAL_RPC="$RPC" RISK_BUNDLE="$BUNDLE" \
   RISK_BUNDLE_DIR="$(dirname "$BUNDLE")" bash contracts/script/load_risk_bundle.sh | tail -1)
-# QE's bundle has no NAV asset: the TBILL sets and σ are a local-only fixture (ADR-0116) until QE calibrates TBILL
-NAV_BUNDLE="${NAV_RISK_BUNDLE:-$ROOT/contracts/test/fixtures/risk/tbill-local/bundle.json}"
+# TBILL:USBANK has its own bundle (ADR-0118), loaded after the equity one
+NAV_BUNDLE="${NAV_RISK_BUNDLE:-$ROOT/calibration/out/nav/risk-bundle-nav-5bdf292d.json}"
 (cd "$ROOT" && RISK_ENGINE="$ENGINE" PRIVATE_KEY="$KEY" LOCAL_RPC="$RPC" RISK_BUNDLE="$NAV_BUNDLE" \
   RISK_BUNDLE_DIR="$(dirname "$NAV_BUNDLE")" bash contracts/script/load_risk_bundle.sh | tail -1)
 
