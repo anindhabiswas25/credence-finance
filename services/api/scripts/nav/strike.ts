@@ -54,14 +54,16 @@ export function dropped(nav: bigint, bps: number): bigint {
   return (nav * BigInt(10_000 - bps)) / 10_000n;
 }
 
-async function main() {
-  const { values } = parseArgs({
-    options: {
-      price: { type: "string" },
-      "drop-bps": { type: "string" },
-      "session-open": { type: "string" },
-    },
-  });
+let lastAt = 0;
+
+/** One issuer strike: `price` (WAD) or the current NAV less `dropBps`. Returns the new NAV. Every report is stamped
+ * max(wall clock − 1, head block time, previous + 1): an idle devnode's head lags the wall clock, and the feed
+ * silently ignores a NAV print at or before its last one (the fund would then pay a NAV the oracle never saw). */
+export async function strike(values: {
+  price?: string;
+  "drop-bps"?: string;
+  "session-open"?: string;
+}): Promise<bigint> {
   const rpc = process.env.RPC_URL ?? "http://127.0.0.1:8547";
   const pub = createPublicClient({ transport: http(rpc) });
   const chainId = await pub.getChainId();
@@ -96,7 +98,9 @@ async function main() {
   const price = values.price
     ? wad(values.price)
     : dropped(current, Number(values["drop-bps"] ?? 0));
-  const now = Number((await pub.getBlock()).timestamp);
+  const head = Number((await pub.getBlock()).timestamp);
+  const now = Math.max(Math.floor(Date.now() / 1000) - 1, head, lastAt + 1);
+  lastAt = now;
   const sessionOpen = Number(values["session-open"] ?? now);
   const seq =
     (await pub.readContract({
@@ -126,7 +130,8 @@ async function main() {
     functionName: "submit",
     args: [[report], sigs],
   });
-  await pub.waitForTransactionReceipt({ hash: h1 });
+  if ((await pub.waitForTransactionReceipt({ hash: h1 })).status !== "success")
+    throw new Error(`NAV report reverted: ${h1}`);
   const h2 = await wallet.writeContract({
     chain: null,
     address: fund,
@@ -134,10 +139,21 @@ async function main() {
     functionName: "publishNav",
     args: [price],
   });
-  await pub.waitForTransactionReceipt({ hash: h2 });
+  if ((await pub.waitForTransactionReceipt({ hash: h2 })).status !== "success")
+    throw new Error(`publishNav reverted: ${h2}`);
   console.log(
     `NAV strike ${price} (was ${current}) seq ${seq} at ${now}: feed ${h1}, fund ${h2}`,
   );
+  return price;
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) await main();
+if (import.meta.url === `file://${process.argv[1]}`) {
+  const { values } = parseArgs({
+    options: {
+      price: { type: "string" },
+      "drop-bps": { type: "string" },
+      "session-open": { type: "string" },
+    },
+  });
+  await strike(values);
+}

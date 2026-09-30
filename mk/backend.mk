@@ -22,7 +22,7 @@ PNPM := pnpm
 .PHONY: backend-install backend-build backend-test backend-lint backend-fmt backend-edge backend-edge-unit backend-edge-infra \
         infra-up infra-down infra-reset infra-ps db-migrate db-rollback calendar-gen calendar-test \
         relayer-dev relayer-smoke keeper-dev indexer-dev api-dev relayer-e2e keeper-e2e indexer-e2e services-up \
-        notifier-dev notifier-e2e r26-probe keeper-sigma-test keeper-j12-e2e keeper-j7-e2e keeper-core-e2e obs-up obs-down obs-check api-db-test api-engine-e2e indexer-core-e2e api-bell-e2e scenario-a-e2e relayer-redstone-e2e
+        notifier-dev notifier-e2e r26-probe keeper-sigma-test keeper-j12-e2e keeper-j7-e2e keeper-core-e2e obs-up obs-down obs-check api-db-test api-engine-e2e indexer-core-e2e api-bell-e2e scenario-a-e2e nav-settlement-e2e relayer-redstone-e2e
 
 backend-install: ## Install backend deps: @credence/risk-wasm (wasm-pack, into target/be), pnpm workspace, uv calibration env, Rust crates fetched
 	CARGO_TARGET_DIR=$(BACKEND_TARGET_DIR) $(MAKE) --no-print-directory risk-wasm
@@ -164,6 +164,11 @@ scenario-a-e2e: ## S3 F (ADR-0012): scenario A on the devnode, keeper-only after
 	$(CARGO) build -q -p credence-keeper -p credence-relayer -p credence-bidder
 	$(PNPM) --filter @credence/sdk build >/dev/null
 	bash services/api/scripts/scenario-a/run.sh
+
+nav-settlement-e2e: ## S4 G on the devnode (≤ 30 min): NAV positions near LT, 13 issuer strikes; J10 opens, the solver bot fills one settlement, the no-bid profile forces a pool advance, the issuer's T+1 fulfil, J10's claim; indexer/API/notifier == chain. Needs infra-up db-migrate + BE-chain's NAV book, USBANK in session
+	$(CARGO) build -q -p credence-keeper -p credence-bidder
+	$(PNPM) --filter @credence/sdk build >/dev/null
+	bash services/api/scripts/nav/run.sh
 
 api-db-test: ## API Postgres repositories (me/notifications, allowlist queue) against the migrated app schema (needs infra-up db-migrate)
 	TEST_DATABASE_URL=$(TEST_DATABASE_URL) $(PNPM) --filter @credence/api exec vitest run test/pg.test.ts
