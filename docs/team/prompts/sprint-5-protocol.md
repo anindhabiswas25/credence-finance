@@ -78,6 +78,25 @@ Changes to your items (the rest of the brief stands):
 
 Time: about +1 day. Order stays A → B → C → D → E. The Stylus check (1) goes first because D depends on it.
 
+## Order of work (PM, 2026-09-30, from the user; it overrides the item order above)
+
+Work in **three phases**, in this order. Don't start a phase until your part of the one before is done and posted as a READY on the board.
+
+**Phase 1: build everything that's left.** Finish all the remaining code in your items, including Amendment 1. Write the unit tests with the code as usual (the normal suites stay green). No testnet deploys.
+
+**Phase 2: edge-case testing.** When **both** engineers have posted their Phase 1 READY, run the full edge-case suites against the finished code and fix what they find. Every row of `docs/qa/edge-cases.md` must name a passing test. Each run ≤ 30 min. Post a Phase 2 READY with the results.
+
+**Phase 3: deploy to testnet.** When both Phase 2 READYs are on the board and the user's inputs are in (keys, test ETH on both chains, Safe owners, host, RPC keys):
+1. rehearse on forks of both chains;
+2. deploy the **equity stack to Robinhood Chain testnet (46630)** and the **NAV stack to Arbitrum Sepolia (421614)**;
+3. verify the contracts, bring up the services on both chains, run the post-deploy checks;
+4. post the final READY and report.
+
+Your items by phase:
+- **Phase 1:** A (S4 close, done), B (QA-11 done, the asset swap, **the ERC-8056 multiplier**), C (GOOGL/AMZN and TBILL risk data), the **Stylus check on 46630** (it tells us which code path we build), D's **deploy scripts and the post-deploy check script** (written and dry-run on anvil only), and the mainnet Chainlink Robinhood adapter. Post the new ABI READY for Engineer B as early as possible.
+- **Phase 2:** item E, all contract-side edge rows, `make security-findings`, the triage gate, coverage, invariants.
+- **Phase 3:** D's fork rehearsals and the real deploys on both chains, verification, `make testnet-postdeploy-check`.
+
 ## Acceptance (the PM re-runs each item from a clean clone)
 1. S4 closed: item E READY with the new book, ADR-0114 with numbers, item G done, both S4 reports final.
 2. QA-11 fixed. The GOOGL/AMZN and TBILL risk data are in a signed bundle, loaded on the devnode, and the backtest is updated.

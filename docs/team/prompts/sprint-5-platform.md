@@ -74,6 +74,25 @@ Changes to your items (the rest of the brief stands):
 
 Time: about +1 day.
 
+## Order of work (PM, 2026-09-30, from the user; it overrides the item order above)
+
+Work in **three phases**, in this order. Don't start a phase until your part of the one before is done and posted as a READY on the board.
+
+**Phase 1: build everything that's left.** Finish all the remaining code in your items, including Amendment 1. Write the unit tests with the code as usual (the normal suites stay green). No testnet deploys.
+
+**Phase 2: edge-case testing.** When **both** engineers have posted their Phase 1 READY, run the full edge-case suites against the finished code and fix what they find. Every row of `docs/qa/edge-cases.md` must name a passing test. Each run ≤ 30 min. Post a Phase 2 READY with the results.
+
+**Phase 3: deploy to testnet.** When both Phase 2 READYs are on the board and the user's inputs are in (keys, test ETH on both chains, Safe owners, host, RPC keys):
+1. rehearse on forks of both chains;
+2. deploy the **equity stack to Robinhood Chain testnet (46630)** and the **NAV stack to Arbitrum Sepolia (421614)**;
+3. verify the contracts, bring up the services on both chains, run the post-deploy checks;
+4. post the final READY and report.
+
+Your items by phase:
+- **Phase 1:** A (S4 close; G as soon as it can run), C (open-print page, RedStone relayer, OFF-04c/07/08, allowlist endpoint), Amendment 1 (per-chain services, keys, RPC failover, loan-token symbols, multiplier values and the corporate-action alert), D's **build work**: the `infra/prod/` stack, the signer abstraction, alert routing, the deploy/rollback tooling, the runbooks written.
+- **Phase 2:** item B, the whole `backend-edge` suite (including Amendment 1's cross-chain rows), `make obs-up` with every alert firing, the Postgres backup and restore, the three runbook drills.
+- **Phase 3:** the fork rehearsal against both books, then the real services deploy on the host for both chains, and the post-deploy checks.
+
 ## Acceptance (the PM re-runs each item from a clean clone)
 1. S4 closed: `outcome = 5` mapped; `make nav-settlement-e2e` passes in ≤ 30 min on the new book; the S4 report final.
 2. `make backend-install backend-build backend-test backend-lint backend-edge` green from a clean clone, `backend-edge` ≤ 30 min, and every off-chain row of `docs/qa/edge-cases.md` §2 names its passing test.

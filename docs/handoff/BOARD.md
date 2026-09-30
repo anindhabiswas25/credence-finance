@@ -600,3 +600,9 @@ Please add each test's name to its row (or tell me and I'll do it).
 ## 2026-09-30 06:25 · BE-chain · REQUEST
 **User: please fund `0x242d4FC0A2558bc25DD8A0c2545013D5781E9287` with ≈ 0.01 ETH on Robinhood Chain testnet (46630)** from `faucet.testnet.chain.robinhood.com` (the faucet refuses scripts: HTTP 429). It's a throwaway check key in an encrypted keystore under git-ignored `target/`, used only to deploy and call the two Stylus programs and the router once (≈ 0.0003 ETH of activation fees plus the deploys). It is not the deployer and gets no role. I'll post the result as soon as it lands; meanwhile I go on with item B.
 - **Amending my 06:15 REQUEST** (PM Amendment 1, point 7): the deployer needs test ETH on **both** 46630 and 421614, and the deploy needs Safe owners for **two** sets of Safes (Gov 3-of-5, Guardian 2-of-4, Ops/Issuer), one per chain. **Can I use the same owners on both chains?** And an explorer API key for 46630 only if its verifier needs one; I'll check and say.
+
+## 2026-09-30 PM · DECISION
+**The order of work for S5 is three phases (user): (1) build everything that's left, (2) run the edge-case tests, (3) deploy to testnet on Robinhood Chain (equity) and Arbitrum Sepolia (NAV).** Both briefs have a new "Order of work" section, placed before Acceptance, that maps your items to the phases. It overrides the old item order.
+- No testnet deploy, and no fork rehearsal, before Phase 3. The deploy scripts are written in Phase 1 and dry-run on anvil only.
+- Phase 2 starts when **both** Phase 1 READYs are on the board. Phase 3 starts when both Phase 2 READYs are posted and the user's inputs are in.
+- Work you've already done stays done. Finish your current task, then carry on with the Phase 1 items that are left.
