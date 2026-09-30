@@ -3,7 +3,7 @@
 
 CONTRACTS_DIR   := contracts
 # v0 is frozen history (S1), v1 = S2 (ADR-0104), v2 = S3 (ADR-0110), v3 = S4 (ADR-0111). Never re-export v0, v1 or v2.
-ABI_VERSION     ?= v3
+ABI_VERSION     ?= v4
 ABI_OUT         := deployments/abis/$(ABI_VERSION)
 DEVNODE_RPC     ?= http://127.0.0.1:8547
 # Pre-funded dev key of nitro-devnode (public, local only; never used on a real network).
@@ -20,7 +20,7 @@ SOLADY_TAG      := v0.1.26
 ABI_CONTRACTS := ICredenceErrors ICalendarStore IAssetClock IPriceSource INavSource ICredencePriceFeed ITwapSource \
   IOracleAdapter ISequencerHealth ICredenceMarket ISeniorVault IUnderwriterPool IAuctionHouse ISettlementAdapter \
   ISolverVenue ISolverAuction IRiskEngine ISigmaOracle IKeeperTips IProtocolReserve ITreasury ICredenceGuardian \
-  ICollateralToken INavFund ICompliance IComplianceRegistry IFaucet
+  ICollateralToken INavFund ICompliance IComplianceRegistry IFaucet IScaledUIAmount
 # Implementations built this sprint (their ABIs add admin functions and constructor args to the interfaces).
 ABI_IMPLS ?= CalendarStore AssetClock CredencePriceFeed OracleAdapter SequencerHealth UniV3TwapSource \
   CredenceStockToken CredenceTreasuryFund ComplianceRegistry Faucet CredenceMarket SeniorVault SigmaOracle \
@@ -72,10 +72,11 @@ abis-export: contracts-build ## Export frozen ABIs to deployments/abis/$(ABI_VER
 	done
 	@echo "exported $$(ls $(ABI_OUT) | wc -l) ABIs to $(ABI_OUT)"
 
-abis-check: ## ABIs are additive release to release except the ADR-listed breaks (v0→v1, v1→v2, v2→v3); regenerates each CHANGELOG.md
+abis-check: ## ABIs are additive release to release except the ADR-listed breaks (v0→v1, v1→v2, v2→v3; v3→v4 additive); regenerates each CHANGELOG.md
 	python3 $(CONTRACTS_DIR)/script/abi_diff.py deployments/abis/v0 deployments/abis/v1 --write deployments/abis/v1/CHANGELOG.md
 	python3 $(CONTRACTS_DIR)/script/abi_diff.py deployments/abis/v1 deployments/abis/v2 --write deployments/abis/v2/CHANGELOG.md
 	python3 $(CONTRACTS_DIR)/script/abi_diff.py deployments/abis/v2 deployments/abis/v3 --write deployments/abis/v3/CHANGELOG.md
+	python3 $(CONTRACTS_DIR)/script/abi_diff.py deployments/abis/v3 deployments/abis/v4 --write deployments/abis/v4/CHANGELOG.md
 
 risk-build: ## Build risk-core and risk-cli (native, release)
 	cargo build --release -p credence-risk-core -p credence-risk-cli
