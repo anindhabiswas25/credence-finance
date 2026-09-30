@@ -183,6 +183,7 @@ Last run (2026-09-29, `3c82b87` + this commit): `forge test --match-path 'test/s
 | R-10 | Holiday, early close and DST days | Status and session dates right on those days | `relayer/tests/edge_calendar_days.rs: edge_r10_dst_switch_…`, `edge_r10_thanksgiving_is_not_regular_whatever_the_vendor_says`, `edge_r10_early_close_ends_regular_at_13_00_et` | proven (reviewed, `5260227`) |
 | R-11 | Stock split (`sharesPerToken`) | Reports stay per share; the halved price is published at once; the adapter applies the ratio after `confirmCorporateAction` | `edge_aggregator.rs: edge_r11_a_two_for_one_split_publishes_the_new_per_share_price_at_once` | proven (reviewed) |
 | R-12 | seq window, node token (OFF-01/02) | As fixed | `off01_seq_window`, `off02_node_token_required_off_dev_chains` | proven (reviewed) |
+| R-13 | Testnet on RedStone (R-26): a stale package, the venue closed, an asset RedStone does not list; a free vendor on a public chain | No LIVE price (never an old one); no LIVE while closed; the relayer refuses `VENDOR=alpaca\|polygon` off dev chains without a licence | `relayer/tests/redstone_live.rs: no_fresh_package_means_no_live_price`, `live_is_the_newest_verified_median_and_passes_the_regular_filter`, `r26_the_free_vendors_publish_on_dev_chains_or_with_a_licence_only`; live gateway `make relayer-redstone-smoke` | proven (S5, `6874a14`; package from an unknown signer: `redstone_prints.rs` verification) |
 
 ### 2.2 Keeper
 
@@ -192,9 +193,9 @@ Last run (2026-09-29, `3c82b87` + this commit): `forge test --match-path 'test/s
 | K-02 | Killed and restarted between **every pair of steps** of J3, J5, J9, J10, J11 | Resumes exactly; no duplicate tx | `keeper_e2e.rs: killed_mid_job_restart_resumes_without_duplicates` covers **J1 (poke) only** | **gap** (J3, J5, J9, J10, J11) |
 | K-03 | Two instances, leader failover | No duplicates | `keeper_e2e.rs: leader_failover_no_duplicates` | proven (reviewed) |
 | K-04 | Stuck tx; gas spike | Replaced at +20 % every 3 blocks; waits at the cap | `keeper_e2e.rs: stuck_tx_is_replaced_after_3_blocks_at_plus_20_percent`; `tx.rs: off09_replacement_fees_stop_at_the_cap` | proven (reviewed) |
-| K-05 | RPC error mid-batch | The batch is retried; nothing done twice | — | **gap** |
-| K-06 | A position repaid / closed between the pre-check and the tx | The tx is a no-op (the chain skips it, E-B-04 / E-L-01); the keeper does not retry forever | — | **gap** |
-| K-07 | Bell with 0 positions; 35+ NEEDS_ACTION positions (4+ J3 txs in 15 min) | Nothing sent; every batch inside the deadline, and **no pre-close candidate in a batch after close − 5 min (QA-10)** | — | **gap** |
+| K-05 | RPC error mid-batch | The batch is retried; nothing done twice | `keeper/tests/edge_keeper.rs` (a lost broadcast answer, then failing receipts mid-batch: 5 borrowers in batches of 2, each enforced once); `tx.rs: edge_k05_a_wrapped_nonce_error_is_recognised` | proven (S5, `48e0665`, `7981c15`) |
+| K-06 | A position repaid / closed between the pre-check and the tx | The tx is a no-op (the chain skips it, E-B-04 / E-L-01); the keeper does not retry forever | `edge_keeper.rs: edge_k06_position_closed_between_precheck_and_tx` | proven (S5, `7981c15`) |
+| K-07 | Bell with 0 positions; 35+ NEEDS_ACTION positions (4+ J3 txs in 15 min) | Nothing sent; every batch inside the deadline, and **no pre-close candidate in a batch after close − 5 min (QA-10)** | `edge_keeper.rs` (0 positions: nothing sent; 36 positions: 4 batches mined before the fixing; a pre-close candidate after the guard: held, paged once); `core_jobs.rs: edge_k07_no_preclose_candidate_in_a_j3_batch_after_the_guard` | proven (S5, `0173e89`, `7981c15`; J3 batch 9 since `b80376b`: to re-run in Phase 2) |
 | K-08 | Lot over 128 positions (tranches) | Every tranche fixed and cleared | — | **gap** (chain side E-L-03) |
 | K-09 | Auction: no bids, no reveals, partial fills | Cleared on schedule | — | **gap** (chain side E-A-05..07) |
 | K-10 | Pool capacity exhausted; withdraw queue short of cash; GDA unsold at the next closure | Bell falls back to the sale; claims retried; `closeResale` / relist | — | **gap** |
@@ -234,7 +235,20 @@ Last run (2026-09-29, `3c82b87` + this commit): `forge test --match-path 'test/s
 | N-04 | A channel down → retry → dead-letter | Dead-lettered after N attempts | `pnpm --filter @credence/notifier e2e` (infra half) | partly (QA-sec did not find an explicit dead-letter assertion; to confirm) |
 | N-05 | A duplicate event | One message | — | **gap** |
 
-### 2.6 Infrastructure
+### 2.6 Two chains (ADR-0014, S5 Amendment 1)
+
+| ID | Trigger | Expected | Test | Status |
+| --- | --- | --- | --- | --- |
+| X-01 | Two keepers (46630, 421614) on one Postgres; the same idempotency key on both; one restarts | Each sees only its chain's jobs; no reconcile / fail / re-send of the other's `submitted` job; a connection without a chain is refused | `keeper/tests/chain_scope.rs: edge_x_two_keepers_on_one_db_never_see_each_others_jobs` | proven (S5, `5aef1d9`) |
+| X-02 | The same wallet (and the same market id) with positions on both chains | The API keeps them apart; every chain-bound body carries `chainId`; a chain-bound route without `?chain=` is a 400 | `api/test/multichain.test.ts: the same wallet and market id on both chains are two separate positions`, `a chain-bound route needs ?chain=…` | proven (S5, `ec3fae5`) |
+| X-03 | One chain's RPC down | That chain's API answers from its indexer (live `null`); the other chain's live reads go on; each chain-bound process has its own RPC list | `multichain.test.ts: one chain's RPC down: …`; keeper `edge_rpc_failover_primary_down_back_up_and_stale_head` (per process) | proven for the API (S5); notifier loops are independent by construction, a process-level test is Phase 2 |
+| X-04 | The same event key on both chains; a rescan | One message per chain; a rescan sends nothing | `notifier/test/scan.e2e.test.ts: ADR-0014: the same rows on another chain are that chain's jobs …`; `api/test/pg.test.ts` (the same email key on two chains) | proven (S5, `fa7daf6`) |
+| X-05 | Alternating `?chain=` to dodge the rate limit | One quota per client across chains | `multichain.test.ts: one rate-limit quota across chains` | proven (S5) |
+| X-06 | A split (2:1), a reverse split (1:3), a dividend step (1 %) on an open position | The API shows share price, the cached `sharesPerToken` and the token price; the collateral value follows; the notifier warns days ahead (a step > 2 % names the pause) | `api/test/core.test.ts: ERC-8056 multiplier in the API …`; `notifier/test/multichain.test.ts: corporate-action alert …`; `scan.e2e.test.ts: corporate action …` | proven (S5, `477faa2`, `fa7daf6`); on-chain E-K-01..06 |
+| X-07 | A key for the wrong chain or role; a group-readable keystore or password; a plain key on a testnet | Refused, with the path it looked for; never another chain's key | `credence-common signer: keystore_per_chain_and_role_…`, `local_key_refused_on_testnet` | proven (S5, `6b3cfa1`) |
+| X-08 | Reindex one chain | Only that chain's `indexer_<id>` / `ix_<id>` schemas are rebuilt | by construction (one Ponder process and schema pair per chain, ADR-0014) | Phase 2: an explicit test with two indexers |
+
+### 2.7 Infrastructure
 
 | ID | Trigger | Expected | Test | Status |
 | --- | --- | --- | --- | --- |

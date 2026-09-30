@@ -5,7 +5,8 @@ import { getAddress, type Address, type Hex } from "viem";
 import { createApp, newLimiters } from "../src/app.ts";
 import { forChain, parseChains, type Config } from "../src/config.ts";
 import { createMultiChainApp, isChainAgnostic } from "../src/multichain.ts";
-import { memoryRepos, type PositionRow } from "../src/repo.ts";
+import { memoryRepos, type MarketRow, type PositionRow } from "../src/repo.ts";
+import type { ChainReader, RiskContext } from "../src/chain.ts";
 
 const base: Config = {
   port: 0,
@@ -172,5 +173,93 @@ describe("one API, two chains", () => {
       await app.request(`/v1/positions/${OWNER}`)
     ).json()) as { chainId: number };
     expect(body.chainId).toBe(412346);
+  });
+
+  it("one chain's RPC down: its positions still answer from the indexer, the other chain's live reads go on", async () => {
+    const market = {
+      marketId: MID,
+      marketAddress: OWNER,
+    } as unknown as MarketRow;
+    const down: ChainReader = {
+      risk: async () => {
+        throw new Error("HTTP request failed: ECONNREFUSED (RPC down)");
+      },
+      position: async () => {
+        throw new Error("unreachable");
+      },
+      uAfter: async () => 0n,
+      vault: async () => {
+        throw new Error("RPC down");
+      },
+    };
+    const up: ChainReader = {
+      risk: async () =>
+        ({
+          block: 99n,
+          loanDecimals: 6,
+          loanSymbol: "USDC",
+          multiplier: null,
+          valuationPrice: 10n ** 18n,
+          upcomingClosureId: 1n,
+        }) as unknown as RiskContext,
+      position: async () => ({
+        collateral: 200n,
+        borrowShares: 1n,
+        coverClosureId: 0n,
+        auctionId: 0n,
+        autoCoverOptOut: false,
+        debt: 5_000_000n,
+        debtProjected: 5_000_000n,
+        collateralValue: 9_000_000n,
+        covered: false,
+        ltv: 10n ** 17n,
+        healthFactor: 10n ** 19n,
+        borrowLimitLtv: 10n ** 17n,
+      }),
+      uAfter: async () => 0n,
+      vault: async () => {
+        throw new Error("unused");
+      },
+    };
+    const limiters = newLimiters(base);
+    const shared = memoryRepos();
+    const apps = (
+      [
+        [46630, 100n, down],
+        [421614, 200n, up],
+      ] as const
+    ).map(([id, q, chain]) => {
+      const r = memoryRepos({ markets: [market], positions: [pos(q)] });
+      return {
+        chainId: id,
+        app: createApp({
+          config: forChain(base, id),
+          clock: r.clock,
+          auth: shared.auth,
+          core: r.core,
+          chain,
+          limiters,
+        }),
+      };
+    });
+    const app = createMultiChainApp(apps);
+    type Body = {
+      positions: {
+        collateral: string;
+        live: { block: string; loanSymbol: string } | null;
+      }[];
+    };
+    const a = (await (
+      await get(app, `/v1/positions/${OWNER}?chain=46630`)
+    ).json()) as Body;
+    expect(a.positions[0]!.collateral).toBe("100");
+    expect(a.positions[0]!.live).toBeNull(); // no live read, but the indexed row is served
+    const b = (await (
+      await get(app, `/v1/positions/${OWNER}?chain=421614`)
+    ).json()) as Body;
+    expect(b.positions[0]!.live).toMatchObject({
+      block: "99",
+      loanSymbol: "USDC",
+    });
   });
 });
