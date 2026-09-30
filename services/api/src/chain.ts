@@ -18,7 +18,10 @@ import {
   type PublicClient,
 } from "viem";
 
-const ERC20 = parseAbi(["function decimals() view returns (uint8)"]);
+const ERC20 = parseAbi([
+  "function decimals() view returns (uint8)",
+  "function symbol() view returns (string)",
+]);
 const WAD = 10n ** 18n;
 const ZERO32 = `0x${"0".repeat(64)}` as Hex;
 /** MarketLib constants (R-03, R-07). */
@@ -50,6 +53,11 @@ export interface RiskContext {
   valuationPrice: bigint;
   collDecimals: number;
   loanDecimals: number;
+  /** The market's own loan token (tUSDG on Robinhood Chain, USDC on Arbitrum; ADR-0014). */
+  loanSymbol: string;
+  /** ERC-8056 (ADR-0119): the oracle's cached multiplier the market values collateral with, and what is
+   * scheduled; null on a deployment before ABIs v4. `valuationPrice` = share price × sharesPerToken / WAD. */
+  multiplier: MultiplierState | null;
   borrowRate: bigint;
   liquidity: bigint;
   state: {
@@ -67,6 +75,22 @@ export interface RiskContext {
     pool: Address;
     vault: Address;
   };
+}
+
+export interface MultiplierState {
+  /** Cached shares per token (WAD): what the market uses now. */
+  sharesPerToken: bigint;
+  /** The token's live multiplier, and the scheduled one with its time (0 when none). */
+  live: bigint;
+  next: bigint;
+  effectiveAt: number;
+  /** A corporate action opened by the multiplier holds (no borrow, no liquidation). */
+  corporateAction: boolean;
+}
+
+/** Price per share (WAD) from the per-token valuation price and the cached multiplier. */
+export function sharePrice(valuationPrice: bigint, sharesPerToken: bigint) {
+  return sharesPerToken === 0n ? 0n : (valuationPrice * WAD) / sharesPerToken;
 }
 
 export interface PositionState {
@@ -136,6 +160,20 @@ export function maxLtvEff(
 
 export function viemChainReader(client: PublicClient): ChainReader {
   const decCache = new Map<string, number>();
+  const symCache = new Map<string, string>();
+  const symbol = async (token: Address) => {
+    const k = token.toLowerCase();
+    let v = symCache.get(k);
+    if (v === undefined) {
+      v = await client.readContract({
+        abi: ERC20,
+        address: token,
+        functionName: "symbol",
+      });
+      symCache.set(k, v);
+    }
+    return v;
+  };
   const decimals = async (token: Address) => {
     const k = token.toLowerCase();
     let d = decCache.get(k);
@@ -171,35 +209,61 @@ export function viemChainReader(client: PublicClient): ChainReader {
       const asset = p.assetId;
       const clock = { abi: IAssetClockAbi, address: w.clock, ...at } as const;
       const engine = { abi: IRiskEngineAbi, address: w.engine, ...at } as const;
-      const [window, info, days, v, cd, ld, params] = await Promise.all([
-        client.readContract({
-          ...clock,
-          functionName: "closureWindow",
-          args: [asset],
-        }),
-        client.readContract({
-          ...clock,
-          functionName: "closureInfo",
-          args: [asset],
-        }),
-        client
-          .readContract({
+      const [window, info, days, v, cd, ld, params, sym, mult] =
+        await Promise.all([
+          client.readContract({
             ...clock,
-            functionName: "closureDays",
+            functionName: "closureWindow",
             args: [asset],
-          })
-          .catch(() => FALLBACK_CLOSURE_DAYS),
-        client.readContract({
-          abi: IOracleAdapterAbi,
-          address: w.oracle,
-          functionName: "valuationPrice",
-          args: [asset],
-          ...at,
-        }),
-        decimals(p.collateralToken),
-        decimals(p.loanToken),
-        client.readContract({ ...engine, functionName: "params" }),
-      ]);
+          }),
+          client.readContract({
+            ...clock,
+            functionName: "closureInfo",
+            args: [asset],
+          }),
+          client
+            .readContract({
+              ...clock,
+              functionName: "closureDays",
+              args: [asset],
+            })
+            .catch(() => FALLBACK_CLOSURE_DAYS),
+          client.readContract({
+            abi: IOracleAdapterAbi,
+            address: w.oracle,
+            functionName: "valuationPrice",
+            args: [asset],
+            ...at,
+          }),
+          decimals(p.collateralToken),
+          decimals(p.loanToken),
+          client.readContract({ ...engine, functionName: "params" }),
+          symbol(p.loanToken),
+          client
+            .readContract({
+              abi: IOracleAdapterAbi,
+              address: w.oracle,
+              functionName: "multiplierState",
+              args: [asset],
+              ...at,
+            })
+            .then(
+              ([
+                cached,
+                live,
+                next,
+                at_,
+                corporateAction,
+              ]): MultiplierState => ({
+                sharesPerToken: cached,
+                live,
+                next,
+                effectiveAt: Number(at_),
+                corporateAction,
+              }),
+            )
+            .catch(() => null), // a deployment before ABIs v4
+        ]);
       const t = Number(window[2]);
       const [sigma, scenarioHash] = await Promise.all([
         client.readContract({
@@ -255,6 +319,8 @@ export function viemChainReader(client: PublicClient): ChainReader {
         valuationPrice: v,
         collDecimals: cd,
         loanDecimals: ld,
+        loanSymbol: sym,
+        multiplier: mult,
         borrowRate: rate,
         liquidity: liq,
         state: {

@@ -100,6 +100,14 @@ beforeAll(async () => {
     valuationPrice: wad("180"),
     collDecimals: 18,
     loanDecimals: 6,
+    loanSymbol: "tUSDG",
+    multiplier: {
+      sharesPerToken: WAD,
+      live: WAD,
+      next: 0n,
+      effectiveAt: 0,
+      corporateAction: false,
+    },
     borrowRate: wad("0.0733"),
     liquidity: 1_000_000_000_000n,
     state: {
@@ -428,5 +436,74 @@ describe("chain helpers mirror MarketLib", () => {
         { haircut: wad("0.1"), haircutUntil: 2000 },
       ),
     ).toBe(wad("0.65"));
+  });
+});
+
+describe("ERC-8056 multiplier in the API (ADR-0119; S5 Amendment 1 point 5)", () => {
+  // the market values collateral per token: share price × the oracle's cached sharesPerToken (= valuationPrice)
+  const withMultiplier = (sharePriceWad: bigint, m: bigint): ChainReader => {
+    const base = fakeChain();
+    return {
+      ...base,
+      async risk() {
+        return {
+          ...ctx,
+          valuationPrice: (sharePriceWad * m) / WAD,
+          multiplier: {
+            sharesPerToken: m,
+            live: m,
+            next: 0n,
+            effectiveAt: 0,
+            corporateAction: false,
+          },
+        };
+      },
+    };
+  };
+  type Live = {
+    collateralValue: { raw: string; formatted: string };
+    loanSymbol: string;
+    multiplier: {
+      sharesPerToken: string;
+      sharePrice: string;
+      tokenPrice: string;
+    };
+  };
+  const live = async (chain: ChainReader) =>
+    (
+      (await (
+        await mk({ chain }).request(`/v1/positions/${PRIYA}`)
+      ).json()) as { positions: { live: Live }[] }
+    ).positions[0]!.live;
+
+  it("a 2:1 split: share price halves, 2 shares per token, the position's value is unchanged", async () => {
+    const l = await live(withMultiplier(wad("90"), 2n * WAD));
+    expect(l.multiplier.sharesPerToken).toBe((2n * WAD).toString());
+    expect(l.multiplier.sharePrice).toBe(wad("90").toString());
+    expect(l.multiplier.tokenPrice).toBe(wad("180").toString());
+    expect(l.collateralValue.formatted).toBe("90000"); // 500 tokens × $180
+    expect(l.loanSymbol).toBe("tUSDG");
+  });
+  it("a 1:3 reverse split: a third of a share per token at 3× the share price", async () => {
+    const l = await live(withMultiplier(wad("540"), WAD / 3n));
+    expect(l.multiplier.sharePrice).toBe(wad("540").toString());
+    // 540 × 0.333… = 179.99…: rounded down, never above the market's own valuation
+    expect(BigInt(l.multiplier.tokenPrice)).toBeLessThanOrEqual(wad("180"));
+    expect(Number(l.collateralValue.formatted)).toBeCloseTo(90_000, 0);
+  });
+  it("a 1 % dividend step: the same share price is worth 1 % more per token", async () => {
+    const l = await live(withMultiplier(wad("180"), (WAD * 101n) / 100n));
+    expect(l.multiplier.tokenPrice).toBe(wad("181.8").toString());
+    expect(l.collateralValue.formatted).toBe("90900");
+  });
+  it("a deployment before ABIs v4 shows no multiplier", async () => {
+    const base = fakeChain();
+    const l = await live({
+      ...base,
+      async risk() {
+        return { ...ctx, multiplier: null };
+      },
+    });
+    expect(l.multiplier).toBeNull();
   });
 });

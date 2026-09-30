@@ -13,7 +13,7 @@ import {
   seniorRate,
   utilization,
 } from "@credence/sdk/risk";
-import type { ChainReader, RiskContext } from "./chain.ts";
+import { sharePrice, type ChainReader, type RiskContext } from "./chain.ts";
 import type { ClockRepo, CoreRepo, MarketRow } from "./repo.ts";
 import type { SetStore } from "./sets.ts";
 import { log } from "./log.ts";
@@ -69,7 +69,7 @@ const closureName = (t: number) =>
   ["NONE", "OVERNIGHT", "WEEKEND", "HOLIDAY_WEEKEND"][t] ?? `UNKNOWN_${t}`;
 const statusName = (s: number) =>
   (["SAFE", "NEEDS_ACTION", "COVERED"] as const)[s] ?? `UNKNOWN_${s}`;
-const LOAN_DECIMALS_FALLBACK = 6; // USDC, when no chain reader is configured
+const LOAN_DECIMALS_FALLBACK = 6; // when no chain reader is configured (both chains' loan tokens have 6)
 
 const NextClosure = z.object({
   closureType: z.object({ code: z.number(), name: z.string() }),
@@ -82,6 +82,42 @@ const NextClosure = z.object({
   }),
   sigma: Ratio,
 });
+const Multiplier = z
+  .object({
+    sharesPerToken: z.string().openapi({
+      description:
+        "The oracle's cached multiplier (WAD) the market values collateral with",
+    }),
+    sharePrice: z.string().openapi({ description: "Price per share (WAD)" }),
+    tokenPrice: z.string().openapi({
+      description:
+        "Price per token (WAD) = sharePrice × sharesPerToken: the valuation price",
+    }),
+    live: z.string(),
+    next: z.string().nullable(),
+    effectiveAt: z.number().nullable(),
+    corporateAction: z.boolean(),
+  })
+  .openapi("Multiplier");
+export const multiplierBody = (ctx: RiskContext) =>
+  ctx.multiplier
+    ? {
+        sharesPerToken: ctx.multiplier.sharesPerToken.toString(),
+        sharePrice: sharePrice(
+          ctx.valuationPrice,
+          ctx.multiplier.sharesPerToken,
+        ).toString(),
+        tokenPrice: ctx.valuationPrice.toString(),
+        live: ctx.multiplier.live.toString(),
+        next:
+          ctx.multiplier.effectiveAt === 0
+            ? null
+            : ctx.multiplier.next.toString(),
+        effectiveAt:
+          ctx.multiplier.effectiveAt === 0 ? null : ctx.multiplier.effectiveAt,
+        corporateAction: ctx.multiplier.corporateAction,
+      }
+    : null;
 const Live = z
   .object({
     block: z.string(),
@@ -93,6 +129,13 @@ const Live = z
     maxLtvEffective: Ratio,
     coverPaused: z.boolean(),
     nextClosure: NextClosure,
+    loanSymbol: z.string().openapi({
+      description:
+        "The market's loan token (tUSDG on Robinhood Chain, USDC on Arbitrum)",
+    }),
+    multiplier: Multiplier.nullable().openapi({
+      description: "ERC-8056 (ADR-0119); null on a deployment before ABIs v4",
+    }),
   })
   .openapi("MarketLive");
 const Market = z
@@ -173,6 +216,8 @@ async function marketBody(m: MarketRow, deps: CoreDeps) {
           ),
           sigma: ratio(ctx.sigma),
         },
+        loanSymbol: ctx.loanSymbol,
+        multiplier: multiplierBody(ctx),
       }
     : null;
   return {
@@ -237,7 +282,12 @@ const PositionBody = z
         block: z.string(),
         debt: Amount,
         debtProjected: Amount,
-        collateralValue: Amount,
+        collateralValue: Amount.openapi({
+          description:
+            "collateral × token price (= share price × the cached sharesPerToken), in the loan token",
+        }),
+        loanSymbol: z.string(),
+        multiplier: Multiplier.nullable(),
         ltv: Ratio,
         healthFactor: Ratio,
         borrowLimitLtv: Ratio,
@@ -254,12 +304,10 @@ const BellBody = z
     status: z.object({ code: z.number(), name: z.string() }),
     closure: z.object({
       closureId: z.string(),
-      epochId: z
-        .string()
-        .openapi({
-          description:
-            "The pool epoch the cover would be written in (the clock's venueEpoch, R-10)",
-        }),
+      epochId: z.string().openapi({
+        description:
+          "The pool epoch the cover would be written in (the clock's venueEpoch, R-10)",
+      }),
       closureType: z.object({ code: z.number(), name: z.string() }),
       closeAt: z.number(),
       reopenAt: z.number(),
@@ -379,6 +427,8 @@ export function registerCoreRoutes(app: OpenAPIHono, deps: CoreDeps) {
                 debt: amt(s.debt, d),
                 debtProjected: amt(s.debtProjected, d),
                 collateralValue: amt(s.collateralValue, d),
+                loanSymbol: ctx.loanSymbol,
+                multiplier: multiplierBody(ctx),
                 ltv: ratio(s.ltv),
                 healthFactor: ratio(s.healthFactor),
                 borrowLimitLtv: ratio(s.borrowLimitLtv),
