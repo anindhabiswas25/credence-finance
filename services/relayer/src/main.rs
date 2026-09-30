@@ -54,6 +54,24 @@ enum Cmd {
     },
     /// The aggregator of one feed.
     Aggregator,
+    /// The issuer's NAV strike for the test fund (the NAV stack, `nav_strike` module docs).
+    NavStrike {
+        /// NAV per share, decimal (e.g. 1.0412); default: the fund's last NAV accrued at --apr-bps.
+        #[arg(long)]
+        price: Option<String>,
+        /// Accrual when no --price is given (400 = 4 %/yr).
+        #[arg(long, default_value_t = 400)]
+        apr_bps: u32,
+        /// How many committee keys sign (roles nav-1..nav-N); at least the feed's threshold.
+        #[arg(long, env = "NAV_COMMITTEE_SIZE", default_value_t = 2)]
+        signers: usize,
+        /// Also call the fund's publishNav as the issuer (an EOA issuer only; keystore role `issuer`).
+        #[arg(long)]
+        publish: bool,
+        /// Compute and sign, print the report, send nothing.
+        #[arg(long)]
+        dry_run: bool,
+    },
     /// Write a synthetic replay session (clearly labelled synthetic) whose regular session opened
     /// `--minutes-in` minutes ago, for local runs without vendor keys.
     SampleReplay {
@@ -501,11 +519,163 @@ async fn smoke(
     Ok(())
 }
 
+alloy::sol! {
+    #[sol(rpc)]
+    interface INavFundLite {
+        function navPerShare() external view returns (uint256, uint40);
+        function publishNav(uint256 navPerShare_) external;
+        function issuer() external view returns (address);
+    }
+}
+
+fn book_address(book: &serde_json::Value, pointer: &str) -> Result<Address> {
+    book.pointer(pointer)
+        .and_then(|v| v.as_str())
+        .with_context(|| format!("{pointer} missing in the address book"))?
+        .parse()
+        .with_context(|| pointer.to_owned())
+}
+
+async fn nav_strike(
+    price: Option<&str>,
+    apr_bps: u32,
+    n_signers: usize,
+    publish: bool,
+    dry_run: bool,
+) -> Result<()> {
+    use alloy::{
+        primitives::{keccak256, B256},
+        providers::{Provider, ProviderBuilder},
+    };
+    use credence_relayer::{
+        nav_strike::{accrue, nav_report, stamp},
+        price::{fmt_wad, wad_from_decimal},
+        report::{digest, sorted_signatures, ICredencePriceFeed},
+    };
+    let chain_id = env::chain_id()?;
+    let rpc = rpc_urls()?;
+    let path = env::optional("DEPLOYMENTS_FILE").unwrap_or_else(|| {
+        let local = format!("deployments/{chain_id}.local.json");
+        if std::path::Path::new(&local).exists() {
+            local
+        } else {
+            format!("deployments/{chain_id}.json")
+        }
+    });
+    let book: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(&path).with_context(|| path.clone())?)?;
+    let feed = book_address(&book, "/shared/feedNav")?;
+    let fund = book_address(&book, "/tokens/tTBILL")?;
+    let asset: B256 = match book.pointer("/assetIds/TBILL").and_then(|v| v.as_str()) {
+        Some(a) => a.parse().context("assetIds.TBILL")?,
+        None => keccak256("TBILL:USBANK"),
+    };
+    anyhow::ensure!(n_signers >= 1, "--signers must be at least 1");
+    let mut committee = Vec::new();
+    for n in 1..=n_signers {
+        let cfg = SignerConfig::resolve(&format!("NAV_SIGNER_{n}"), chain_id, &format!("nav-{n}"))?;
+        committee.push(CredenceSigner::load(&cfg, chain_id).await?);
+    }
+    let read = ProviderBuilder::new()
+        .connect_http(rpc[0].parse().context("RPC_URL")?)
+        .erased();
+    let f = INavFundLite::new(fund, &read);
+    let nav = f.navPerShare().call().await?;
+    let (current, at): (u128, u64) = (nav._0.to(), nav._1.to());
+    let now = credence_relayer::node::now_s();
+    let new_price = match price {
+        Some(p) => wad_from_decimal(p)?,
+        None => accrue(current, apr_bps, now.saturating_sub(at)),
+    };
+    let head = read
+        .get_block_by_number(alloy::eips::BlockNumberOrTag::Latest)
+        .await?
+        .map(|b| b.header.timestamp)
+        .unwrap_or(0);
+    let seq = ICredencePriceFeed::new(feed, &read)
+        .latestSeq(asset)
+        .call()
+        .await?
+        + 1;
+    let r = nav_report(asset, new_price, stamp(now, head, at), seq);
+    let d = digest(&domain(chain_id, feed), std::slice::from_ref(&r));
+    let mut sigs = Vec::new();
+    for s in &committee {
+        sigs.push((s.address(), s.sign_hash(&d).await?));
+    }
+    let sigs: Vec<_> = sorted_signatures(sigs)
+        .into_iter()
+        .map(|(_, b)| b)
+        .collect();
+    println!(
+        "NAV strike on chain {chain_id}: {} (was {}), seq {seq}, observedAt {}, {} signatures",
+        fmt_wad(new_price),
+        fmt_wad(current),
+        r.observedAt,
+        sigs.len()
+    );
+    if dry_run {
+        return Ok(());
+    }
+    // gas: the first committee key pays unless a `nav-submitter` key exists
+    let payer = match SignerConfig::resolve("NAV_SUBMITTER", chain_id, "nav-submitter") {
+        Ok(cfg) => CredenceSigner::load(&cfg, chain_id).await?,
+        Err(_) => committee[0].clone(),
+    };
+    let chain = ChainClient::connect(&rpc, payer.wallet(), feed, None)?;
+    match chain.submit(std::slice::from_ref(&r), sigs).await? {
+        credence_relayer::chain::SubmitOutcome::Accepted { tx_hash, .. } => {
+            println!("feedNav accepted: {tx_hash}")
+        }
+        other => bail!("feedNav did not accept the NAV report: {other:?}"),
+    }
+    if publish {
+        let issuer = CredenceSigner::load(
+            &SignerConfig::resolve("ISSUER", chain_id, "issuer")?,
+            chain_id,
+        )
+        .await?;
+        let on_chain = f.issuer().call().await?;
+        anyhow::ensure!(
+            on_chain == issuer.address(),
+            "the fund's issuer is {on_chain}, not this key {}: publish through the issuer (Safe) instead",
+            issuer.address()
+        );
+        let w = ProviderBuilder::new()
+            .wallet(issuer.wallet())
+            .connect_http(rpc[0].parse()?)
+            .erased();
+        let receipt = INavFundLite::new(fund, &w)
+            .publishNav(alloy::primitives::U256::from(new_price))
+            .send()
+            .await?
+            .get_receipt()
+            .await?;
+        anyhow::ensure!(
+            receipt.status(),
+            "publishNav reverted: {}",
+            receipt.transaction_hash
+        );
+        println!("publishNav: {}", receipt.transaction_hash);
+    }
+    Ok(())
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     env::load_dotenv();
     telemetry::init("credence-relayer");
     let cli = Cli::parse();
+    if let Cmd::NavStrike {
+        price,
+        apr_bps,
+        signers,
+        publish,
+        dry_run,
+    } = &cli.cmd
+    {
+        return nav_strike(price.as_deref(), *apr_bps, *signers, *publish, *dry_run).await;
+    }
     if let Cmd::SampleReplay { out, minutes_in } = &cli.cmd {
         let open = credence_relayer::node::now_s() - minutes_in * 60;
         let symbols: Vec<(String, String, f64)> = env::list("ASSETS")
@@ -560,7 +730,9 @@ async fn main() -> Result<()> {
     let metrics_addr: SocketAddr = env::parse_or("METRICS_ADDR", "127.0.0.1:9101".parse()?)?; // OFF-08: private unless set
 
     match cli.cmd {
-        Cmd::SampleReplay { .. } | Cmd::RedstoneRecord { .. } => unreachable!("handled above"),
+        Cmd::SampleReplay { .. } | Cmd::RedstoneRecord { .. } | Cmd::NavStrike { .. } => {
+            unreachable!("handled above")
+        }
         Cmd::Smoke { asset, out } => smoke(&common, asset, out).await,
         Cmd::Record {
             start,

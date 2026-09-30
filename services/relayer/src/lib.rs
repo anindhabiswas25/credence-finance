@@ -12,6 +12,7 @@ pub mod conditions;
 pub mod config;
 pub mod filter;
 pub mod metrics;
+pub mod nav_strike;
 pub mod node;
 pub mod ocr;
 pub mod price;
