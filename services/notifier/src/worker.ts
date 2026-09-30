@@ -15,6 +15,8 @@ import {
 } from "./templates.ts";
 
 export interface WorkerConfig {
+  /** Amendment 2: the channels switched on (`NOTIFIER_CHANNELS`, default in-app only); undefined = all. */
+  enabled?: ReadonlySet<Channel>;
   email?: EmailConfig;
   push?: PushConfig;
   telegram?: TelegramConfig;
@@ -49,8 +51,11 @@ export function channelsFor(
   cfg: WorkerConfig,
 ): Channel[] {
   return DEFAULT_CHANNELS[event].filter((c) => {
+    if (cfg.enabled && !cfg.enabled.has(c)) return false;
     if (r.prefs.get(`${event}:${c}`) === false) return false;
     switch (c) {
+      case "inapp":
+        return true; // every account has an inbox
       case "email":
         return (
           !!cfg.email &&
@@ -139,6 +144,24 @@ export async function processJob(
     try {
       const providerIds: string[] = [];
       switch (c) {
+        case "inapp": {
+          const push = (rendered as { push?: { url?: string } }).push;
+          providerIds.push(
+            String(
+              await q.writeInbox(d.sql, {
+                chainId: job.chainId,
+                address: job.address,
+                event: job.event,
+                dedupeKey: job.dedupeKey,
+                subject: rendered.subject,
+                body: rendered.text,
+                url: push?.url ?? null,
+                payload: data,
+              }),
+            ),
+          );
+          break;
+        }
         case "email": {
           const to =
             job.event === "email_verify"

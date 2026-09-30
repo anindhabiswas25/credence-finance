@@ -211,18 +211,25 @@ export const EVENTS = {
   email_verify: EmailVerify,
 } as const;
 export type EventName = keyof typeof EVENTS;
-export type Channel = "email" | "push" | "telegram";
+export type Channel = "inapp" | "email" | "push" | "telegram";
+/** Amendment 2: in-app is the default; email / push / Telegram stay in the code, off unless enabled. */
+export const CHANNELS: readonly Channel[] = [
+  "inapp",
+  "email",
+  "push",
+  "telegram",
+];
 
 /** Default channels per event (§10.5 table); user preferences can turn each off. */
 export const DEFAULT_CHANNELS: Record<EventName, Channel[]> = {
-  bell_headsup: ["email", "push", "telegram"],
-  bell_outcome: ["email", "push", "telegram"],
-  reopen_queued: ["push", "telegram"],
-  auction_settled: ["email", "push", "telegram"],
-  nav_sold: ["email", "push", "telegram"],
-  epoch_settled: ["email"],
-  withdrawal_claimable: ["email", "push"],
-  corporate_action: ["email", "push", "telegram"],
+  bell_headsup: ["inapp", "email", "push", "telegram"],
+  bell_outcome: ["inapp", "email", "push", "telegram"],
+  reopen_queued: ["inapp", "push", "telegram"],
+  auction_settled: ["inapp", "email", "push", "telegram"],
+  nav_sold: ["inapp", "email", "push", "telegram"],
+  epoch_settled: ["inapp", "email"],
+  withdrawal_claimable: ["inapp", "email", "push"],
+  corporate_action: ["inapp", "email", "push", "telegram"],
   email_verify: ["email"],
 };
 

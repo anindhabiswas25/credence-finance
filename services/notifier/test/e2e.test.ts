@@ -130,6 +130,8 @@ describe.skipIf(!DB)("notifier e2e (Postgres)", () => {
     p = await providers();
     const vapid = webpush.generateVAPIDKeys();
     cfg = {
+      // the external channels (Amendment 2: switched on explicitly; in-app has its own tests)
+      enabled: new Set(["email", "push", "telegram"] as const),
       email: {
         apiKey: "re_test",
         apiUrl: `${p.base}/resend`,

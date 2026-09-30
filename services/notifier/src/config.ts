@@ -3,6 +3,7 @@
 import { hostname } from "node:os";
 import { z } from "zod";
 import type { WorkerConfig } from "./worker.ts";
+import { CHANNELS, type Channel } from "./templates.ts";
 
 const Env = z.object({
   DATABASE_URL: z.string().min(1),
@@ -45,6 +46,8 @@ const Env = z.object({
   VAPID_PRIVATE_KEY: z.string().optional(),
   VAPID_SUBJECT: z.string().default("mailto:ops@credence.finance"),
   TELEGRAM_BOT_TOKEN: z.string().optional(),
+  /** Amendment 2: the delivery channels switched on, comma-separated (default in-app only). */
+  NOTIFIER_CHANNELS: z.string().default("inapp"),
   TELEGRAM_API_URL: z.string().default("https://api.telegram.org"),
 });
 
@@ -126,6 +129,21 @@ export function chainScans(
   });
 }
 
+export function enabledChannels(raw: string): Set<Channel> {
+  const out = new Set<Channel>();
+  for (const c of raw
+    .split(",")
+    .map((x) => x.trim())
+    .filter(Boolean)) {
+    if (!CHANNELS.includes(c as Channel))
+      throw new Error(
+        `NOTIFIER_CHANNELS: unknown channel ${c} (${CHANNELS.join(", ")})`,
+      );
+    out.add(c as Channel);
+  }
+  return out;
+}
+
 const set = (v?: string) => (v && v.trim() ? v.trim() : undefined);
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
@@ -148,6 +166,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
       chains: chainScans(env, e),
     },
     worker: {
+      enabled: enabledChannels(e.NOTIFIER_CHANNELS),
       email: resend
         ? {
             apiKey: resend,

@@ -6,6 +6,8 @@ export type Sql = postgres.Sql;
 
 export interface Job {
   id: bigint;
+  /** ADR-0014: the chain the event is about (0: account-level). */
+  chainId: number;
   dedupeKey: string;
   address: Buffer;
   event: string;
@@ -55,9 +57,10 @@ export async function claim(
     update app.notification_job j
        set status = 'sending', attempts = j.attempts + 1, locked_at = now(), locked_by = ${worker}, updated_at = now()
       from due where j.id = due.id
-    returning j.id, j.dedupe_key, j.address, j.event, j.payload, j.attempts, j.delivered_channels, j.failed_channels`;
+    returning j.id, j.chain_id, j.dedupe_key, j.address, j.event, j.payload, j.attempts, j.delivered_channels, j.failed_channels`;
   return rows.map((r) => ({
     id: BigInt(r.id),
+    chainId: Number(r.chain_id),
     dedupeKey: r.dedupe_key,
     address: r.address,
     event: r.event,
@@ -66,6 +69,30 @@ export async function claim(
     deliveredChannels: r.delivered_channels,
     failedChannels: r.failed_channels,
   }));
+}
+
+/** Amendment 2: the in-app channel. One inbox row per (chain, address, dedupe key): a retried or replayed job
+ * never writes twice. Returns the row id (the existing one on a replay). */
+export async function writeInbox(
+  sql: Sql,
+  a: {
+    chainId: number;
+    address: Buffer;
+    event: string;
+    dedupeKey: string;
+    subject: string;
+    body: string;
+    url: string | null;
+    payload: unknown;
+  },
+): Promise<bigint> {
+  const [r] = await sql`
+    insert into app.inbox (chain_id, address, event, dedupe_key, subject, body, url, payload)
+    values (${a.chainId}, ${a.address}, ${a.event}, ${a.dedupeKey}, ${a.subject}, ${a.body}, ${a.url},
+            ${sql.json(a.payload as postgres.JSONValue)})
+    on conflict (chain_id, address, dedupe_key) do update set dedupe_key = excluded.dedupe_key
+    returning id`;
+  return BigInt(r!.id);
 }
 
 export async function recipient(sql: Sql, address: Buffer): Promise<Recipient> {

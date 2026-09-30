@@ -210,3 +210,16 @@ describe("corporate-action alert", () => {
     );
   });
 });
+
+describe("Amendment 2: channels", () => {
+  it("in-app only by default; others only when listed; unknown refused", () => {
+    expect([...loadConfig(base).worker.enabled!]).toEqual(["inapp"]);
+    expect([
+      ...loadConfig({ ...base, NOTIFIER_CHANNELS: "inapp,telegram" }).worker
+        .enabled!,
+    ]).toEqual(["inapp", "telegram"]);
+    expect(() =>
+      loadConfig({ ...base, NOTIFIER_CHANNELS: "inapp,sms" }),
+    ).toThrow(/unknown channel sms/);
+  });
+});

@@ -11,6 +11,8 @@ import { render } from "../src/templates.ts";
 import { backoffS, channelsFor, type WorkerConfig } from "../src/worker.ts";
 
 const cfg: WorkerConfig = {
+  // the external channels (Amendment 2: switched on explicitly; in-app has its own tests)
+  enabled: new Set(["email", "push", "telegram"] as const),
   email: { apiKey: "k", from: "a@b.c", apiUrl: "http://x" } as never,
   push: {} as never,
   telegram: { botToken: "t", apiUrl: "http://tg" },
