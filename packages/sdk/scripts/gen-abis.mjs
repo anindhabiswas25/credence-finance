@@ -1,11 +1,11 @@
-// Generate `src/generated/abis.ts` from the frozen ABIs in deployments/abis/v4 (ABI_VERSION=v3 / v2 / v1 / v0 for older sets) (owned by BE-chain),
+// Generate `src/generated/abis.ts` from the frozen ABIs in deployments/abis/v5 (ABI_VERSION=v4 / v3 / v2 / v1 / v0 for older sets) (owned by BE-chain),
 // so viem gets literal ABI types (`as const`). Run by build, typecheck and test.
 import { readdirSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const here = dirname(fileURLToPath(import.meta.url));
-const version = process.env.ABI_VERSION ?? "v4";
+const version = process.env.ABI_VERSION ?? "v5";
 const src = resolve(here, "../../../deployments/abis", version);
 const out = resolve(here, "../src/generated");
 mkdirSync(out, { recursive: true });

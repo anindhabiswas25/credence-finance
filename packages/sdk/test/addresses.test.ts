@@ -13,6 +13,7 @@ import {
   AssetClockAbi,
   IOracleAdapterAbi,
   IScaledUIAmountAbi,
+  IUnderwriterPoolAbi,
 } from "../src/generated/abis.js";
 
 const book = {
@@ -80,7 +81,7 @@ describe("ids and enums", () => {
   });
 });
 
-describe("ABIs (deployments/abis/v4)", () => {
+describe("ABIs (deployments/abis/v5)", () => {
   it("exposes the price feed and clock", () => {
     const names = (
       ICredencePriceFeedAbi as readonly { type: string; name?: string }[]
@@ -93,10 +94,10 @@ describe("ABIs (deployments/abis/v4)", () => {
       ),
     ).toBe(true);
     expect(Object.keys(abis).length).toBeGreaterThanOrEqual(37);
-    expect(ABI_VERSION).toBe("v4");
+    expect(ABI_VERSION).toBe("v5");
   });
 
-  it("v4 carries the ERC-8056 multiplier the API and notifier read (ADR-0119)", () => {
+  it("v5 (as v4) carries the ERC-8056 multiplier the API and notifier read (ADR-0119)", () => {
     const names = (a: readonly unknown[]) =>
       (a as readonly { name?: string }[]).map((x) => x.name);
     expect(names(IOracleAdapterAbi)).toEqual(
@@ -225,5 +226,16 @@ describe("per-chain books (ADR-0014)", () => {
       tokens: { loan: a(8) },
     });
     expect(eq.nav).toBeUndefined();
+  });
+});
+
+describe("ABIs v5 (ADR-0114 revert)", () => {
+  it("the pool no longer has the J3 Bell-batch bracket; tUSDG is there", () => {
+    const names = (IUnderwriterPoolAbi as readonly { name?: string }[]).map(
+      (x) => x.name,
+    );
+    expect(names).not.toContain("beginBellBatch");
+    expect(names).not.toContain("endBellBatch");
+    expect(Object.keys(abis)).toContain("TestStablecoinAbi");
   });
 });

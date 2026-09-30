@@ -2,7 +2,7 @@
   "name": "@credence/sdk",
   "version": "0.1.0",
   "private": true,
-  "description": "Credence TS SDK: ABIs (deployments/abis/v4), typed address book, shared types, EIP-712 report builder, risk-wasm Bell/quote helpers.",
+  "description": "Credence TS SDK: ABIs (deployments/abis/v5), typed address book, shared types, EIP-712 report builder, risk-wasm Bell/quote helpers.",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
