@@ -52,13 +52,14 @@ export function stackOf(
   };
 }
 
-/** "A" / "B" for the two relayer feeds, else the address itself. */
+/** "A" / "B" for the two relayer feeds, "NAV" for the NAV stack's feed (S5), else the address itself. */
 export function feedLabeler(book: Pick<AddressBook, "shared">) {
   const a = book.shared.feedA?.toLowerCase();
   const b = book.shared.feedB?.toLowerCase();
+  const nav = book.shared.feedNav?.toLowerCase();
   return (addr: string): string => {
     const x = addr.toLowerCase();
-    return x === a ? "A" : x === b ? "B" : addr;
+    return x === a ? "A" : x === b ? "B" : x === nav ? "NAV" : addr;
   };
 }
 

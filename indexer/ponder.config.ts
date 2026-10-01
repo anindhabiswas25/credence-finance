@@ -33,7 +33,8 @@ const book = indexerBook(
   chainId,
   process.env.DEPLOYMENTS_DIR ?? "../deployments",
 );
-const feeds = [book.shared.feedA, book.shared.feedB].filter(
+// S5: the NAV stack's feed too (421614 has feedNav and no equity feeds), so the first NAV print is indexed
+const feeds = [book.shared.feedA, book.shared.feedB, book.shared.feedNav].filter(
   (a): a is `0x${string}` => !!a,
 );
 const ZERO = "0x0000000000000000000000000000000000000000" as const;
