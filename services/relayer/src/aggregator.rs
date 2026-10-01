@@ -3,7 +3,7 @@
 //! all assets in **one** `submit` transaction. Every signed report is persisted before submission.
 
 use crate::{
-    cadence::AssetCadence,
+    cadence::{AssetCadence, CadenceConfig},
     chain::{FeedChain, SubmitOutcome},
     metrics::Metrics,
     node::{Node, SignResponse},
@@ -115,6 +115,7 @@ pub struct Aggregator {
     store: Arc<dyn ReportStore>,
     metrics: Metrics,
     cadence: HashMap<B256, AssetCadence>,
+    cadence_cfg: CadenceConfig,
     next_seq: HashMap<B256, u64>,
     clock: fn() -> u64,
 }
@@ -127,12 +128,17 @@ impl Aggregator {
         store: Arc<dyn ReportStore>,
         metrics: Metrics,
     ) -> Self {
+        let tick_s = cfg.tick.as_secs().max(1);
         Self {
             cfg,
             nodes,
             chain,
             store,
             metrics,
+            cadence_cfg: CadenceConfig {
+                tick_s,
+                ..Default::default()
+            },
             cadence: HashMap::new(),
             next_seq: HashMap::new(),
             clock: crate::node::now_s,
@@ -141,6 +147,15 @@ impl Aggregator {
 
     pub fn with_clock(mut self, clock: fn() -> u64) -> Self {
         self.clock = clock;
+        self
+    }
+
+    /// Heartbeats, age limits and coalescing (the tick is taken from the aggregator's config).
+    pub fn with_cadence(mut self, c: CadenceConfig) -> Self {
+        self.cadence_cfg = CadenceConfig {
+            tick_s: self.cadence_cfg.tick_s,
+            ..c
+        };
         self
     }
 
@@ -191,33 +206,43 @@ impl Aggregator {
             .collect()
     }
 
-    /// Drafts due now under the cadence rules, in batch order (STATUS, OPEN, CLOSE, LIVE per asset).
+    /// Drafts due now under the cadence rules, in batch order (STATUS, OPEN, CLOSE, LIVE per asset). Once anything
+    /// is due, LIVE and STATUS reports due within `coalesce_s` join the batch (one transaction for every asset).
     fn due_drafts(&self, snaps: &[NodeSnapshot], now: u64) -> Vec<Draft> {
-        let mut out = Vec::new();
-        for (id, _) in &self.cfg.assets {
-            let cad = self.cadence.get(id).cloned().unwrap_or_default();
-            let mut drafts = propose_asset(*id, snaps, self.cfg.threshold);
-            drafts.sort_by_key(|d| match d.kind {
-                Kind::Status => 0,
-                Kind::Open => 1,
-                Kind::Close => 2,
-                Kind::Live => 3,
-                Kind::Nav => 4,
-            });
-            for d in drafts {
-                let due = match d.kind {
-                    Kind::Status => cad.status_due(d.status, now),
-                    Kind::Live => cad.live_due(d.status, d.price_wad, now),
-                    Kind::Open => cad.open_due(d.session_date),
-                    Kind::Close => cad.close_due(d.session_date),
-                    Kind::Nav => false,
-                };
-                if due {
-                    out.push(d);
-                }
-            }
-        }
-        out
+        let all: Vec<(Draft, AssetCadence)> = self
+            .cfg
+            .assets
+            .iter()
+            .flat_map(|(id, _)| {
+                let cad = self.cadence.get(id).cloned().unwrap_or_default();
+                let mut drafts = propose_asset(*id, snaps, self.cfg.threshold);
+                drafts.sort_by_key(|d| match d.kind {
+                    Kind::Status => 0,
+                    Kind::Open => 1,
+                    Kind::Close => 2,
+                    Kind::Live => 3,
+                    Kind::Nav => 4,
+                });
+                drafts.into_iter().map(move |d| (d, cad.clone()))
+            })
+            .collect();
+        let c = &self.cadence_cfg;
+        let due = |d: &Draft, cad: &AssetCadence, lead: u64| match d.kind {
+            Kind::Status => cad.status_due_with(c, d.status, now, lead),
+            Kind::Live => cad.live_due_with(c, d.status, d.price_wad, now, lead),
+            Kind::Open => cad.open_due(d.session_date),
+            Kind::Close => cad.close_due(d.session_date),
+            Kind::Nav => false,
+        };
+        let lead = if all.iter().any(|(d, cad)| due(d, cad, 0)) {
+            c.coalesce_s
+        } else {
+            return Vec::new();
+        };
+        all.into_iter()
+            .filter(|(d, cad)| due(d, cad, lead))
+            .map(|(d, _)| d)
+            .collect()
     }
 
     fn node_spread(&self, snaps: &[NodeSnapshot]) {
@@ -447,7 +472,7 @@ impl Aggregator {
             let status = MarketStatus::from_u8(r.marketStatus).unwrap_or(MarketStatus::Closed);
             let c = self.cadence.entry(r.assetId).or_default();
             match kind {
-                Kind::Live => c.mark_live(r.price, now, status),
+                Kind::Live => c.mark_live(r.price, now, status, r.observedAt.to::<u64>()),
                 Kind::Status => c.mark_status(status, now),
                 Kind::Open => {
                     c.opens.insert(r.sessionDate.to::<u64>());

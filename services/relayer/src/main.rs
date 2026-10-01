@@ -272,7 +272,22 @@ async fn aggregator(
     };
     let _ = ops;
     let chain: Arc<dyn FeedChain> = Arc::new(chain);
-    let mut agg = Aggregator::new(cfg, nodes, chain, store(common.chain_id).await?, metrics);
+    let d = credence_relayer::cadence::CadenceConfig::default();
+    let rule = |hb: &str, age: &str, r: credence_relayer::cadence::Rule| -> Result<_> {
+        Ok(credence_relayer::cadence::Rule {
+            heartbeat_s: env::parse_or(hb, r.heartbeat_s)?,
+            max_age_s: env::parse_or(age, r.max_age_s)?,
+            ..r
+        })
+    };
+    let cadence = credence_relayer::cadence::CadenceConfig {
+        regular: rule("RELAYER_HEARTBEAT_REGULAR_S", "RELAYER_MAX_AGE_REGULAR_S", d.regular)?,
+        extended: rule("RELAYER_HEARTBEAT_EXTENDED_S", "RELAYER_MAX_AGE_EXTENDED_S", d.extended)?,
+        coalesce_s: env::parse_or("RELAYER_COALESCE_S", d.coalesce_s)?,
+        ..d
+    };
+    let mut agg = Aggregator::new(cfg, nodes, chain, store(common.chain_id).await?, metrics)
+        .with_cadence(cadence);
     agg.sync_seqs().await?;
     Ok(agg)
 }
