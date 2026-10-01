@@ -3,7 +3,8 @@
 # non-zero on any failure. Read-only: it changes nothing, and prints no secret or RPC URL.
 #   1 every service is up (healthy where it has a health check; the migration exited 0)
 #   2 the indexers of both chains are caught up (Ponder /ready)
-#   3 feed A and feed B publish on 46630 (a report in the last 10 min), unless XNYS is outside its extended hours
+#   3 feed A and feed B publish on 46630 (a report in the last 10 min), unless XNYS is outside its extended hours;
+#     in XNYS's regular session (from open + 15 min, past the REOPEN window) every equity clock is REGULAR
 #   4 each chain's keeper is the leader, healthy and idle: no reverted tx and no page firing
 #   5 the API answers for both chains (/readyz, /v1/markets?chain=…)
 #   6 the first NAV print landed on 421614 (indexed on feedNav), or TBILL is HALTED with its reason until it does
@@ -54,6 +55,18 @@ if [[ " $CHAINS " == *" 46630 "* ]]; then
     elif [ "$open" = 0 ]; then note "feed $f: nothing in 10 min, XNYS is outside its extended hours (expected)"
     else bad "feed $f: no report in the last 10 min while XNYS is open"; fi
   done
+  regular="$(jq --argjson n "$now" '[.sessions[] | select(.open + 900 <= $n and $n < .close)] | length' "$cal" 2>/dev/null || echo 0)"
+  ids="$(curl -sf --max-time 15 "$API/v1/markets?chain=46630" | jq -r '(.items // .markets // .)[] | select(.stack == "equity") | .assetId' 2>/dev/null | sort -u)"
+  states=(); notreg=""
+  for id in $ids; do
+    s="$(curl -sf --max-time 10 "$API/v1/clock/$id?chain=46630" | jq -r '.state.name // "unknown"' 2>/dev/null)"
+    states+=("${s:-unknown}"); [ "$s" = REGULAR ] || notreg="$notreg ${id:0:10}=${s:-unknown}"
+  done
+  summary="$(printf '%s\n' "${states[@]}" | sort | uniq -c | awk '{printf "%s %s, ", $1, $2}' | sed 's/, $//')"
+  if [ "${regular:-0}" -gt 0 ]; then
+    if [ "${#states[@]}" -gt 0 ] && [ -z "$notreg" ]; then ok "all ${#states[@]} equity clocks REGULAR in the session"
+    else bad "regular session, clocks not REGULAR:${notreg:- none found}"; fi
+  else note "equity clocks outside the regular session: ${summary:-none found}"; fi
 fi
 
 echo "4. keepers"
