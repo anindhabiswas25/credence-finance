@@ -101,17 +101,17 @@
     "_fill": "USER INPUT: the Safe owner addresses (checksummed; no keys). The same owners on both chains is fine for testnet (PM, 2026-09-30). Created through the canonical Safe v1.4.1 factory; the deploy refuses to start while a list is empty or shorter than its threshold.",
     "gov": {
       "_owners": "5 addresses (timelock proposer and canceller, 3-of-5)",
-      "owners": [],
+      "owners": ["0xA85C7C991c31e99BE175EccE0AC3F2D7E1641313", "0x3004D6c5810CF46211DAA6B1459344C14e9b2B7d", "0x4a69DfAA0df87a4fE35e438E4F8b8976b941570C", "0x06E91159A7BD2DE33584928Eb6D7004384848a26", "0x661765F8881d4E694bce1815f91B9468c04e12ce"],
       "threshold": 3
     },
     "guardian": {
       "_owners": "4 addresses (pause and restrictions, 2-of-4)",
-      "owners": [],
+      "owners": ["0xA85C7C991c31e99BE175EccE0AC3F2D7E1641313", "0x3004D6c5810CF46211DAA6B1459344C14e9b2B7d", "0x4a69DfAA0df87a4fE35e438E4F8b8976b941570C", "0x06E91159A7BD2DE33584928Eb6D7004384848a26"],
       "threshold": 2
     },
     "ops": {
       "_owners": "the Ops / Issuer owners (test-token issuer, vault allocator, faucet owner); set the threshold",
-      "owners": [],
+      "owners": ["0xA85C7C991c31e99BE175EccE0AC3F2D7E1641313", "0x3004D6c5810CF46211DAA6B1459344C14e9b2B7d", "0x4a69DfAA0df87a4fE35e438E4F8b8976b941570C"],
       "threshold": 2
     }
   },

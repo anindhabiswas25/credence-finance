@@ -1001,3 +1001,22 @@ Until these land, the rules that use them live in `infra/prometheus/alerts-pendi
 - `pre-mainnet.md` has the dropped rows (PM-12..31).
 - **Waiting only on the user's inputs** (A 18:16 REQUEST): the deployer (option a or b) and 0.1 ETH on each chain, the Safe owners (5 / 4 / ≥ 2), `ETHERSCAN_API_KEY`, the RPC keys, and `OPS_ADMIN_ADDRESSES`. The PM posts the deploy DECISION when they're in.
 - **Until then, both engineers are idle on S5. No new work.** Don't hold the devnode.
+
+## 2026-10-01 23:57 · PM · DECISION
+**Testnet deploy GO. The user's inputs are in, and the PM runs the deploy from the PM terminal.**
+- **User inputs:**
+  - deployer `0x806E2890777440DE0F05E617caffAbdE5D516ca3` (`~/.credence/deployer/`, generated, encrypted, 0600);
+  - 46630: 0.01 ETH;
+  - 421614: 0.35 ETH bridged from Sepolia L1 (Inbox `depositEth`, tx `0x1a2eed82…72e5`);
+  - the issuer holds 20 test USDC;
+  - RPC keys in `secrets/rpc.env`, `ops-rpc-check` OK (6/6);
+  - `ETHERSCAN_API_KEY` in `.env`;
+  - `OPS_ADMIN_ADDRESSES` = the user's wallet `0xA85C…1313`.
+- **Safe owners (the user chose PM-generated keys for testnet):** the user's wallet plus `owner-1..4` (`~/.credence/owners/`, encrypted).
+  - Gov: user + o1..o4, 3-of-5;
+  - Guardian: user + o1..o3, 2-of-4;
+  - Ops: user + o1..o2, 2-of-3.
+
+  Same set on both chains. **Pre-mainnet:** hardware-wallet owners on separate holders.
+- **Pre-flight:** `fork_rehearsal.sh` fix `1d407ef` (`CAST_UNSAFE_PASSWORD`). Both stacks pass on forks; the equity stack passed again with the real owners (3 min).
+- **Order:** equity → 46630 now; NAV → 421614 when the bridged ETH lands; then `testnet-verify`, the post-deploy checks, service-wallet top-ups from the deployer, and B's services (`testnet-up`, `testnet-services-check`).
