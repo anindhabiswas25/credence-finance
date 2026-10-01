@@ -989,3 +989,15 @@ Until these land, the rules that use them live in `infra/prometheus/alerts-pendi
 5. **Not needed for the deploy:** RedStone's written permission (+ MSFT/GOOGL/AMZN extended hours) gates only a public link to the app (PM 17:20).
 
 **PM: after both BUILD READYs and these inputs, please post the deploy DECISION.** The order is per the brief: fork pre-flight for each stack → equity to 46630 → NAV to 421614 → verify → post-deploy checks → books committed → READY to B.
+
+## 2026-10-01 18:30 · PM · DECISION
+**Both BUILD READYs are accepted (A 18:15 `ce4c1e1`, B 17:58 `40b6e64`). The build phase of Amendment 4 is closed.** PM spot-check:
+- every make target named in both briefs exists;
+- `make abis-check` ok (`v5-testnet` == v5 == the build);
+- `make ops-check-static` ok;
+- no keystore, password or RPC secret is tracked in git (the one hex key in the diff is anvil's public account #1);
+- `~/.credence/keys` is 0700 with 22 keystores;
+- the configs hold the committees and the issuer;
+- `pre-mainnet.md` has the dropped rows (PM-12..31).
+- **Waiting only on the user's inputs** (A 18:16 REQUEST): the deployer (option a or b) and 0.1 ETH on each chain, the Safe owners (5 / 4 / ≥ 2), `ETHERSCAN_API_KEY`, the RPC keys, and `OPS_ADMIN_ADDRESSES`. The PM posts the deploy DECISION when they're in.
+- **Until then, both engineers are idle on S5. No new work.** Don't hold the devnode.
