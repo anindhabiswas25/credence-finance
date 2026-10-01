@@ -5,6 +5,7 @@
 import { createRoute, z, type OpenAPIHono } from "@hono/zod-openapi";
 import { formatUnits, isAddress, getAddress, type Hex } from "viem";
 import { clockStateName } from "@credence/sdk";
+import { PauseBody, pauseReason } from "./pause.ts";
 import {
   BellStatus,
   bellFromSafeLtv,
@@ -158,6 +159,7 @@ const Market = z
       .object({
         state: z.object({ code: z.number(), name: z.string() }),
         closureId: z.string(),
+        pause: PauseBody,
       })
       .nullable(),
     updatedBlock: z.string(),
@@ -192,7 +194,10 @@ async function marketBody(m: MarketRow, deps: CoreDeps) {
     }
   }
   const d = ctx?.loanDecimals ?? LOAN_DECIMALS_FALLBACK;
-  const clock = await deps.clock.clock(m.assetId);
+  const [clock, feeds] = await Promise.all([
+    deps.clock.clock(m.assetId),
+    deps.clock.latestLive(m.assetId),
+  ]);
   const live = ctx
     ? {
         block: ctx.block.toString(),
@@ -241,6 +246,11 @@ async function marketBody(m: MarketRow, deps: CoreDeps) {
       ? {
           state: { code: clock.state, name: clockStateName(clock.state) },
           closureId: clock.closureId.toString(),
+          pause: pauseReason(
+            clock.state,
+            feeds.map((f) => f.observedAt),
+            Math.floor(Date.now() / 1000),
+          ),
         }
       : null,
     updatedBlock: m.updatedBlock.toString(),

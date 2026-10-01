@@ -1,6 +1,6 @@
 // Node 24 entry point: `node src/server.ts` (type stripping) or `node dist/server.js`.
 import { serve } from "@hono/node-server";
-import { createPublicClient, http } from "viem";
+import { createPublicClient, fallback, http } from "viem";
 import { Hono } from "hono";
 import { createApp, newLimiters, toAssetId } from "./app.ts";
 import { createMultiChainApp } from "./multichain.ts";
@@ -68,10 +68,23 @@ const served = chains.map(({ chainId, indexerSchema }) => {
       .split(",")
       .concat("TBILL:USBANK"),
   );
-  const rpcUrl = env("RPC_URL");
-  const publicClient = rpcUrl
-    ? createPublicClient({ transport: http(rpcUrl) })
-    : undefined;
+  // S5: RPC_URL_<id> is an ordered failover list (comma-separated), like the keeper's and the indexer's
+  const rpcUrls = (env("RPC_URL") ?? "")
+    .split(",")
+    .map((u) => u.trim())
+    .filter(Boolean);
+  const publicClient =
+    rpcUrls.length === 0
+      ? undefined
+      : createPublicClient({
+          transport:
+            rpcUrls.length === 1
+              ? http(rpcUrls[0])
+              : fallback(
+                  rpcUrls.map((u) => http(u, { timeout: 5_000 })),
+                  { rank: false, retryCount: 1 },
+                ),
+        });
   const app = createApp({
     config: forChain(config, chainId),
     clock: repos.clock,

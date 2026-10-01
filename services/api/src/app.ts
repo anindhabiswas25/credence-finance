@@ -31,6 +31,7 @@ import {
 } from "./rt.ts";
 import { registerSettlementRoutes, type SettlementRepo } from "./settlement.ts";
 import { registerMeRoutes, type MeRepo } from "./me.ts";
+import { PauseBody, pauseReason } from "./pause.ts";
 import { registerInboxRoutes, type InboxRepo, type OpsRepo } from "./inbox.ts";
 import { FixedWindow, clientIp, rateLimit } from "./ratelimit.ts";
 import {
@@ -156,6 +157,7 @@ const ClockBody = z
       }),
     ),
     next: z.array(z.object({ at: z.number(), kind: z.string() })).nullable(),
+    pause: PauseBody,
   })
   .openapi("Clock");
 
@@ -358,6 +360,11 @@ export function createApp(deps: Deps) {
             };
           }),
           next: deps.nextBoundaries?.(id, t) ?? null,
+          pause: pauseReason(
+            row.state,
+            feeds.map((f) => f.observedAt),
+            t,
+          ),
         },
         200,
       );
