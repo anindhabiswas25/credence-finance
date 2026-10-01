@@ -830,3 +830,19 @@ Until these land, the rules that use them live in `infra/prometheus/alerts-pendi
 5. **Wallet balances more often:** J12's `wallet-balances` key is per day (`j12_key` = `J12:…:YYYY-MM-DD`), so `credence_keeper_wallet_balance_gwei` updates once a day and a wallet running dry is seen up to 24 h late. **Please refresh it at least hourly** (an hourly key). The rule `KeeperWalletLow` = `{wallet="keeper"}` below 0.01 ETH per chain, plus the existing 3-days-of-spend trend. For 421614 I set `WATCH_WALLETS` to the NAV signers and the issuer; for 46630 to the two relayer submitters.
 6. **Tips budget** (§16.1 "relayer wallet / tips budget low < 3 days", J12's "tip budget < 7 d of spend"): `credence_keeper_tips_budget_days{stack}`. If J12 already computes it, just a gauge.
 7. **Findings, no action unless you want one:** (a) the API's `RPC_URL_<id>` and the solver's `RPC_URL` take one URL (no failover list); in prod I give them the primary. (b) The keeper's `ALERT_WEBHOOK_URL` posts its own JSON shape, not Alertmanager's v4, so I leave it unset in prod: its `page` alerts reach the inbox through `credence_keeper_alerts_total{severity="page"}` → Alertmanager instead (rule `KeeperPaged`). (c) Your 17:17 solver `/healthz`: please post its port and env name when it lands.
+
+## 2026-10-01 16:55 · PM · DECISION
+**Amendment 3 to S5 (user): build and deploy now, test before mainnet. Engineer A's Phase 2 is dropped; the deep testing and all CI/CD move to pre-mainnet.** Brief: `docs/team/prompts/sprint-5-protocol-finish.md` (replaces A's Phase 2 and 3).
+- **No new contracts are needed for testnet** (PM check of `contracts/src` + `stylus/` against the Build Guide; the only unbuilt ones are the mainnet venues `RedStoneSettleVenue` / `UpshiftClearVenue`).
+- **A builds, in order:**
+  1. `make testnet-keys`: the service keystores, in C's layout, with their addresses written into the configs;
+  2. `make testnet-verify`: Blockscout, Arbiscan and `cargo stylus verify`;
+  3. `make testnet-fork-rehearsal`, ≤ 30 min, with Stylus stand-ins on the fork;
+  4. the frozen ABI tag `v5-testnet`;
+  5. `make gov-propose`: Safe → timelock batches to list a market, change caps, load a risk bundle, extend calendars, and pause;
+  6. a one-hour read of the 4 Aderyn Highs (fix only clear bugs);
+  7. the `pre-mainnet.md` rows for Amendments 2 and 3.
+
+  Then a BUILD READY, one consolidated user REQUEST, and the deploy after a PM DECISION.
+- **Moved to pre-mainnet:** A's edge rows, coverage ≥ 95 %, invariants, the Slither/Aderyn triage gate, `deploy-testnet.yml`. The normal suites (`contracts-test risk-test abis-check`) stay green on every commit.
+- **C:** A will ask you to agree the service-key role names before writing `testnet-keys`; please answer promptly. **B:** unchanged for now; the PM rules separately on your edge rows.
