@@ -10,7 +10,7 @@ use credence_common::{
     telemetry,
 };
 use credence_keeper::{
-    clock::SystemClock, config::Config, leader::Leader, metrics::Metrics, rpc::Rpc, tasks::Keeper,
+    clock::SystemClock, config::Config, leader::Leader, metrics::Metrics, rpc::{self, Rpc}, tasks::Keeper,
     tx::TxManager,
 };
 use std::{net::SocketAddr, sync::Arc, time::Duration};
@@ -86,7 +86,12 @@ async fn main() -> Result<()> {
     let signer = CredenceSigner::load(&signer_cfg, cfg.chain_id).await?;
     let rpc = Arc::new(
         Rpc::connect(&cfg.rpc_urls, Some(metrics.rpc_failovers.clone()))?
-            .with_health_gauges(metrics.rpc_up.clone(), metrics.rpc_active.clone()),
+            .with_health_gauges(metrics.rpc_up.clone(), metrics.rpc_active.clone())
+            .with_logs_paging(
+                env::parse_or("KEEPER_LOGS_MAX_RANGE", rpc::LOGS_MAX_RANGE)?,
+                env::parse_or("KEEPER_LOGS_MIN_RANGE", rpc::LOGS_MIN_RANGE)?,
+                env::parse_or("KEEPER_LOGS_MAX_WINDOWS", rpc::LOGS_MAX_WINDOWS)?,
+            ),
     );
     let actual = rpc.chain_id().await?;
     if actual != cfg.chain_id {

@@ -15,7 +15,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use alloy::{
     eips::BlockNumberOrTag,
-    primitives::{Address, Bytes, B256, U256},
+    primitives::{Address, Bytes, U256},
     providers::Provider,
     rpc::types::Filter,
     sol_types::{SolCall, SolEvent},
@@ -105,12 +105,54 @@ pub struct AuctionStack {
     pub pool: Address,
 }
 
-/// Auctions seen per house (from `AuctionCreated`), the scanned block, and the finished ones.
+/// Per stack (keyed by its house), from one paged log scan of the house and the market: the auctions seen
+/// (`AuctionCreated`), the positions each lot released with a quantity (`LotReleased`) and the ones the market settled
+/// (`PositionSettled`), the last block scanned, and the finished auctions.
 #[derive(Debug, Default)]
 pub struct AuctionBook {
     pub scanned_to: BTreeMap<Address, u64>,
     pub known: BTreeMap<Address, BTreeSet<u64>>,
+    pub released: BTreeMap<(Address, u64), BTreeSet<Address>>,
+    pub settled: BTreeMap<(Address, u64), BTreeSet<Address>>,
     pub finished: BTreeSet<(Address, u64)>,
+}
+
+impl AuctionBook {
+    /// File one scanned log of stack `s`.
+    pub fn record(&mut self, s: &AuctionStack, l: &alloy::rpc::types::Log) {
+        let addr = l.address();
+        if addr == s.house {
+            if let Ok(ev) = IAuctionHouse::AuctionCreated::decode_log_data(l.data()) {
+                self.known.entry(s.house).or_default().insert(ev.id);
+            }
+        } else if addr == s.market {
+            if let Ok(e) = ICredenceMarket::LotReleased::decode_log_data(l.data()) {
+                if !e.qty.is_zero() {
+                    self.released
+                        .entry((s.house, e.auctionId))
+                        .or_default()
+                        .insert(e.owner);
+                }
+            } else if let Ok(e) = ICredenceMarket::PositionSettled::decode_log_data(l.data()) {
+                self.settled
+                    .entry((s.house, e.auctionId))
+                    .or_default()
+                    .insert(e.borrower);
+            }
+        }
+    }
+
+    /// Positions auction `id` of house `house` released and the market has not settled yet.
+    pub fn unsettled(&self, house: Address, id: u64) -> Vec<Address> {
+        let done = self.settled.get(&(house, id));
+        self.released
+            .get(&(house, id))
+            .into_iter()
+            .flatten()
+            .filter(|o| done.is_none_or(|d| !d.contains(*o)))
+            .copied()
+            .collect()
+    }
 }
 
 impl Keeper {
@@ -194,23 +236,30 @@ impl Keeper {
                     .map_or(core.from_block, |x| x + 1)
             };
             if from <= head {
-                let logs = p
-                    .get_logs(
-                        &Filter::new()
-                            .address(s.house)
-                            .event_signature(IAuctionHouse::AuctionCreated::SIGNATURE_HASH)
-                            .from_block(from)
-                            .to_block(head),
-                    )
-                    .await?;
+                // ≤ 10-block windows on a free plan: the cursor keeps what one tick's call budget did not reach
+                let filter = Filter::new().address(vec![s.house, s.market]).event_signature(vec![
+                    IAuctionHouse::AuctionCreated::SIGNATURE_HASH,
+                    ICredenceMarket::LotReleased::SIGNATURE_HASH,
+                    ICredenceMarket::PositionSettled::SIGNATURE_HASH,
+                ]);
+                let (logs, to) = self.rpc.logs_paged(&filter, from, head).await?;
                 let mut b = core.auctions.lock().expect("auction book");
-                for l in logs {
-                    if let Ok(ev) = IAuctionHouse::AuctionCreated::decode_log_data(l.data()) {
-                        b.known.entry(s.house).or_default().insert(ev.id);
-                    }
+                for l in &logs {
+                    b.record(s, l);
                 }
-                b.scanned_to.insert(s.house, head);
+                b.scanned_to.insert(s.house, to);
+                if to < head {
+                    tracing::info!(stack = %s.stack, scanned_to = to, head, "auction scan catching up");
+                }
             }
+            // settlement reads the scanned events: only once the scan reached the block the steps read at
+            let caught_up = core
+                .auctions
+                .lock()
+                .expect("auction book")
+                .scanned_to
+                .get(&s.house)
+                .is_some_and(|t| *t >= head);
             let ids: Vec<u64> = {
                 let b = core.auctions.lock().expect("auction book");
                 b.known
@@ -224,7 +273,7 @@ impl Keeper {
                     .unwrap_or_default()
             };
             for id in ids {
-                if let Err(e) = self.step_auction(conn, core, s, id, now, rep).await {
+                if let Err(e) = self.step_auction(conn, core, s, id, now, caught_up, rep).await {
                     tracing::warn!(stack = %s.stack, auction = id, error = %e, "auction step failed");
                 }
             }
@@ -239,6 +288,7 @@ impl Keeper {
         s: &AuctionStack,
         id: u64,
         now: u64,
+        caught_up: bool,
         rep: &mut TickReport,
     ) -> Result<()> {
         let a = IAuctionHouse::new(s.house, self.rpc.primary())
@@ -304,7 +354,11 @@ impl Keeper {
                 }
             }
             Step::Settle => {
-                let pending = self.unsettled(s, id).await?;
+                if !caught_up {
+                    return Ok(()); // the releases up to the head are not all scanned yet
+                }
+                let pending = self
+                    .auctions_unsettled(core, s, id);
                 if pending.is_empty() {
                     core.auctions
                         .lock()
@@ -341,38 +395,13 @@ impl Keeper {
         Ok(())
     }
 
-    /// Positions the lot released (`LotReleased`) and the market has not settled (`PositionSettled`).
-    pub async fn unsettled(&self, s: &AuctionStack, id: u64) -> Result<Vec<Address>> {
-        let p = self.rpc.primary();
-        let topic = B256::from(U256::from(id));
-        let base = |sig: B256| {
-            Filter::new()
-                .address(s.market)
-                .event_signature(sig)
-                .from_block(0u64)
-                .to_block(BlockNumberOrTag::Latest)
-        };
-        // LotReleased(uint64 indexed auctionId, …); v2 PositionSettled(marketId, borrower, uint64 indexed auctionId, …)
-        let released = p
-            .get_logs(&base(ICredenceMarket::LotReleased::SIGNATURE_HASH).topic1(topic))
-            .await?;
-        let settled = p
-            .get_logs(&base(ICredenceMarket::PositionSettled::SIGNATURE_HASH).topic3(topic))
-            .await?;
-        let done: BTreeSet<Address> = settled
-            .iter()
-            .filter_map(|l| ICredenceMarket::PositionSettled::decode_log_data(l.data()).ok())
-            .map(|e| e.borrower)
-            .collect();
-        let mut out: BTreeSet<Address> = BTreeSet::new();
-        for l in released {
-            if let Ok(e) = ICredenceMarket::LotReleased::decode_log_data(l.data()) {
-                if !e.qty.is_zero() && !done.contains(&e.owner) {
-                    out.insert(e.owner);
-                }
-            }
-        }
-        Ok(out.into_iter().collect())
+    /// Positions the lot released (`LotReleased`) and the market has not settled (`PositionSettled`), from the
+    /// auction scan.
+    fn auctions_unsettled(&self, core: &CoreJobs, s: &AuctionStack, id: u64) -> Vec<Address> {
+        core.auctions
+            .lock()
+            .expect("auction book")
+            .unsettled(s.house, id)
     }
 }
 

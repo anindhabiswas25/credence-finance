@@ -370,7 +370,16 @@ async fn j1_pokes_on_schedule() {
             .fetch_all(&pool)
             .await
             .unwrap();
-    assert_eq!(j12.len(), 3, "{j12:?}");
+    // per day: calendar coverage and the Stylus check; wallet balances once per hour the run crosses
+    assert_eq!(
+        j12.iter().filter(|(k, _)| !k.contains("wallet-balances")).count(),
+        2,
+        "{j12:?}"
+    );
+    assert!(
+        j12.iter().any(|(k, s)| k.contains("wallet-balances") && s == "done"),
+        "{j12:?}"
+    );
     assert!(j12
         .iter()
         .any(|(k, s)| k.contains("stylus") && s == "skipped"));

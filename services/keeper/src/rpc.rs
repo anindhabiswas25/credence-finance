@@ -7,12 +7,15 @@
 //! provider that answers but lags (two RPCs that disagree on the head) is as bad as one that is down: its reads
 //! would be stale. When none answers, the active provider is kept and the tick's own reads fail as before.
 
-use alloy::providers::{DynProvider, Provider, ProviderBuilder};
+use alloy::{
+    providers::{DynProvider, Provider, ProviderBuilder},
+    rpc::types::{Filter, Log},
+};
 use anyhow::{anyhow, bail, Context, Result};
 use prometheus::{IntCounterVec, IntGaugeVec};
 use std::{
     future::Future,
-    sync::atomic::{AtomicUsize, Ordering},
+    sync::atomic::{AtomicU64, AtomicUsize, Ordering},
     time::Duration,
 };
 
@@ -21,8 +24,32 @@ pub const DEFAULT_MAX_LAG: u64 = 32;
 /// Per-provider head read timeout in a health check.
 pub const HEALTH_TIMEOUT: Duration = Duration::from_secs(3);
 
+/// `eth_getLogs` paging ([`Rpc::logs_paged`]): a provider is first asked for up to `LOGS_MAX_RANGE` blocks per call
+/// and drops to `LOGS_MIN_RANGE` once it refuses a range (Alchemy free: 10 blocks); at most `LOGS_MAX_WINDOWS` calls
+/// per scan, the caller's cursor keeps the rest for its next tick.
+pub const LOGS_MAX_RANGE: u64 = 10_000;
+pub const LOGS_MIN_RANGE: u64 = 10;
+pub const LOGS_MAX_WINDOWS: usize = 60;
+/// A provider with a small range is tried after the wide ones while the backlog needs more than this many of its
+/// windows (a catch-up after a restart); otherwise the read order stands.
+pub const LOGS_DEFER_WINDOWS: u64 = 30;
+
+/// Whether an RPC error refuses the block range (or the result size) of an `eth_getLogs`.
+pub fn is_range_refusal(msg: &str) -> bool {
+    let m = msg.to_ascii_lowercase();
+    m.contains("block range")
+        || m.contains("range is too")
+        || m.contains("exceeds limit")
+        || m.contains("too many")
+        || m.contains("query returned more than")
+}
+
 pub struct Rpc {
     providers: Vec<(String, DynProvider)>,
+    /// Per provider: the `eth_getLogs` range it accepts (learned).
+    log_caps: Vec<AtomicU64>,
+    pub logs_min_range: u64,
+    pub logs_max_windows: usize,
     failovers: Option<IntCounterVec>,
     /// `rpc_up{rpc}` / `rpc_active{rpc}` (S5 alerts: one chain's RPC down), set by each health check.
     health: Option<(IntGaugeVec, IntGaugeVec)>,
@@ -67,6 +94,12 @@ impl Rpc {
             })
             .collect::<Result<Vec<_>>>()?;
         Ok(Self {
+            log_caps: providers
+                .iter()
+                .map(|_| AtomicU64::new(LOGS_MAX_RANGE))
+                .collect(),
+            logs_min_range: LOGS_MIN_RANGE,
+            logs_max_windows: LOGS_MAX_WINDOWS,
             providers,
             failovers,
             health: None,
@@ -160,6 +193,86 @@ impl Rpc {
         Err(last
             .unwrap_or_else(|| anyhow!("no provider"))
             .context(format!("{what}: every RPC failed")))
+    }
+
+    /// `eth_getLogs` paging knobs: the first range each provider is asked for, its range after a refusal, and the
+    /// calls per scan (`KEEPER_LOGS_MAX_RANGE` / `KEEPER_LOGS_MIN_RANGE` / `KEEPER_LOGS_MAX_WINDOWS`).
+    pub fn with_logs_paging(mut self, max_range: u64, min_range: u64, max_windows: usize) -> Self {
+        let min_range = min_range.max(1);
+        self.log_caps = self
+            .providers
+            .iter()
+            .map(|_| AtomicU64::new(max_range.max(min_range)))
+            .collect();
+        self.logs_min_range = min_range;
+        self.logs_max_windows = max_windows.max(1);
+        self
+    }
+
+    /// `filter`'s logs over `from..=to` in windows each provider accepts, in the read failover order (a provider
+    /// that refuses the range drops to `logs_min_range` and is asked again; any other error moves to the next one).
+    /// Returns the logs and the last block covered: less than `to` once `logs_max_windows` calls are spent or every
+    /// provider failed after some progress; `Err` only when nothing was covered.
+    pub async fn logs_paged(&self, filter: &Filter, from: u64, to: u64) -> Result<(Vec<Log>, u64)> {
+        let mut out = Vec::new();
+        let mut cur = from;
+        let mut windows = 0;
+        while cur <= to && windows < self.logs_max_windows {
+            let remaining = to - cur + 1;
+            let first = self.active();
+            let mut order: Vec<usize> = std::iter::once(first)
+                .chain((0..self.providers.len()).filter(|&i| i != first))
+                .collect();
+            order.sort_by_key(|&i| {
+                self.log_caps[i].load(Ordering::Relaxed) * LOGS_DEFER_WINDOWS < remaining
+            });
+            let mut got = None;
+            let mut last = None;
+            'providers: for i in order {
+                let (name, p) = &self.providers[i];
+                loop {
+                    let cap = self.log_caps[i].load(Ordering::Relaxed);
+                    let end = to.min(cur.saturating_add(cap - 1));
+                    match p
+                        .get_logs(&filter.clone().from_block(cur).to_block(end))
+                        .await
+                    {
+                        Ok(l) => {
+                            if i != first {
+                                if let Some(c) = &self.failovers {
+                                    c.with_label_values(&[name.as_str()]).inc();
+                                }
+                            }
+                            got = Some((l, end));
+                            break 'providers;
+                        }
+                        Err(e) if cap > self.logs_min_range && is_range_refusal(&e.to_string()) => {
+                            tracing::info!(rpc = %name, from_range = cap, to_range = self.logs_min_range, "eth_getLogs range refused: paging smaller");
+                            self.log_caps[i].store(self.logs_min_range, Ordering::Relaxed);
+                        }
+                        Err(e) => {
+                            tracing::warn!(rpc = %name, what = "eth_getLogs", error = %e, "rpc call failed");
+                            last = Some(anyhow!(e));
+                            continue 'providers;
+                        }
+                    }
+                }
+            }
+            match got {
+                Some((l, end)) => {
+                    out.extend(l);
+                    cur = end + 1;
+                    windows += 1;
+                }
+                None if cur == from => {
+                    return Err(last
+                        .unwrap_or_else(|| anyhow!("no provider"))
+                        .context("eth_getLogs: every RPC failed"))
+                }
+                None => break,
+            }
+        }
+        Ok((out, cur - 1))
     }
 
     pub async fn chain_id(&self) -> Result<u64> {

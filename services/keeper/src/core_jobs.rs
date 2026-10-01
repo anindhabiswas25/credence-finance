@@ -923,8 +923,8 @@ impl Keeper {
         Ok(())
     }
 
-    /// §16.1 "Shortfall reached the reserve or senior": scan the markets' `Shortfall` events (≤ 10,000
-    /// blocks per tick) and publish how many paid from the reserve (`paidReserve > 0`) or hit the senior
+    /// §16.1 "Shortfall reached the reserve or senior": scan the markets' `Shortfall` events (paged, one call
+    /// budget per tick: `Rpc::logs_paged`) and publish how many paid from the reserve (`paidReserve > 0`) or hit the senior
     /// vault (`seniorLoss > 0`). A gauge recounted from the start block and published only once the scan
     /// reached the head, so a restart never looks like a new escalation to the alert.
     pub(crate) async fn shortfall_scan(&self, core: &CoreJobs) -> Result<()> {
@@ -938,17 +938,17 @@ impl Keeper {
         if from > head {
             return Ok(());
         }
-        let to = head.min(from + 9_999);
         let mut markets: Vec<Address> = core.markets.iter().map(|m| m.market).collect();
         markets.sort();
         markets.dedup();
-        let logs = p
-            .get_logs(
+        let (logs, to) = self
+            .rpc
+            .logs_paged(
                 &Filter::new()
                     .address(markets)
-                    .event_signature(abi::ICredenceMarket::Shortfall::SIGNATURE_HASH)
-                    .from_block(from)
-                    .to_block(to),
+                    .event_signature(abi::ICredenceMarket::Shortfall::SIGNATURE_HASH),
+                from,
+                head,
             )
             .await?;
         for l in logs {
