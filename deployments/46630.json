@@ -1,0 +1,209 @@
+{
+  "assetIds": {
+    "AAPL": "0x01c37bcfde180cb59fe95c9292a582ec445ca51d361ac0a940cd37a82ed512e4",
+    "AMZN": "0x61a311babb2bf8dfac04085e8d4effa61dd6f4c3a3254beb8baf2a4257115c24",
+    "GOOGL": "0x65e3c81dafe37692f32f313c3e2a6ff6ea80d3f6d560cbc1deb860e8924d9978",
+    "MSFT": "0xb9b5377251807759235d71513fcf099c7cc6df22bc241ddaa666ad7e8a49b975",
+    "NVDA": "0x2ba7fe0221993f0b564e6bd78704eab0e0162888663625d7124a5d01aa95c620",
+    "RHTSLA": "0xfb68229259484f219ab984404ec6b471e43f7df67b1dfd9118b56f3af39392ae",
+    "TSLA": "0x0abc9a3a23e5b8dcd93b9b072da91e18eabe5b096373d9c313ecebcbbfad56db"
+  },
+  "chainId": 46630,
+  "deployer": "0x806E2890777440DE0F05E617caffAbdE5D516ca3",
+  "equity": {
+    "auctionHouse": "0x053Bb76ca3b17A3A17966e519A79f9Cd81853032",
+    "market": "0xe58B9870401A4dB8dc340AF8c4A85c12142f62Bf",
+    "markets": {
+      "AAPL": "0x132e2a2562f6c2417149109bd0ebc4d060e3eacd100260601e7b60f1cfad63bc",
+      "AMZN": "0x14aa0270e12b3fa5d4e772779c6720622a95f1a792810f589d6cc6802c876e30",
+      "GOOGL": "0x19f032d35210df0a60b567ce35f7c90425b23ef054e8f20dcdf1e677abac9b2e",
+      "MSFT": "0xb8fff32f086022316edd281ac369956109452d5085c7c6344c50040e698a34d4",
+      "NVDA": "0xc8f9796bbec4d69cbe2e3d05af423633407f6bac7647793d70be7122f531eaa1",
+      "RHTSLA": "0x458bf2e83e4637533c980caafbee7d52a711b843c2b0976d177116dfd02ca5df",
+      "TSLA": "0x9a36ef430e4a8b148e2d1d16eb36212eb851888cbdd74e40f4b4f2c131bd7347"
+    },
+    "pool": "0x228236ED9BE9f7AF935412Db00d9A970Ef2944C6",
+    "reserve": "0x6e007A4aC28342347F5024F94f8742322EdE98a0",
+    "tips": "0x8F7f423063b9f6A4188CD33d6097505C4AfF0E30",
+    "treasury": "0x60Dbc67c314c672224C1C3c811E4836942d8d563",
+    "vault": "0x149511106E3A2E9bA12a89e4b4b01F3d596fD7E8"
+  },
+  "finalized": true,
+  "release": "v0.1.0-testnet",
+  "safes": {
+    "gov": "0x6bf8DD01aDaE9B983849bE65832a6E44595C41e9",
+    "guardian": "0xA1ADB2c1eD9aa63E5C55fa7fAcB9B601A1AB15f9",
+    "ops": "0x7781C0Ff8D18F8456Ea53F404F19258A677726A3"
+  },
+  "shared": {
+    "calendar": "0x0B879cf15ECe47d563F8BC894c878b791C1052f5",
+    "clock": "0x5EdBBd24554E699a47878951352d723667CF4615",
+    "faucet": "0x8FBAefaFb49575c497eC42d9763e8F3F277821B8",
+    "feedA": "0x36a34e300487d621A93Ae6D156eA208E0a85c345",
+    "feedB": "0x1915bB71328481F6E9e3705028085db73369183e",
+    "guardian": "0x8Dc65168e11e543151a7e6b6740C4D78910b5396",
+    "listingEngine": "0x22939e09Ea29e945DbD9afE9ED483503DDB3685A",
+    "oracle": "0x524A3a0c0Aca5a6EFFf45CeB4dA7187780E3489B",
+    "riskEngine": "0xe5b94BF0e2C7Bb6ae0FC72ce1Fd42E07e84241C0",
+    "sequencerHealth": "0xA981a083d10FA9840408fB69192F364E3E81390E",
+    "sigmaOracle": "0xf7b202E49467Aa8ed410606d31ac6Ba988c7044B",
+    "timelock": "0xEd720868fa19431B2EAB25c6Bb358e1934fEa297"
+  },
+  "stack": "equity",
+  "startBlock": 11823610,
+  "tokens": {
+    "loan": "0x9de1Fd6B9f2E2F4dC4C90471c7da6344B32A2a7F",
+    "tAAPL": "0xD43407E0be57640cd80aC51fB71B2D5A5dDdf893",
+    "tAMZN": "0xf2Ddf14B9E3C5a22B1574016fA5275Ae9f5807d7",
+    "tGOOGL": "0x2c7E3e8972e065533a00DDF85B75Ef118876e9f3",
+    "tMSFT": "0x15479499ef1E98A7AEEfAd23e6BdB8bC1a45fFc0",
+    "tNVDA": "0x13764e66F846922b62DBaC148b65E34C30b0b1C3",
+    "tRHTSLA": "0xC9f9c86933092BbbfFF3CCb4b105A4A94bf3Bd4E",
+    "tTSLA": "0x4b895fa81D7fd872afFBDD1121Fa9b18E9efa83d"
+  },
+  "stylus": {
+    "pricing": {
+      "address": "0x740b6a46585474eb113f81999c1117e69d4be1be",
+      "wasmSha256": "ab8d7daab48d1b3d7b4581fbd707c1e7f0d2df98c3f5230422404114f93dc30a",
+      "deployTx": "0xeb6be45555c92b2a34d43c4fcb95d89ae9e60c276758246e329f65099f998029"
+    },
+    "auctionMath": {
+      "address": "0x46e21eed59ad0652b638231653e11c5f7b3e7f9b",
+      "wasmSha256": "6466bdcd88ef855a377bfeac31286d11b5cb0ae784d97f6c2605bec8aa21b417",
+      "deployTx": "0x0de41bd6fda14dc3bf5cc5997860ce9af3b2c75a47e06470544fb2adbd1a2941"
+    }
+  },
+  "deployBlocks": {
+    "equity.auctionHouse": 127256685,
+    "equity.market": 127256662,
+    "equity.pool": 127256675,
+    "equity.reserve": 127256654,
+    "equity.tips": 127256644,
+    "equity.treasury": 127256647,
+    "equity.vault": 127256669,
+    "safes.gov": 127256371,
+    "safes.guardian": 127256376,
+    "safes.ops": 127256379,
+    "shared.calendar": 127256401,
+    "shared.clock": 127256417,
+    "shared.faucet": 127256499,
+    "shared.feedA": 127256428,
+    "shared.feedB": 127256437,
+    "shared.guardian": 127256394,
+    "shared.listingEngine": 127256492,
+    "shared.oracle": 127256444,
+    "shared.riskEngine": 127256478,
+    "shared.sequencerHealth": 127256407,
+    "shared.sigmaOracle": 127256476,
+    "shared.timelock": 127256390,
+    "tokens.loan": 127256510,
+    "tokens.tAAPL": 127256557,
+    "tokens.tAMZN": 127256628,
+    "tokens.tGOOGL": 127256610,
+    "tokens.tMSFT": 127256593,
+    "tokens.tNVDA": 127256535,
+    "tokens.tTSLA": 127256573,
+    "stylus.pricing": 127256814,
+    "stylus.auctionMath": 127256814
+  },
+  "libraries": {
+    "BorrowLogic": "0x421b8d9c06ba28b375d918a05ac75e3dc5949e49",
+    "PoolLib": "0xeee51c4daad2dfda23e2fc60e06af955680e2721",
+    "LiquidationLogic": "0x7e0325866c7a7bbd16e3b63cf5b3f6b768fc3e37",
+    "GdaLib": "0xbfd1cbf4c4dccba09731f44faaa032b1384078f7",
+    "CoverLogic": "0x6bdace1f35538a58eb4be104df8a614aa9e54c12"
+  },
+  "abiTag": "v5-testnet",
+  "creations": [
+    {
+      "name": "BorrowLogic",
+      "source": "src/core/market/BorrowLogic.sol",
+      "address": "0x421b8d9c06ba28b375d918a05ac75e3dc5949e49",
+      "kind": "CREATE2",
+      "tx": "0x96f1f168196bf6390c5be182713a26ef501f91c30e75523aebd9a939f6264c71",
+      "sizeProfile": true,
+      "constructorArgs": "",
+      "block": 127256343
+    },
+    {
+      "name": "PoolLib",
+      "source": "src/pool/PoolLib.sol",
+      "address": "0xeee51c4daad2dfda23e2fc60e06af955680e2721",
+      "kind": "CREATE2",
+      "tx": "0xd98de4b9593ff9c76ceaef3fb9229e9949a32b842a82161c96bf71c9edb5f056",
+      "sizeProfile": true,
+      "constructorArgs": "",
+      "block": 127256349
+    },
+    {
+      "name": "LiquidationLogic",
+      "source": "src/core/market/LiquidationLogic.sol",
+      "address": "0x7e0325866c7a7bbd16e3b63cf5b3f6b768fc3e37",
+      "kind": "CREATE2",
+      "tx": "0x848eb3602fd44dd0f2737989a61f40d4c300ded8378a42117a5bbc92a48aa046",
+      "sizeProfile": true,
+      "constructorArgs": "",
+      "block": 127256355
+    },
+    {
+      "name": "GdaLib",
+      "source": "src/auction/GdaLib.sol",
+      "address": "0xbfd1cbf4c4dccba09731f44faaa032b1384078f7",
+      "kind": "CREATE2",
+      "tx": "0xe066bfa2736124ca21e0080b3c97d3d834cc054b44afdc5818ebb87e19ea9896",
+      "sizeProfile": true,
+      "constructorArgs": "",
+      "block": 127256361
+    },
+    {
+      "name": "CoverLogic",
+      "source": "src/core/market/CoverLogic.sol",
+      "address": "0x6bdace1f35538a58eb4be104df8a614aa9e54c12",
+      "kind": "CREATE2",
+      "tx": "0x7ecfeba0bfbccc407e31187c78cbfb3c4c08afbcbfe23de27bf6a9423ac6eae0",
+      "sizeProfile": true,
+      "constructorArgs": "",
+      "block": 127256369
+    },
+    {
+      "name": "ListingParamsEngine",
+      "source": "script/testnet/ListingParamsEngine.sol",
+      "address": "0x22939e09ea29e945dbd9afe9ed483503ddb3685a",
+      "kind": "CREATE",
+      "tx": "0x54adbbbc81b5d53c7ce7f2878c23bb5d821e8913ba22df5d221c8683eeed82a9",
+      "sizeProfile": true,
+      "constructorArgs": "0x00000000000000000000000000000000000000000000000000038d7ea4c68000000000000000000000000000000000000000000000000000006a94d74f4300000000000000000000000000000000000000000000000000000de0b6b3a76400000000000000000000000000000000000000000000000000000214e8348c4f00000000000000000000000000000000000000000000000000003782dace9d9000000000000000000000000000000000000000000000000000000d87e5559001800000000000000000000000000000000000000000000000000006f05b59d3b20000000000000000000000000000000000000000000000000000000000000007a1200000000000000000000000000000000000000000000000000000000000000100",
+      "block": 127256492
+    },
+    {
+      "name": "CredenceMarket",
+      "source": "src/core/CredenceMarket.sol",
+      "address": "0xe58b9870401a4db8dc340af8c4a85c12142f62bf",
+      "kind": "CREATE",
+      "tx": "0x277dbf84790bbd5812adda77fdd5b1f8ef536478c99818b5f3f8fff74a11205c",
+      "sizeProfile": true,
+      "constructorArgs": "0x000000000000000000000000ed720868fa19431b2eab25c6bb358e1934fea2970000000000000000000000008dc65168e11e543151a7e6b6740c4d78910b5396",
+      "block": 127256662
+    },
+    {
+      "name": "UnderwriterPool",
+      "source": "src/pool/UnderwriterPool.sol",
+      "address": "0x228236ed9be9f7af935412db00d9a970ef2944c6",
+      "kind": "CREATE",
+      "tx": "0x8adc3e2af04423ee7b7f454af010e637b089a00a137781469810cf9208de8434",
+      "sizeProfile": true,
+      "constructorArgs": "0x000000000000000000000000ed720868fa19431b2eab25c6bb358e1934fea2970000000000000000000000009de1fd6b9f2e2f4dc4c90471c7da6344b32a2a7f584e59530000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000a00000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000002343726564656e636520556e64657277726974657220745553444720286571756974792900000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000007636655502d455100000000000000000000000000000000000000000000000000",
+      "block": 127256675
+    },
+    {
+      "name": "AuctionHouse",
+      "source": "src/auction/AuctionHouse.sol",
+      "address": "0x053bb76ca3b17a3a17966e519a79f9cd81853032",
+      "kind": "CREATE",
+      "tx": "0x78983d066a54c897a0641d9158b70934d6d6daad3d97a1ae66620f71d660f793",
+      "sizeProfile": true,
+      "constructorArgs": "0x000000000000000000000000ed720868fa19431b2eab25c6bb358e1934fea297",
+      "block": 127256685
+    }
+  ]
+}

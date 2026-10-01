@@ -1,0 +1,47 @@
+{
+  "assetIds": {
+    "TBILL": "0x5264b60e27ff3d5f95d3aaa26e44d735125be863529f81767f41a4148c9f2586"
+  },
+  "chainId": 421614,
+  "deployer": "0x806E2890777440DE0F05E617caffAbdE5D516ca3",
+  "finalized": false,
+  "nav": {
+    "market": "0x3f7c11e0927FD949496fdB77D65F04d260d5084F",
+    "markets": {
+      "TBILL": "0x4ebb58af7c24aebd14d34d2747a382faa3c77965bd9235a94dc378c23baeeaf6"
+    },
+    "pool": "0x4b895fa81D7fd872afFBDD1121Fa9b18E9efa83d",
+    "reserve": "0xD43407E0be57640cd80aC51fB71B2D5A5dDdf893",
+    "settlement": "0xB2dB56c7e2b9C064b3feb15868d27Fb7f3988aa1",
+    "solverAuction": "0x2a4D747B3Ae4F7053848c18CFCba696369268f35",
+    "tips": "0xcc98E205d6066b833612fd6143A822391b5243AE",
+    "treasury": "0x4b9784aDBff536834Ea5f858B0Dd7DCD076597E0",
+    "vault": "0xa0e26596D8dB18481020C92e572aF84f9C35DD57"
+  },
+  "release": "v0.1.0-testnet",
+  "safes": {
+    "gov": "0x77E40E10241d6BDf1E884BD96788fc65f16eD315",
+    "guardian": "0x1362DbEca0F024297060ad272A52a8d108923d2a",
+    "ops": "0x8c65F517306537Ac53fc52da398686f6c25EF062"
+  },
+  "shared": {
+    "calendar": "0x0B879cf15ECe47d563F8BC894c878b791C1052f5",
+    "clock": "0x5EdBBd24554E699a47878951352d723667CF4615",
+    "faucet": "0x22939e09Ea29e945DbD9afE9ED483503DDB3685A",
+    "feedNav": "0x36a34e300487d621A93Ae6D156eA208E0a85c345",
+    "guardian": "0x8Dc65168e11e543151a7e6b6740C4D78910b5396",
+    "listingEngine": "0xDED0FA041aBE0d235B994f594ccf552e31CfcCE8",
+    "oracle": "0x1915bB71328481F6E9e3705028085db73369183e",
+    "registry": "0x8FBAefaFb49575c497eC42d9763e8F3F277821B8",
+    "riskEngine": "0xf7b202E49467Aa8ed410606d31ac6Ba988c7044B",
+    "sequencerHealth": "0xA981a083d10FA9840408fB69192F364E3E81390E",
+    "sigmaOracle": "0xED788ba25E5f870a7b4434e5Dae4Ee4B01bAAaB2",
+    "timelock": "0xEd720868fa19431B2EAB25c6Bb358e1934fEa297"
+  },
+  "stack": "nav",
+  "startBlock": 11823703,
+  "tokens": {
+    "loan": "0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d",
+    "tTBILL": "0x02C1F1ae7da10A95dBD21adD6c67E6813d44eCF2"
+  }
+}

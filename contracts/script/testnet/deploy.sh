@@ -87,8 +87,11 @@ else
   tr -d '\r\n' < "$DEPLOYER_PASSWORD_FILE" > "$PW_STYLUS"
   LOGS="$ROOT/target/testnet-deploy/$CID"; mkdir -p "$LOGS"   # kept: the deploy logs survive a failed run
   program() { # contract args… → address (the deployment tx stays in $LOGS/<contract>.log for testnet-verify)
+    # a max fee with headroom: cargo stylus prices at the current base fee, and a base-fee rise before inclusion is
+    # rejected ("max fee per gas less than block base fee", 421614, 2026-10-02). Default 3x the current gas price.
+    local fee="${STYLUS_MAX_FEE_GWEI:-$(cast gas-price --rpc-url "$RPC" | awk '{printf "%.9f", $1 * 3 / 1e9}')}"
     (cd "$WS" && cargo stylus deploy --no-verify --contract "$1" --endpoint "$RPC" --keystore-path "$KS" \
-      --keystore-password-path "$PW_STYLUS" --constructor-args "${@:2}" 2>&1 | sed 's/\x1b\[[0-9;]*m//g') \
+      --keystore-password-path "$PW_STYLUS" --max-fee-per-gas-gwei "$fee" --constructor-args "${@:2}" 2>&1 | sed 's/\x1b\[[0-9;]*m//g') \
       > "$LOGS/$1.log"
     grep -oE 'deployed code at address: 0x[0-9a-fA-F]{40}' "$LOGS/$1.log" | grep -oE '0x[0-9a-fA-F]{40}' | tail -1
   }
