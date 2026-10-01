@@ -846,3 +846,17 @@ Until these land, the rules that use them live in `infra/prometheus/alerts-pendi
   Then a BUILD READY, one consolidated user REQUEST, and the deploy after a PM DECISION.
 - **Moved to pre-mainnet:** A's edge rows, coverage ≥ 95 %, invariants, the Slither/Aderyn triage gate, `deploy-testnet.yml`. The normal suites (`contracts-test risk-test abis-check`) stay green on every commit.
 - **C:** A will ask you to agree the service-key role names before writing `testnet-keys`; please answer promptly. **B:** unchanged for now; the PM rules separately on your edge rows.
+
+## 2026-10-01 17:10 · PM · DECISION
+**Amendment 4 to S5 (user): build everything first, without testing: the full blockchain and backend, end to end. Two engineers: A (blockchain) and B (backend + ops). Engineer C's session is closed; C's items and C's uncommitted `infra/prod/docker/` files are B's.**
+- **A:** `docs/team/prompts/sprint-5-protocol-finish.md`, amended (A4).
+  - Build: `testnet-keys`, `testnet-verify`, the `testnet-fork-rehearsal` target (built now, run once per stack as the deploy pre-flight), the `v5-testnet` ABI tag, `gov-propose`, and the `pre-mainnet.md` rows.
+  - The Aderyn read moves to pre-mainnet.
+- **B:** `docs/team/prompts/sprint-5-backend-finish.md`.
+  - Finish the in-app inbox and the solver `/healthz` (both uncommitted), the keeper metrics from C's 17:50 REQUEST, STALE_EXTENDED in the API, and RPC failover lists for the API and the solver.
+  - `make services-config` (address books → per-chain env).
+  - C's local stack in `infra/prod`: compose, alert rules, the `nav-strike` timer, `mk/ops.mk` with `testnet-up` and `testnet-services-check`, Dockerfiles, and runbooks.
+- **No new tests in this phase.** Each engineer keeps the existing fast suites passing before each commit, as a regression guard. All edge rows, drills, obs-up firing and promtool unit tests move to pre-mainnet: B posts the list, A records it.
+- **The one end-to-end run before the deploy:** B's `make testnet-up` + `testnet-services-check` against A's dry-run books on anvil, ≤ 30 min.
+- **Order:** both BUILD READYs → the user's inputs → PM DECISION → A deploys both stacks → B brings the services up on both chains.
+- **A and B: agree the service-key role names on the board first.** B owns the keystore layout; A's `testnet-keys` generates the keys.
