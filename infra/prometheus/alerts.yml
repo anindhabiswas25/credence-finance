@@ -1,76 +1,107 @@
-# Every §16.1 alert (S2: feeds, keeper, housekeeping; S4: Bell, reopen, epoch, pool, shortfall). Owner: BE-backend.
-# Severity label = the guide's P1/P2 (P3 = operability, not in the guide). Unit tests: alerts.test.yml
-# (`make obs-check` runs promtool). Runbooks: docs/runbooks (RB-xx in the annotations).
+# Every §16.1 alert (S2: feeds, keeper, housekeeping; S4: Bell, reopen, epoch, pool, shortfall; S5: the testnet
+# stack). Owner: BE-backend. Loaded by the dev stack (`make obs-up`) and the local testnet stack (infra/prod).
+# Labels (B's 17:17 ops-alert contract): `severity` page | ticket (what Alertmanager does with it), `priority` the
+# guide's P1 / P2 (P3 = operability, not in the guide), and `chain` from the scrape target (infra/prod/prometheus):
+# every rule keeps it, so aggregations are `by (chain, …)`. `annotations.runbook` names the runbook (docs/runbooks;
+# RB-xx = the guide's §16 runbook ids). Unit tests: alerts.test.yml (`make obs-check`).
 groups:
   - name: credence-feeds
     rules:
       - alert: FeedStale
-        # REGULAR only (credence_relayer_market_status 2); the relayer publishes LIVE every 10 s, OracleAdapter's
-        # REGULAR limit is 60 s
+        # REGULAR only (credence_relayer_market_status 2): no page for an asset without a LIVE price out of session
+        # (MSFT / GOOGL / AMZN have no RedStone extended-hours feed on testnet, PM 16:30 ruling 2; the API shows
+        # STALE_EXTENDED instead). The relayer publishes LIVE every 10 s, OracleAdapter's REGULAR limit is 60 s.
         expr: (time() - credence_relayer_last_live_timestamp_seconds) > 60 and on (feed, asset) credence_relayer_market_status == 2
         for: 30s
-        labels: { severity: P1 }
+        labels: { severity: page, priority: P1 }
         annotations:
           summary: "Feed {{ $labels.feed }} {{ $labels.asset }}: last LIVE {{ $value | humanizeDuration }} ago in REGULAR"
           runbook: RB-04
       - alert: FeedDisagreement
         expr: credence_relayer_vendor_disagreement_ppm > 15000
         for: 2m
-        labels: { severity: P2 }
+        labels: { severity: ticket, priority: P2 }
         annotations:
           summary: "Feed {{ $labels.feed }} vs the other feed on {{ $labels.asset }}: {{ $value }} ppm (> 1.5%)"
           runbook: RB-04
       - alert: FeedDisagreementSevere
         expr: credence_relayer_vendor_disagreement_ppm > 50000
         for: 2m
-        labels: { severity: P1 }
+        labels: { severity: page, priority: P1 }
         annotations:
           summary: "Feed {{ $labels.feed }} vs the other feed on {{ $labels.asset }}: {{ $value }} ppm (> 5%)"
           runbook: RB-04
       - alert: RelayerStreamDown
         expr: credence_relayer_stream_connected == 0
         for: 5m
-        labels: { severity: P3 }
+        labels: { severity: ticket, priority: P3 }
         annotations:
           summary: "Vendor {{ $labels.vendor }} WebSocket down for 5 min (REST fallback in use)"
+          runbook: docs/runbooks/feed-stale.md
 
   - name: credence-keeper
     rules:
       - alert: KeeperLeaderMissing
-        # no instance holds the lock, or no keeper is scraped at all
-        expr: (max(credence_keeper_is_leader) < 1) or absent(credence_keeper_is_leader == 1)
+        # no instance holds the lock on a chain, or no keeper is scraped at all
+        expr: (max by (chain) (credence_keeper_is_leader) < 1) or absent(credence_keeper_is_leader == 1)
         for: 30s
-        labels: { severity: P1 }
+        labels: { severity: page, priority: P1 }
         annotations:
           summary: "No keeper leader heartbeat for 30 s"
+          runbook: docs/runbooks/keeper-down.md
       - alert: WalletLow
-        # < 3 days of spend at the last 6 h's burn rate
+        # < 3 days of spend at the last 6 h's burn rate (J12 refreshes the balances hourly)
         expr: predict_linear(credence_keeper_wallet_balance_gwei[6h], 3 * 86400) < 0
         for: 15m
-        labels: { severity: P2 }
+        labels: { severity: ticket, priority: P2 }
         annotations:
           summary: "Wallet {{ $labels.wallet }} runs dry within 3 days at the current spend"
+          runbook: docs/runbooks/wallet-low.md
       - alert: WalletBelowFloor
         # the keeper's own configured floor (KEEPER_MIN_BALANCE_WEI), raised by J12
         expr: increase(credence_keeper_alerts_total{check="wallet-balance"}[1d]) > 0
-        labels: { severity: P2 }
+        labels: { severity: ticket, priority: P2 }
         annotations:
           summary: "A watched wallet is below the keeper's configured floor"
+          runbook: docs/runbooks/wallet-low.md
+      - alert: KeeperWalletLow
+        # the keeper's own hot wallet below 0.01 ETH: it cannot send for long (DevOps 17:50 item 5)
+        expr: credence_keeper_wallet_balance_gwei{wallet="keeper"} < 1e7
+        labels: { severity: page, priority: P1 }
+        annotations:
+          summary: "The keeper's wallet has {{ $value }} gwei (< 0.01 ETH)"
+          runbook: docs/runbooks/wallet-low.md
+      - alert: TipsBudgetLow
+        # §16.1 "tips budget low < 3 days" (J12: KeeperTips.budget() at the last 24 h's spend)
+        expr: credence_keeper_tips_budget_days < 3
+        for: 15m
+        labels: { severity: ticket, priority: P2 }
+        annotations:
+          summary: "{{ $labels.stack }} keeper tip budget lasts {{ $value | humanize }} more days (< 3)"
+          runbook: docs/runbooks/wallet-low.md
+      - alert: KeeperPaged
+        # the keeper's own page-level checks (its ALERT_WEBHOOK_URL is unset in the stack: they reach the inbox here)
+        expr: increase(credence_keeper_alerts_total{severity="page"}[10m]) > 0
+        labels: { severity: page, priority: P1 }
+        annotations:
+          summary: "The keeper raised a page ({{ $labels.check }}): see its log"
+          runbook: docs/runbooks/keeper-down.md
       - alert: CalendarCoverage
         expr: credence_keeper_calendar_coverage_days < 30
-        labels: { severity: P2 }
+        labels: { severity: ticket, priority: P2 }
         annotations:
           summary: "{{ $labels.venue }} calendar covers only {{ $value }} more days"
           runbook: RB-08
       - alert: KeeperFailedTx
         # every keeper job pre-checks with risk-core natively (§10.2), so any reverted tx is a bug
-        expr: sum by (job) (increase(credence_keeper_failed_txs_total{reason="reverted"}[1h])) > 0
-        labels: { severity: P2 }
+        expr: sum by (chain, job) (increase(credence_keeper_failed_txs_total{reason="reverted"}[1h])) > 0
+        labels: { severity: ticket, priority: P2 }
         annotations:
           summary: "Keeper {{ $labels.job }}: a tx reverted on chain in the last hour"
+          runbook: docs/runbooks/keeper-down.md
       - alert: StylusActivation
         expr: credence_keeper_stylus_program_time_left_seconds < 30 * 86400
-        labels: { severity: P2 }
+        labels: { severity: ticket, priority: P2 }
         annotations:
           summary: "Stylus {{ $labels.program }}: programTimeLeft {{ $value | humanizeDuration }}"
           runbook: RB-10
@@ -81,50 +112,127 @@ groups:
       - alert: BellNotEnforced
         # J3 publishes the NEEDS_ACTION positions still open from bellAt + 10 min (0 before)
         expr: credence_keeper_bell_unenforced_positions > 0
-        labels: { severity: P1 }
+        labels: { severity: page, priority: P1 }
         annotations:
           summary: "{{ $labels.asset }}: {{ $value }} NEEDS_ACTION position(s) left at bellAt + 10 min"
+          runbook: docs/runbooks/keeper-enforce.md
       - alert: ReopenStuck
         # seconds since the open print (net of the R-20 extension) while the asset is still in REOPEN
         expr: credence_keeper_reopen_pending_seconds > 900
-        labels: { severity: P1 }
+        labels: { severity: page, priority: P1 }
         annotations:
           summary: "{{ $labels.asset }}: REOPEN not complete {{ $value | humanizeDuration }} after the open print (> 15 min)"
+          runbook: docs/runbooks/keeper-enforce.md
+      - alert: OpenPrintDeviation
+        # threat model row 4 (PM ruling): the open print more than ±50 % from the closure's frozen reference close pages
+        # the guardian for an hour after the print; exactly ±50 % does not
+        expr: abs(credence_keeper_open_print_deviation_ratio) > 0.5 and on (chain, asset) (time() - credence_keeper_open_print_timestamp_seconds) < 3600
+        labels: { severity: page, priority: P1 }
+        annotations:
+          summary: "{{ $labels.asset }}: open print {{ $value | humanizePercentage }} away from the previous close (> 50%)"
+          runbook: docs/runbooks/open-print.md
       - alert: EpochNotSettled
         expr: credence_keeper_epoch_unsettled_seconds > 7200
-        labels: { severity: P2 }
+        labels: { severity: ticket, priority: P2 }
         annotations:
           summary: "{{ $labels.pool }} pool: epoch not settled {{ $value | humanizeDuration }} after reopenAt (> 2 h)"
+          runbook: docs/runbooks/keeper-enforce.md
       - alert: PoolUtilisation
         expr: credence_keeper_pool_utilisation_ratio > 0.45
-        labels: { severity: P2 }
+        labels: { severity: ticket, priority: P2 }
         annotations:
           summary: "{{ $labels.pool }} pool utilisation {{ $value | humanizePercentage }} (> 45%)"
+          runbook: docs/runbooks/halted.md
       - alert: ShortfallEscalated
         # a Shortfall paid from the protocol reserve (paidReserve > 0) or hit the senior vault (seniorLoss > 0)
         expr: delta(credence_keeper_shortfall_escalations[1h]) > 0
-        labels: { severity: P1 }
+        labels: { severity: page, priority: P1 }
         annotations:
           summary: "A shortfall reached the {{ $labels.layer }} in the last hour"
+          runbook: docs/runbooks/halted.md
+      - alert: NavPrintMissing
+        # PM 16:30 ruling 3: the nav-strike timer prints once per USBANK session; nothing since the latest session opened,
+        # 10 min after it ended
+        expr: credence_keeper_nav_print_overdue_seconds > 600
+        labels: { severity: ticket, priority: P2 }
+        annotations:
+          summary: "{{ $labels.asset }}: no NAV print for the last USBANK session ({{ $value | humanizeDuration }} past its end)"
+          runbook: docs/runbooks/nav-print-missing.md
+
+  # S5: one chain's RPC, sequencer or indexer down while the other chain is fine (every rule is per chain)
+  - name: credence-chain
+    rules:
+      - alert: RpcProviderDown
+        expr: credence_keeper_rpc_up == 0
+        for: 5m
+        labels: { severity: ticket, priority: P2 }
+        annotations:
+          summary: "RPC {{ $labels.rpc }} has not answered within the lag for 5 min (the keeper failed over)"
+          runbook: docs/runbooks/rpc-outage.md
+      - alert: RpcAllDown
+        expr: max by (chain) (credence_keeper_rpc_up) == 0
+        for: 2m
+        labels: { severity: page, priority: P1 }
+        annotations:
+          summary: "Chain {{ $labels.chain }}: no RPC answers"
+          runbook: docs/runbooks/rpc-outage.md
+      - alert: ChainHeadStale
+        # the latest block is old on every RPC: the sequencer is down (or every RPC is stuck)
+        expr: credence_keeper_chain_head_age_seconds > 300
+        for: 2m
+        labels: { severity: page, priority: P1 }
+        annotations:
+          summary: "Chain {{ $labels.chain }}: the head block is {{ $value | humanizeDuration }} old"
+          runbook: docs/runbooks/sequencer-down.md
+      - alert: KeeperDown
+        expr: up{job="keeper"} == 0
+        for: 2m
+        labels: { severity: page, priority: P1 }
+        annotations:
+          summary: "Chain {{ $labels.chain }}: the keeper is not answering"
+          runbook: docs/runbooks/keeper-down.md
+      - alert: IndexerDown
+        expr: up{job="indexer"} == 0
+        for: 5m
+        labels: { severity: page, priority: P1 }
+        annotations:
+          summary: "Chain {{ $labels.chain }}: the indexer is not answering"
+          runbook: docs/runbooks/indexer-reindex.md
+      - alert: RelayerNodeDown
+        # one node of three: the committee (threshold 2) still publishes
+        expr: up{job="relayer"} == 0
+        for: 5m
+        labels: { severity: ticket, priority: P2 }
+        annotations:
+          summary: "Relayer {{ $labels.committee }} {{ $labels.instance }} is not answering"
+          runbook: docs/runbooks/feed-stale.md
 
   - name: credence-services
     rules:
       - alert: IndexerLag
         expr: time() - ponder_indexing_timestamp > 120
         for: 5m
-        labels: { severity: P2 }
+        labels: { severity: ticket, priority: P2 }
         annotations:
           summary: "Indexer is {{ $value | humanizeDuration }} behind"
+          runbook: docs/runbooks/indexer-reindex.md
       - alert: NotifierBacklog
         expr: credence_notifier_oldest_due_seconds > 300
         for: 2m
-        labels: { severity: P2 }
+        labels: { severity: ticket, priority: P2 }
         annotations:
           summary: "Oldest due notification waits {{ $value | humanizeDuration }} (Bell heads-ups expire)"
           runbook: RB-01
       - alert: ApiErrors
         expr: sum(rate(credence_api_http_requests_total{status=~"5.."}[5m])) / sum(rate(credence_api_http_requests_total[5m])) > 0.05
         for: 5m
-        labels: { severity: P3 }
+        labels: { severity: ticket, priority: P3 }
         annotations:
           summary: "API 5xx rate above 5%"
+      - alert: ServiceDown
+        expr: up{job=~"api|notifier|solver"} == 0
+        for: 2m
+        labels: { severity: page, priority: P1 }
+        annotations:
+          summary: "{{ $labels.job }} is not answering"
+          runbook: docs/runbooks/keeper-down.md

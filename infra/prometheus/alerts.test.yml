@@ -22,7 +22,7 @@ tests:
       - eval_time: 100s # stale since 70 s, pending 30 s → firing
         alertname: FeedStale
         exp_alerts:
-          - exp_labels: { severity: P1, feed: A, asset: NVDA }
+          - exp_labels: { severity: page, priority: P1, feed: A, asset: NVDA }
             exp_annotations:
               summary: "Feed A NVDA: last LIVE 1m 40s ago in REGULAR"
               runbook: RB-04
@@ -39,12 +39,12 @@ tests:
       - eval_time: 150s # above 1.5% since 30 s, for 2 min
         alertname: FeedDisagreement
         exp_alerts:
-          - exp_labels: { severity: P2, feed: A, asset: TSLA }
+          - exp_labels: { severity: ticket, priority: P2, feed: A, asset: TSLA }
             exp_annotations: { summary: "Feed A vs the other feed on TSLA: 20000 ppm (> 1.5%)", runbook: RB-04 }
       - eval_time: 5m
         alertname: FeedDisagreementSevere
         exp_alerts:
-          - exp_labels: { severity: P1, feed: A, asset: TSLA }
+          - exp_labels: { severity: page, priority: P1, feed: A, asset: TSLA }
             exp_annotations: { summary: "Feed A vs the other feed on TSLA: 60000 ppm (> 5%)", runbook: RB-04 }
 
   - name: keeper leader missing
@@ -61,8 +61,8 @@ tests:
       - eval_time: 70s # no leader since 30 s, for 30 s → firing
         alertname: KeeperLeaderMissing
         exp_alerts:
-          - exp_labels: { severity: P1 }
-            exp_annotations: { summary: "No keeper leader heartbeat for 30 s" }
+          - exp_labels: { severity: page, priority: P1 }
+            exp_annotations: { summary: "No keeper leader heartbeat for 30 s", runbook: docs/runbooks/keeper-down.md }
 
   - name: keeper absent entirely
     interval: 10s
@@ -73,8 +73,8 @@ tests:
       - eval_time: 60s
         alertname: KeeperLeaderMissing
         exp_alerts:
-          - exp_labels: { severity: P1 }
-            exp_annotations: { summary: "No keeper leader heartbeat for 30 s" }
+          - exp_labels: { severity: page, priority: P1 }
+            exp_annotations: { summary: "No keeper leader heartbeat for 30 s", runbook: docs/runbooks/keeper-down.md }
 
   - name: housekeeping thresholds
     interval: 1m
@@ -89,12 +89,12 @@ tests:
       - eval_time: 1m
         alertname: CalendarCoverage
         exp_alerts:
-          - exp_labels: { severity: P2, venue: XNYS }
+          - exp_labels: { severity: ticket, priority: P2, venue: XNYS }
             exp_annotations: { summary: "XNYS calendar covers only 29 more days", runbook: RB-08 }
       - eval_time: 1m
         alertname: StylusActivation
         exp_alerts:
-          - exp_labels: { severity: P2, program: riskEngine }
+          - exp_labels: { severity: ticket, priority: P2, program: riskEngine }
             exp_annotations: { summary: "Stylus riskEngine: programTimeLeft 29d 0h 0m 0s", runbook: RB-10 }
 
   - name: wallet runs dry within 3 days
@@ -110,8 +110,8 @@ tests:
       - eval_time: 7h
         alertname: WalletLow
         exp_alerts:
-          - exp_labels: { severity: P2, wallet: relayerA }
-            exp_annotations: { summary: "Wallet relayerA runs dry within 3 days at the current spend" }
+          - exp_labels: { severity: ticket, priority: P2, wallet: relayerA }
+            exp_annotations: { summary: "Wallet relayerA runs dry within 3 days at the current spend", runbook: docs/runbooks/wallet-low.md }
 
   - name: keeper failed tx
     interval: 1m
@@ -127,8 +127,8 @@ tests:
       - eval_time: 3m
         alertname: KeeperFailedTx
         exp_alerts:
-          - exp_labels: { severity: P2, job: J5 }
-            exp_annotations: { summary: "Keeper J5: a tx reverted on chain in the last hour" }
+          - exp_labels: { severity: ticket, priority: P2, job: J5 }
+            exp_annotations: { summary: "Keeper J5: a tx reverted on chain in the last hour", runbook: docs/runbooks/keeper-down.md }
 
   # ── S4 F: pool / auction alerts ──
   - name: bell not enforced at bellAt + 10 min
@@ -145,8 +145,8 @@ tests:
       - eval_time: 30s
         alertname: BellNotEnforced
         exp_alerts:
-          - exp_labels: { severity: P1, asset: NVDA }
-            exp_annotations: { summary: "NVDA: 3 NEEDS_ACTION position(s) left at bellAt + 10 min" }
+          - exp_labels: { severity: page, priority: P1, asset: NVDA }
+            exp_annotations: { summary: "NVDA: 3 NEEDS_ACTION position(s) left at bellAt + 10 min", runbook: docs/runbooks/keeper-enforce.md }
 
   - name: reopen stuck after 15 min
     interval: 1m
@@ -160,8 +160,8 @@ tests:
       - eval_time: 16m
         alertname: ReopenStuck
         exp_alerts:
-          - exp_labels: { severity: P1, asset: TSLA }
-            exp_annotations: { summary: "TSLA: REOPEN not complete 16m 0s after the open print (> 15 min)" }
+          - exp_labels: { severity: page, priority: P1, asset: TSLA }
+            exp_annotations: { summary: "TSLA: REOPEN not complete 16m 0s after the open print (> 15 min)", runbook: docs/runbooks/keeper-enforce.md }
 
   - name: epoch not settled 2 h after reopen
     interval: 10m
@@ -175,8 +175,8 @@ tests:
       - eval_time: 130m
         alertname: EpochNotSettled
         exp_alerts:
-          - exp_labels: { severity: P2, pool: equity }
-            exp_annotations: { summary: "equity pool: epoch not settled 2h 10m 0s after reopenAt (> 2 h)" }
+          - exp_labels: { severity: ticket, priority: P2, pool: equity }
+            exp_annotations: { summary: "equity pool: epoch not settled 2h 10m 0s after reopenAt (> 2 h)", runbook: docs/runbooks/keeper-enforce.md }
 
   - name: pool utilisation above 45%
     interval: 10s
@@ -190,8 +190,8 @@ tests:
       - eval_time: 20s
         alertname: PoolUtilisation
         exp_alerts:
-          - exp_labels: { severity: P2, pool: equity }
-            exp_annotations: { summary: "equity pool utilisation 46% (> 45%)" }
+          - exp_labels: { severity: ticket, priority: P2, pool: equity }
+            exp_annotations: { summary: "equity pool utilisation 46% (> 45%)", runbook: docs/runbooks/halted.md }
 
   - name: shortfall reached the reserve, not after a keeper restart
     interval: 5m
@@ -208,5 +208,5 @@ tests:
       - eval_time: 20m
         alertname: ShortfallEscalated
         exp_alerts:
-          - exp_labels: { severity: P1, layer: reserve }
-            exp_annotations: { summary: "A shortfall reached the reserve in the last hour" }
+          - exp_labels: { severity: page, priority: P1, layer: reserve }
+            exp_annotations: { summary: "A shortfall reached the reserve in the last hour", runbook: docs/runbooks/halted.md }
