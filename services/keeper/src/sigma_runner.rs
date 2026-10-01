@@ -96,7 +96,7 @@ impl SigmaRunner {
         since: u64,
     ) -> Result<BTreeMap<NaiveDate, SessionPrints>> {
         let q = format!(
-            "select kind, price::text as price, observed_at, feed from {}.price_point
+            "select kind, price::text as price, observed_at::int8 as observed_at, feed from {}.price_point
               where asset_id = $1 and kind in (1, 2) and observed_at >= $2 order by feed desc, observed_at",
             self.indexer_schema
         );
