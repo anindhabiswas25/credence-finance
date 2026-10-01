@@ -1,0 +1,388 @@
+# The local testnet stack (Amendment 2): both chains' services on this machine against the real testnets,
+# Robinhood Chain testnet 46630 (equity) and Arbitrum Sepolia 421614 (NAV). Owner: BE-backend (was DevOps).
+#
+#   make testnet-up            services-config for both chains, then this stack (project credence-testnet)
+#   make testnet-services-check
+#   make testnet-down
+#
+# Everything is on the private network `backend`. Host ports, all on 127.0.0.1 and away from the dev stack's
+# (:5433 :8547 :9090 :3001): the API :8787 (the frontend calls it), Grafana :13001, Prometheus :19090,
+# Alertmanager :19093. Postgres, the indexers, the relayer nodes and every /metrics stay private.
+#
+# Config is env only (Railway-ready). Per chain it comes from `make services-config` (GEN_DIR/<chainId>/chain.env +
+# book.json); secrets are 0600 files in infra/prod/secrets (make ops-secrets-init), mounted read-only and turned into
+# env inside the container (docker/entrypoint.sh: FILE__<NAME>, RPC_ENV_FILE). The services run as the host user
+# (HOST_UID/HOST_GID), so they can read the 0600 keystores and secrets the host user owns.
+name: credence-testnet
+
+x-service: &service
+  restart: unless-stopped
+  networks: [backend]
+  user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
+  logging: { driver: json-file, options: { max-size: "20m", max-file: "5" } }
+  # the dry run's anvils listen on the host (make testnet-dry-up); unused against the real testnets
+  extra_hosts: ["host.docker.internal:host-gateway"]
+
+x-db-env: &db-env
+  PGHOST: postgres
+  PGUSER: credence
+  PGDATABASE: credence
+  FILE__PGPASSWORD: /run/secrets/pg_password
+
+x-rust-env: &rust-env
+  <<: *db-env
+  RUST_LOG: ${RUST_LOG:-info}
+  RPC_ENV_FILE: /run/secrets/rpc_env
+
+x-after-db: &after-db
+  postgres: { condition: service_healthy }
+  migrate: { condition: service_completed_successfully }
+
+x-rust-health: &rust-health
+  test: ["CMD", "curl", "-sf", "http://127.0.0.1:${HEALTH_PORT:-9101}/healthz"]
+  interval: 15s
+  timeout: 5s
+  retries: 5
+  start_period: 30s
+
+services:
+  # ── data ──
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    networks: [backend]
+    environment:
+      POSTGRES_USER: credence
+      POSTGRES_DB: credence
+      POSTGRES_PASSWORD_FILE: /run/secrets/pg_password
+    secrets: [pg_password]
+    volumes: ["pgdata:/var/lib/postgresql/data"]
+    shm_size: 256m
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U credence -d credence"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+
+  # migrations first (dbmate, every migration has a rollback); the services start after it exits 0
+  migrate:
+    image: ghcr.io/amacneil/dbmate:2
+    networks: [backend]
+    restart: "no"
+    secrets: [pg_password]
+    environment:
+      DBMATE_MIGRATIONS_DIR: /db/migrations
+      DBMATE_NO_DUMP_SCHEMA: "true"
+    volumes: ["../db/migrations:/db/migrations:ro"]
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - 'export DATABASE_URL="postgres://credence:$$(cat /run/secrets/pg_password)@postgres:5432/credence?sslmode=disable"; exec dbmate --wait ${MIGRATE_CMD:-up}'
+    depends_on:
+      postgres: { condition: service_healthy }
+
+  # nightly pg_dump with retention (infra/backup/pg-backup.sh); `make db-backup` runs one now
+  pg-backup:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    networks: [backend]
+    user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
+    environment:
+      PGHOST: postgres
+      PGUSER: credence
+      PGDATABASE: credence
+      PGPASSFILE_SRC: /run/secrets/pg_password
+      BACKUP_DIR: /backups
+      BACKUP_KEEP_DAYS: ${BACKUP_KEEP_DAYS:-14}
+      BACKUP_AT_UTC: ${BACKUP_AT_UTC:-20:30}
+    secrets: [pg_password]
+    volumes:
+      - ../backup:/opt/backup:ro
+      - ${BACKUP_HOST_DIR:-./backups}:/backups
+    entrypoint: ["/bin/sh", "/opt/backup/pg-backup.sh"]
+    command: ["loop"]
+    depends_on: *after-db
+
+  # ── 46630 Robinhood Chain testnet: the equity stack ──
+  indexer-46630:
+    <<: *service
+    image: credence/indexer:${TAG:-latest}
+    build: { context: ../.., dockerfile: infra/prod/docker/indexer.Dockerfile }
+    env_file: ["${GEN_DIR:-./generated}/46630/chain.env"]
+    environment: { <<: *db-env, RPC_ENV_FILE: /run/secrets/rpc_env, PORT: "42069" }
+    secrets: [pg_password, rpc_env]
+    volumes: ["${GEN_DIR:-./generated}/46630/book.json:/run/config/book.json:ro"]
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://127.0.0.1:42069/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 60s
+    depends_on: *after-db
+
+  keeper-46630:
+    <<: *service
+    image: credence/keeper:${TAG:-latest}
+    build: { context: ../.., dockerfile: infra/prod/docker/keeper.Dockerfile }
+    env_file: ["${GEN_DIR:-./generated}/46630/chain.env"]
+    environment: { <<: *rust-env, KEEPER_INSTANCE_ID: keeper-46630-1, METRICS_ADDR: "0.0.0.0:9102" }
+    secrets: [pg_password, rpc_env]
+    volumes:
+      - "${GEN_DIR:-./generated}/46630/book.json:/run/config/book.json:ro"
+      - "${KEYS_DIR:?KEYS_DIR (the service keystores)}/46630:/run/keys/46630:ro"
+    healthcheck: { <<: *rust-health, test: ["CMD", "curl", "-sf", "http://127.0.0.1:9102/healthz"] }
+    depends_on:
+      <<: *after-db
+      indexer-46630: { condition: service_healthy }
+
+  # feed A and feed B: two RedStone committees (PM 16:30 ruling 1), 3 signer nodes + an aggregator each
+  relayer-a-node-1: &relayer-a-node
+    <<: *service
+    image: credence/relayer:${TAG:-latest}
+    build: { context: ../.., dockerfile: infra/prod/docker/relayer.Dockerfile }
+    command: ["node"]
+    env_file: ["${GEN_DIR:-./generated}/46630/chain.env", "${GEN_DIR:-./generated}/46630/feed-a.env"]
+    environment:
+      <<: *rust-env
+      NODE_ID: node-1
+      NODE_LISTEN: "0.0.0.0:8080"
+      METRICS_ADDR: "0.0.0.0:9101"
+      FILE__RELAYER_NODE_TOKEN: /run/secrets/relayer_a_token
+    secrets: [pg_password, rpc_env, relayer_a_token]
+    volumes:
+      - "${GEN_DIR:-./generated}/46630/book.json:/run/config/book.json:ro"
+      - "${KEYS_DIR:?KEYS_DIR (the service keystores)}/46630:/run/keys/46630:ro"
+    healthcheck: { <<: *rust-health, test: ["CMD", "curl", "-sf", "http://127.0.0.1:9101/healthz"] }
+    depends_on: *after-db
+  relayer-a-node-2:
+    <<: *relayer-a-node
+    environment: { <<: *rust-env, NODE_ID: node-2, NODE_LISTEN: "0.0.0.0:8080", METRICS_ADDR: "0.0.0.0:9101", FILE__RELAYER_NODE_TOKEN: /run/secrets/relayer_a_token }
+  relayer-a-node-3:
+    <<: *relayer-a-node
+    environment: { <<: *rust-env, NODE_ID: node-3, NODE_LISTEN: "0.0.0.0:8080", METRICS_ADDR: "0.0.0.0:9101", FILE__RELAYER_NODE_TOKEN: /run/secrets/relayer_a_token }
+  relayer-a-agg:
+    <<: *relayer-a-node
+    command: ["aggregator"]
+    environment: { <<: *rust-env, METRICS_ADDR: "0.0.0.0:9101", FILE__RELAYER_NODE_TOKEN: /run/secrets/relayer_a_token }
+    depends_on:
+      <<: *after-db
+      relayer-a-node-1: { condition: service_healthy }
+      relayer-a-node-2: { condition: service_healthy }
+      relayer-a-node-3: { condition: service_healthy }
+
+  relayer-b-node-1: &relayer-b-node
+    <<: *relayer-a-node
+    env_file: ["${GEN_DIR:-./generated}/46630/chain.env", "${GEN_DIR:-./generated}/46630/feed-b.env"]
+    environment: { <<: *rust-env, NODE_ID: node-1, NODE_LISTEN: "0.0.0.0:8080", METRICS_ADDR: "0.0.0.0:9101", FILE__RELAYER_NODE_TOKEN: /run/secrets/relayer_b_token }
+    secrets: [pg_password, rpc_env, relayer_b_token]
+  relayer-b-node-2:
+    <<: *relayer-b-node
+    environment: { <<: *rust-env, NODE_ID: node-2, NODE_LISTEN: "0.0.0.0:8080", METRICS_ADDR: "0.0.0.0:9101", FILE__RELAYER_NODE_TOKEN: /run/secrets/relayer_b_token }
+  relayer-b-node-3:
+    <<: *relayer-b-node
+    environment: { <<: *rust-env, NODE_ID: node-3, NODE_LISTEN: "0.0.0.0:8080", METRICS_ADDR: "0.0.0.0:9101", FILE__RELAYER_NODE_TOKEN: /run/secrets/relayer_b_token }
+  relayer-b-agg:
+    <<: *relayer-b-node
+    command: ["aggregator"]
+    environment: { <<: *rust-env, METRICS_ADDR: "0.0.0.0:9101", FILE__RELAYER_NODE_TOKEN: /run/secrets/relayer_b_token }
+    depends_on:
+      <<: *after-db
+      relayer-b-node-1: { condition: service_healthy }
+      relayer-b-node-2: { condition: service_healthy }
+      relayer-b-node-3: { condition: service_healthy }
+
+  # ── 421614 Arbitrum Sepolia: the NAV stack ──
+  indexer-421614:
+    <<: *service
+    image: credence/indexer:${TAG:-latest}
+    env_file: ["${GEN_DIR:-./generated}/421614/chain.env"]
+    environment: { <<: *db-env, RPC_ENV_FILE: /run/secrets/rpc_env, PORT: "42069" }
+    secrets: [pg_password, rpc_env]
+    volumes: ["${GEN_DIR:-./generated}/421614/book.json:/run/config/book.json:ro"]
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://127.0.0.1:42069/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 60s
+    depends_on: *after-db
+
+  keeper-421614:
+    <<: *service
+    image: credence/keeper:${TAG:-latest}
+    env_file: ["${GEN_DIR:-./generated}/421614/chain.env"]
+    environment: { <<: *rust-env, KEEPER_INSTANCE_ID: keeper-421614-1, METRICS_ADDR: "0.0.0.0:9102" }
+    secrets: [pg_password, rpc_env]
+    volumes:
+      - "${GEN_DIR:-./generated}/421614/book.json:/run/config/book.json:ro"
+      - "${KEYS_DIR:?KEYS_DIR (the service keystores)}/421614:/run/keys/421614:ro"
+    healthcheck: { <<: *rust-health, test: ["CMD", "curl", "-sf", "http://127.0.0.1:9102/healthz"] }
+    depends_on:
+      <<: *after-db
+      indexer-421614: { condition: service_healthy }
+
+  solver-421614:
+    <<: *service
+    image: credence/solver:${TAG:-latest}
+    build: { context: ../.., dockerfile: infra/prod/docker/solver.Dockerfile }
+    command: ["--config", "/run/config/solvers.json"]
+    env_file: ["${GEN_DIR:-./generated}/421614/chain.env"]
+    environment: { RUST_LOG: "${RUST_LOG:-info}", RPC_ENV_FILE: /run/secrets/rpc_env, SOLVER_OPS_ADDR: "0.0.0.0:9105" }
+    secrets: [rpc_env]
+    volumes:
+      - "${GEN_DIR:-./generated}/421614/book.json:/run/config/book.json:ro"
+      - "${GEN_DIR:-./generated}/421614/solvers.json:/run/config/solvers.json:ro"
+      - "${KEYS_DIR:?KEYS_DIR (the service keystores)}/421614:/run/keys/421614:ro"
+    healthcheck: { <<: *rust-health, test: ["CMD", "curl", "-sf", "http://127.0.0.1:9105/healthz"] }
+
+  # the issuer's NAV strike once per USBANK session (PM 16:30 ruling 3; testnet only): infra/prod/navstrike
+  navstrike-421614:
+    <<: *service
+    image: credence/relayer:${TAG:-latest}
+    entrypoint: ["/usr/local/bin/credence-entrypoint", "/bin/sh", "/opt/navstrike/navstrike.sh"]
+    command: []
+    env_file: ["${GEN_DIR:-./generated}/421614/chain.env"]
+    environment:
+      RUST_LOG: "${RUST_LOG:-info}"
+      RPC_ENV_FILE: /run/secrets/rpc_env
+      NAVSTRIKE_STATE: /state
+      NAVSTRIKE_OFFSET_S: ${NAVSTRIKE_OFFSET_S:-1800}
+    secrets: [rpc_env]
+    volumes:
+      - ./navstrike:/opt/navstrike:ro
+      - "${GEN_DIR:-./generated}/421614/book.json:/run/config/book.json:ro"
+      - "${KEYS_DIR:?KEYS_DIR (the service keystores)}/421614:/run/keys/421614:ro"
+      - "${STATE_DIR:-./state}/navstrike:/state"
+    healthcheck:
+      test: ["CMD", "test", "-f", "/state/alive"]
+      interval: 60s
+      retries: 3
+      start_period: 30s
+
+  # ── both chains: one API, one notifier (ADR-0014) ──
+  api:
+    <<: *service
+    image: credence/api:${TAG:-latest}
+    build: { context: ../.., dockerfile: infra/prod/docker/api.Dockerfile }
+    env_file: ["${GEN_DIR:-./generated}/stack.env"]
+    environment:
+      <<: *db-env
+      RPC_ENV_FILE: /run/secrets/rpc_env
+      NODE_ENV: production
+      API_PORT: "8787"
+      API_METRICS_ADDR: "0.0.0.0:9104"
+      API_PUBLIC_URL: http://127.0.0.1:8787
+      API_PUBLIC_ORIGIN: ${FRONTEND_ORIGIN:-http://localhost:3000}
+      CORS_ORIGINS: ${FRONTEND_ORIGIN:-http://localhost:3000}
+      SIWE_DOMAIN: ${SIWE_DOMAIN:-localhost:3000}
+      FILE__SESSION_SECRET: /run/secrets/session_secret
+      OPS_ALERT_WEBHOOK_SECRET_FILE: /run/secrets/ops_alert_webhook
+      OPS_ADMIN_ADDRESSES: ${OPS_ADMIN_ADDRESSES:-}
+    secrets: [pg_password, rpc_env, session_secret, ops_alert_webhook]
+    volumes:
+      - "${GEN_DIR:-./generated}/46630/book.json:/run/config/46630/book.json:ro"
+      - "${GEN_DIR:-./generated}/421614/book.json:/run/config/421614/book.json:ro"
+    ports: ["127.0.0.1:${API_PORT:-8787}:8787"]
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://127.0.0.1:8787/readyz"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    depends_on: *after-db
+
+  notifier:
+    <<: *service
+    image: credence/notifier:${TAG:-latest}
+    build: { context: ../.., dockerfile: infra/prod/docker/notifier.Dockerfile }
+    env_file: ["${GEN_DIR:-./generated}/stack.env"]
+    environment:
+      <<: *db-env
+      RPC_ENV_FILE: /run/secrets/rpc_env
+      NODE_ENV: production
+      NOTIFIER_HOST: 0.0.0.0
+      NOTIFIER_PORT: "9103"
+      NOTIFIER_CHANNELS: inapp
+      API_PUBLIC_ORIGIN: ${FRONTEND_ORIGIN:-http://localhost:3000}
+    secrets: [pg_password, rpc_env]
+    volumes:
+      - "${GEN_DIR:-./generated}/46630/book.json:/run/config/46630/book.json:ro"
+      - "${GEN_DIR:-./generated}/421614/book.json:/run/config/421614/book.json:ro"
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://127.0.0.1:9103/healthz"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    depends_on: *after-db
+
+  # ── observability: Prometheus → Alertmanager → the API's in-app ops inbox (POST /v1/ops/alerts) ──
+  prometheus:
+    image: prom/prometheus:v3.6.0
+    restart: unless-stopped
+    networks: [backend]
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.retention.time=${PROM_RETENTION:-30d}
+      - --web.enable-lifecycle
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ../prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
+      - promdata:/prometheus
+    ports: ["127.0.0.1:${PROMETHEUS_PORT:-19090}:9090"]
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:9090/-/ready"]
+      interval: 10s
+      retries: 20
+
+  alertmanager:
+    image: prom/alertmanager:v0.28.1
+    restart: unless-stopped
+    networks: [backend]
+    # the host user, to read the 0600 webhook secret; its state is a tmpfs (silences are re-created by hand)
+    user: "${HOST_UID:-1000}:0"
+    command: ["--config.file=/etc/alertmanager/alertmanager.yml", "--storage.path=/alertmanager"]
+    volumes: ["./alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro"]
+    tmpfs: ["/alertmanager:mode=1777"]
+    secrets: [ops_alert_webhook]
+    ports: ["127.0.0.1:${ALERTMANAGER_PORT:-19093}:9093"]
+    depends_on:
+      api: { condition: service_healthy }
+
+  grafana:
+    image: grafana/grafana:12.2.0
+    restart: unless-stopped
+    networks: [backend]
+    # Grafana supports any uid with gid 0; the host user reads the 0600 admin password file
+    user: "${HOST_UID:-1000}:0"
+    environment:
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+      GF_SECURITY_ADMIN_PASSWORD__FILE: /run/secrets/grafana_admin
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+    secrets: [grafana_admin]
+    volumes:
+      - ../grafana/provisioning:/etc/grafana/provisioning:ro
+      - ../grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafanadata:/var/lib/grafana
+    ports: ["127.0.0.1:${GRAFANA_PORT:-13001}:3000"]
+    depends_on:
+      prometheus: { condition: service_healthy }
+
+networks:
+  backend: {}
+
+volumes:
+  pgdata: {}
+  promdata: {}
+  grafanadata: {}
+
+# 0600 files made by `make ops-secrets-init` (git-ignored); never values in this file
+secrets:
+  pg_password: { file: "${SECRETS_DIR:-./secrets}/pg_password" }
+  rpc_env: { file: "${SECRETS_DIR:-./secrets}/rpc.env" }
+  session_secret: { file: "${SECRETS_DIR:-./secrets}/session_secret" }
+  ops_alert_webhook: { file: "${SECRETS_DIR:-./secrets}/ops_alert_webhook" }
+  relayer_a_token: { file: "${SECRETS_DIR:-./secrets}/relayer_a_token" }
+  relayer_b_token: { file: "${SECRETS_DIR:-./secrets}/relayer_b_token" }
+  grafana_admin: { file: "${SECRETS_DIR:-./secrets}/grafana_admin" }

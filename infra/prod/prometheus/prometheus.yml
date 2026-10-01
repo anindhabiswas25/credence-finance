@@ -1,0 +1,38 @@
+# Prometheus of the local testnet stack (infra/prod). Owner: BE-backend (was DevOps).
+# Every chain-bound target carries a `chain` label, so every alert from it does too (the API shows it, and
+# GET /v1/ops/alerts?chain= filters by it). Rules: infra/prometheus/alerts.yml (§16.1, shared with the dev stack).
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels: { stack: testnet }
+
+rule_files: [/etc/prometheus/alerts.yml]
+
+alerting:
+  alertmanagers:
+    - static_configs: [{ targets: ["alertmanager:9093"] }]
+
+scrape_configs:
+  - job_name: keeper
+    static_configs:
+      - { targets: ["keeper-46630:9102"], labels: { chain: "46630", stack: equity } }
+      - { targets: ["keeper-421614:9102"], labels: { chain: "421614", stack: nav } }
+  - job_name: relayer
+    static_configs:
+      - targets: ["relayer-a-node-1:9101", "relayer-a-node-2:9101", "relayer-a-node-3:9101", "relayer-a-agg:9101"]
+        labels: { chain: "46630", committee: A }
+      - targets: ["relayer-b-node-1:9101", "relayer-b-node-2:9101", "relayer-b-node-3:9101", "relayer-b-agg:9101"]
+        labels: { chain: "46630", committee: B }
+  - job_name: indexer # Ponder serves /metrics on its HTTP port, private network only (OFF-07)
+    static_configs:
+      - { targets: ["indexer-46630:42069"], labels: { chain: "46630" } }
+      - { targets: ["indexer-421614:42069"], labels: { chain: "421614" } }
+  - job_name: solver
+    static_configs:
+      - { targets: ["solver-421614:9105"], labels: { chain: "421614" } }
+  - job_name: api # the API's private metrics listener (API_METRICS_ADDR, OFF-08)
+    static_configs: [{ targets: ["api:9104"] }]
+  - job_name: notifier
+    static_configs: [{ targets: ["notifier:9103"] }]
+  - job_name: prometheus
+    static_configs: [{ targets: ["localhost:9090"] }]

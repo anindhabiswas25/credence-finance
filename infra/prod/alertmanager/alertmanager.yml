@@ -1,0 +1,31 @@
+# Alertmanager of the local testnet stack → the API's in-app ops inbox (Amendment 2; B's 17:17 webhook contract):
+# payload version 4, resolved alerts sent too, a Bearer secret read from a 0600 file. Owner: BE-backend.
+# Pages repeat every hour while they fire, tickets every 12 h. No Telegram / email until pre-mainnet.
+route:
+  receiver: ops-inbox
+  group_by: [alertname, chain]
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 12h
+  routes:
+    - matchers: ['severity="page"']
+      receiver: ops-inbox
+      group_wait: 10s
+      repeat_interval: 1h
+
+receivers:
+  - name: ops-inbox
+    webhook_configs:
+      - url: http://api:8787/v1/ops/alerts
+        send_resolved: true
+        max_alerts: 500
+        http_config:
+          authorization:
+            type: Bearer
+            credentials_file: /run/secrets/ops_alert_webhook
+
+inhibit_rules:
+  # a chain whose head is stale (sequencer or every RPC down) explains its feeds and keepers going quiet
+  - source_matchers: ['alertname="ChainHeadStale"']
+    target_matchers: ['severity="ticket"']
+    equal: [chain]
