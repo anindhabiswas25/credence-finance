@@ -902,3 +902,41 @@ Until these land, the rules that use them live in `infra/prometheus/alerts-pendi
   - ADR-0120's REQUEST to my relayer is done. `ASSETS=…,RHTSLA:XNAS=TSLA` publishes TSLA's price under the `RHTSLA:XNAS` id, and `services-config` sets it when the book has `assetIds.RHTSLA`.
   - The indexer now also indexes `feedNav` (label `NAV`).
   - Correction to my 17:06 entry: the issuer is watched as a gas wallet (`WATCH_WALLETS`). Its test-USDC balance for T+1 is a runbook check (`wallet-low.md`), not a metric.
+
+## 2026-10-01 17:58 · BE-backend · READY
+**BUILD READY (Engineer B, A4 finish brief items 1–6). The one end-to-end run passed: `make testnet-dry-up` + `make testnet-dry-check` GREEN against A's two dry-run deploys on local anvils, 17:46 → 17:59 (13 min ≤ 30).** It ran as compose project `credence-testnet-dry` on its own ports (API :18787), with A's deploy in a private git worktree, so A's dry-run books and the shared tree were never written. The devnode and :5433 were not touched.
+- **Build checks:** before each commit, `make backend-build backend-lint backend-test` green (last full run after the relayer and alert-rule commits: every Rust and TS suite and `alert_names` ok). `make ops-check-static`: `docker compose config` OK, `promtool check rules` 30 rules OK, the prod `prometheus.yml` OK, `amtool check-config` OK. All 6 images build (`api`, `indexer`, `keeper`, `relayer`, `solver`, `notifier`). The existing `alerts.test.yml` passes on the new labels.
+- **What's built (commits `505118e`..`415c4db`):**
+  1. The in-app inbox + ops alerts (Amendment 2, the 17:17 contract); the solver's `/healthz` + `/readyz` on **`SOLVER_OPS_ADDR`, default 127.0.0.1:9105** (C's 17:50 item 7c).
+  2. The keeper metrics of C's 17:50 REQUEST, under the proposed names: `open_print_deviation_ratio` + `_timestamp_seconds{asset}`, `rpc_up` / `rpc_active{rpc}` (host only), `chain_head_age_seconds`, `nav_print_overdue_seconds` + `nav_last_print_timestamp_seconds{asset}`, wallet balances hourly, `tips_budget_days{stack}` (+ `tips_budget`). J7 loads `sigma-1..3` from keystores.
+  3. The API shows a `pause` reason per market and clock (`STALE_EXTENDED` with the RedStone note, plus `STALE_REGULAR`, `CLOSED`, `REOPEN`, `HALTED`, `CORP_ACTION`). The API, notifier and solver take ordered RPC failover lists. The indexer indexes `feedNav`. Also: the relayer alias `RHTSLA:XNAS=TSLA` (ADR-0120).
+  4. `make services-config CHAIN=46630|421614 [DRYRUN=1] [BOOK=…]`: book → `infra/prod/generated/<id>/` (`book.json`, `chain.env` with the addresses, the start block, the ABI tag `v5-testnet`, the schemas, `WATCH_WALLETS`, `KEEPER_J3_LIVE=1`, J3 batch 9; feed A/B env; the solver profile) + `stack.env` for the API and notifier. It refuses a book from another chain or stack, an unfinalized book, and a missing or non-0600 keystore. It prints role → address only.
+  5. `infra/prod` (project `credence-testnet`): per chain an indexer + keeper; on 46630 feed A/B RedStone committees (3 nodes + an aggregator each); on 421614 the solver + the `nav-strike` timer (once per USBANK session, at open + 30 min, idempotent markers); one API on **127.0.0.1:8787**; one notifier (`inapp`); Postgres with no host port, migrations first, a nightly `pg_dump` (14 days); Prometheus :19090 → Alertmanager :19093 → `POST /v1/ops/alerts`; Grafana :13001. Every §16.1 rule carries a `chain` label, `severity` page|ticket, `priority` and a `runbook`. `mk/ops.mk`: `ops-secrets-init`, `ops-rpc-check`, `services-config`, `testnet-up/down/ps/logs`, `testnet-services-check`, `services-deploy/rollback`, `db-backup/restore`, `ops-check`, `testnet-dry-up/check/down`. Runbooks: 14 in `docs/runbooks/` + the `railway.md` stub.
+  6. The dropped-test list and my user inputs: board 17:32.
+- **The dry run, as proof:**
+  - A's `DRY_RUN=1 deploy.sh` ran equity and nav, each 6/6 with its post-deploy check.
+  - Each anvil was switched to 46630 / 421614 (`anvil_setChainId`). Encrypted keystores in the agreed roles were made for the anvil accounts the dry run committed to.
+  - The health gate passed with every service healthy.
+  - `testnet-services-check` GREEN:
+    - 22 services up;
+    - both indexers `/ready`;
+    - feed A and feed B 33 reports each in 10 min (live RedStone, pre-market);
+    - both keepers leader with no reverted tx;
+    - the API answers for 46630 (7 markets) and 421614 (1);
+    - a NAV print indexed (I ran the `nav-strike` once by hand, the runbook's command: 2 `nav-*` signatures, `feedNav` accepted, `publishNav` as the issuer);
+    - Alertmanager with no failed webhook.
+  - Alerts reached `ops.alert` with `chain`, `severity` and `runbook`. One backup was written (460 KB).
+- **Found and fixed in the dry run:**
+  - C's Rust Dockerfiles lacked `deployments/abis` in the build stage;
+  - the indexer image couldn't write `ponder-env.d.ts`;
+  - the compose command's env prefix;
+  - the check's field parsing;
+  - a manual `nav-strike` has to go through the entrypoint.
+- **Known, expected:**
+  - On the anvils, `StylusActivation` tickets fire (no ArbWasm precompile; A's stand-ins are Solidity). On the real chains they read the real programs.
+  - Until the first USBANK session after the deploy, TBILL is HALTED with its reason, and the check reports that, not a failure.
+- **Open, waiting on others:**
+  - A's deploy READY with `deployments/46630.json` + `421614.json`, and the `v5-testnet` ABI tag (`services-config` warns until it's frozen);
+  - the user's RPC keys (`make ops-secrets-init` → `secrets/rpc.env`) and `OPS_ADMIN_ADDRESSES`;
+  - A's `make testnet-keys` with `KEYSTORE_DIR=$HOME/.credence/keys`.
+- **Then, per the brief:** `make ops-rpc-check` → `make testnet-up` → `make testnet-services-check` → the first NAV print → `make db-backup` → the final READY and `docs/handoff/sprint-5-backend-report.md`.
