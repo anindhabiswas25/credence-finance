@@ -1,0 +1,92 @@
+#!/usr/bin/env bash
+# make testnet-keys CHAIN=46630|421614 (ADR-0122, ADR-0014): every service keystore of one testnet chain, in Engineer
+# B's layout, and their ADDRESSES ONLY written into config/<chainId>.json.
+#   KEYSTORE_DIR/<chainId>/<role>.json      encrypted (scrypt) keystore, `cast wallet new` format, 0600
+#   KEYSTORE_DIR/<chainId>/<role>.password  a random 32-byte password (base64, no trailing newline), 0600
+# Roles (board, BE-chain 2026-10-01 17:05, agreed with B):
+#   46630:  relayer-a-node-1..3 → relayers.feedA, relayer-b-node-1..3 → relayers.feedB, sigma-1..3 → sigma.signers,
+#           relayer-a-submitter, relayer-b-submitter, keeper (gas only)
+#   421614: nav-1..3 → relayers.nav, sigma-1..3 → sigma.signers, issuer → fund.issuer + fund.reserveWallet,
+#           keeper → registryOperators, solver-<SOLVER_NAME> → navSolvers, nav-submitter (gas only)
+# Every role is also listed in the config's `serviceKeys` {role: address} (B's services-config and the funding list).
+# An existing keystore is never overwritten: it is kept and its address read back, so a re-run only adds what is
+# missing. A config value that differs from the generated one is refused (FORCE_CONFIG=1 replaces it). Never prints a
+# key or a password. KEYSTORE_DIR must be outside the git tree. TESTNET_CONFIG_DIR replaces config/ (the dry-run proof).
+set -euo pipefail
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+CHAIN="${1:?usage: keys.sh 46630|421614}"
+: "${KEYSTORE_DIR:?KEYSTORE_DIR, the service keystore directory (outside the repository)}"
+N="${COMMITTEE_SIZE:-3}"
+SOLVER_NAME="${SOLVER_NAME:-main}"
+CFG="${TESTNET_CONFIG_DIR:-$ROOT/contracts/script/testnet/config}/$CHAIN.json"
+[ -f "$CFG" ] || { echo "no config $CFG" >&2; exit 1; }
+KS="$(realpath -m "$KEYSTORE_DIR")"
+case "$KS/" in "$ROOT"/*) echo "refusing: KEYSTORE_DIR $KS is inside the repository" >&2; exit 1 ;; esac
+DIR="$KS/$CHAIN"
+(umask 077 && mkdir -p "$DIR")
+chmod 700 "$DIR"
+
+seq_roles() { for i in $(seq 1 "$N"); do echo "$1-$i"; done; }
+case "$CHAIN" in
+  46630)
+    ROLES=($(seq_roles relayer-a-node) $(seq_roles relayer-b-node) $(seq_roles sigma)
+      relayer-a-submitter relayer-b-submitter keeper) ;;
+  421614)
+    ROLES=($(seq_roles nav) $(seq_roles sigma) issuer keeper "solver-$SOLVER_NAME" nav-submitter) ;;
+  *) echo "CHAIN must be 46630 or 421614" >&2; exit 2 ;;
+esac
+
+declare -A ADDR
+for r in "${ROLES[@]}"; do
+  ks="$DIR/$r.json"; pw="$DIR/$r.password"
+  if [ -e "$ks" ] || [ -e "$pw" ]; then
+    [ -f "$ks" ] && [ -f "$pw" ] || { echo "refusing: $r has only one of $r.json / $r.password" >&2; exit 1; }
+    a="$(cast wallet address --keystore "$ks" --password-file "$pw")"
+    echo "kept     $r $a"
+  else
+    tmp="$(umask 077 && mktemp -d "$DIR/.new.XXXXXX")"
+    (umask 077 && openssl rand -base64 32 | tr -d '\r\n' > "$tmp/pw")
+    a="$(CAST_PASSWORD="$(cat "$tmp/pw")" cast wallet new "$tmp" k --json | jq -r '.data[0].address')"
+    [[ "$a" =~ ^0x[0-9a-fA-F]{40}$ ]] || { rm -rf "$tmp"; echo "cast wallet new failed for $r" >&2; exit 1; }
+    chmod 600 "$tmp/k" "$tmp/pw"
+    mv -n "$tmp/k" "$ks"; mv -n "$tmp/pw" "$pw"; rm -rf "$tmp"
+    # read back through the files as they now are: the password opens the keystore, and it is the address we write
+    [ "$(cast wallet address --keystore "$ks" --password-file "$pw")" = "$a" ] \
+      || { echo "keystore read-back failed for $r" >&2; exit 1; }
+    echo "created  $r $a"
+  fi
+  ADDR[$r]="$a"
+done
+
+list() { local out=() r; for r in "$@"; do out+=("${ADDR[$r]}"); done; printf '%s\n' "${out[@]}" | jq -R . | jq -sc .; }
+# key=value pairs of jq paths → JSON values the config must hold
+declare -A WANT
+if [ "$CHAIN" = 46630 ]; then
+  WANT[.relayers.feedA]="$(list $(seq_roles relayer-a-node))"
+  WANT[.relayers.feedB]="$(list $(seq_roles relayer-b-node))"
+else
+  WANT[.relayers.nav]="$(list $(seq_roles nav))"
+  WANT[.fund.issuer]="\"${ADDR[issuer]}\""
+  WANT[.fund.reserveWallet]="\"${ADDR[issuer]}\""
+  WANT[.registryOperators]="$(list keeper)"
+  WANT[.navSolvers]="$(list "solver-$SOLVER_NAME")"
+fi
+WANT[.sigma.signers]="$(list $(seq_roles sigma))"
+
+norm() { jq -c 'if type == "array" then map(ascii_downcase) | sort elif type == "string" then ascii_downcase else . end'; }
+for k in "${!WANT[@]}"; do
+  have="$(jq -c "$k // empty" "$CFG")"
+  case "$have" in ""|'""'|"[]"|null) continue ;; esac
+  if [ "$(echo "$have" | norm)" != "$(echo "${WANT[$k]}" | norm)" ] && [ "${FORCE_CONFIG:-0}" != 1 ]; then
+    echo "refusing: $CFG $k already holds other addresses (FORCE_CONFIG=1 replaces them)" >&2; exit 1
+  fi
+done
+
+TMP="$(mktemp)"; cp "$CFG" "$TMP"
+for k in "${!WANT[@]}"; do jq --argjson v "${WANT[$k]}" "$k = \$v" "$TMP" > "$TMP.n" && mv "$TMP.n" "$TMP"; done
+keys="$(for r in "${ROLES[@]}"; do jq -n --arg r "$r" --arg a "${ADDR[$r]}" '{($r): $a}'; done | jq -s 'add')"
+jq --argjson k "$keys" \
+  '.serviceKeys = ($k + {"_comment": "role → address, generated by make testnet-keys; keystores in KEYSTORE_DIR/<chainId>/<role>.json (not in git)"})' \
+  "$TMP" > "$TMP.n" && mv "$TMP.n" "$CFG"; rm -f "$TMP"
+echo "wrote the addresses into $CFG"
+echo "needs test ETH on $CHAIN (gas payers): $(for r in "${ROLES[@]}"; do case "$r" in *submitter|keeper|issuer|solver-*) printf '%s ' "$r" ;; esac; done)"

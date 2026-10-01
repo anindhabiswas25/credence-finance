@@ -5,3 +5,5 @@ cache/
 coverage/
 lcov.info
 broadcast/
+# the fork rehearsal's broadcasts (fork_rehearsal.sh)
+broadcast-fork/

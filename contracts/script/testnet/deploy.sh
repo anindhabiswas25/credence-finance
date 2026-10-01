@@ -8,8 +8,11 @@
 # Steps: 1 DeployTestnet (Safes, timelock at delay 0 with the deployer, every contract, listing) → 2 the Stylus
 # programs (cargo stylus deploy; stand-ins on anvil) → 3 router wiring → 4 the risk bundles, each call scheduled and
 # executed through the timelock, every hash read back → 5 FinalizeTestnet (Gov Safe, 1 h, no deployer role) →
-# 6 postdeploy_check.sh. Refuses a re-run (the book exists), a missing input, and another chain.
-# Real chains: DEPLOYER_ACCOUNT (a `cast wallet import`ed keystore) and DEPLOYER_PASSWORD_FILE; never a key in the env.
+# 6 postdeploy_check.sh. The book also gets each contract's deploy block, the linked libraries and the ABI tag
+# (book_meta.sh). Refuses a re-run (the book exists), a missing input, and another chain.
+# Real chains: DEPLOYER_KEYSTORE (a keystore file) or DEPLOYER_ACCOUNT (a `cast wallet import`ed name), and
+# DEPLOYER_PASSWORD_FILE; never a key in the env. FORK=1 (fork_rehearsal.sh): the same path against an anvil fork of the
+# stack's chain, with the Stylus stand-ins and the book deployments/<chainId>.fork.json.
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 STACK="${1:?usage: deploy.sh equity|nav}"
@@ -32,8 +35,10 @@ if [ "${DRY_RUN:-0}" = 1 ]; then
   [ "$(cast chain-id --rpc-url "$RPC")" = 31337 ] || { echo "DRY_RPC is not plain anvil (31337)" >&2; exit 1; }
   refuse_if_deployed
   REAL_RPC="$(cfg .rpc)"
+  # Safe v1.4.1 factory, singleton, fallback handler, and MultiSendCallOnly (gov.sh); read-only, a public RPC that
+  # hangs fails the dry run
   for a in 0x4e1DCf7AD4e460CfD30791CCC4F9c8a4f820ec67 0x29fcB43b46531BcA003ddC8FCB67FFE91900C762 \
-           0xfd0732Dc9E303f09fCEf3a7388Ad10A83459Ec99; do   # read-only; a public RPC that hangs fails the dry run
+           0xfd0732Dc9E303f09fCEf3a7388Ad10A83459Ec99 0x9641d764fc13c8B624c04430C7356C1C7C8102e2; do
     code="$(timeout 60 cast code "$a" --rpc-url "$REAL_RPC")" && [ "${#code}" -gt 2 ] \
       || { echo "could not read the canonical Safe contract $a from $REAL_RPC" >&2; exit 1; }
     cast rpc --rpc-url "$RPC" anvil_setCode "$a" "$code" >/dev/null
@@ -50,10 +55,15 @@ if [ "${DRY_RUN:-0}" = 1 ]; then
 else
   [ "$(cast chain-id --rpc-url "$RPC")" = "$CID" ] || { echo "RPC is not chain $CID" >&2; exit 1; }
   refuse_if_deployed
-  : "${DEPLOYER_ACCOUNT:?a cast keystore account (cast wallet import <name> --interactive)}"
+  # DEPLOYER_KEYSTORE (a keystore file), or DEPLOYER_ACCOUNT (a name in ~/.foundry/keystores)
+  if [ -z "${DEPLOYER_KEYSTORE:-}" ]; then
+    : "${DEPLOYER_ACCOUNT:?a cast keystore account (cast wallet import <name> --interactive) or DEPLOYER_KEYSTORE}"
+    DEPLOYER_KEYSTORE="$HOME/.foundry/keystores/$DEPLOYER_ACCOUNT"
+  fi
+  [ -f "$DEPLOYER_KEYSTORE" ] || { echo "no keystore $DEPLOYER_KEYSTORE" >&2; exit 1; }
   : "${DEPLOYER_PASSWORD_FILE:?the keystore password file}"
-  export DEPLOYER="$(cast wallet address --account "$DEPLOYER_ACCOUNT" --password-file "$DEPLOYER_PASSWORD_FILE")"
-  KEY=(--account "$DEPLOYER_ACCOUNT" --password-file "$DEPLOYER_PASSWORD_FILE")
+  export DEPLOYER="$(cast wallet address --keystore "$DEPLOYER_KEYSTORE" --password-file "$DEPLOYER_PASSWORD_FILE")"
+  KEY=(--keystore "$DEPLOYER_KEYSTORE" --password-file "$DEPLOYER_PASSWORD_FILE")
 fi
 send() { cast send --rpc-url "$RPC" "${KEY[@]}" "$@" --json | jq -e '.status == "0x1"' >/dev/null; }
 
@@ -63,22 +73,28 @@ say "1/6 DeployTestnet ($STACK, chain $(cast chain-id --rpc-url "$RPC"), deploye
 ROUTER="$(jq -r .shared.riskEngine "$BOOK")"; TL="$(jq -r .shared.timelock "$BOOK")"
 
 say "2/6 risk-engine programs for router $ROUTER"
-if [ "${DRY_RUN:-0}" = 1 ]; then
+STYLUS_FROM_BLOCK="$(cast block-number --rpc-url "$RPC")"   # the programs' start block (a lower bound) for the book
+if [ "${DRY_RUN:-0}" = 1 ] || [ "${FORK:-0}" = 1 ]; then   # anvil (plain or a fork) cannot run WASM: the stand-ins
   create() { (cd "$ROOT/contracts" && forge create "script/testnet/DryRunPrograms.sol:$1" --rpc-url "$RPC" "${KEY[@]}" \
     --broadcast --constructor-args "$ROUTER" | grep -oE 'Deployed to: 0x[0-9a-fA-F]{40}' | grep -oE '0x[0-9a-fA-F]{40}'); }
   PRICING="$(create DryRunPricingProgram)"; AUCTION="$(create DryRunAuctionMathProgram)"; P_META=dry-run; A_META=dry-run
+  P_TX=""; A_TX=""
 else
   WS="$("$ROOT/stylus/risk-engine/scripts/stylus-ws.sh")"
-  KS="$HOME/.foundry/keystores/$DEPLOYER_ACCOUNT"
+  KS="$DEPLOYER_KEYSTORE"
   # cargo stylus reads the password file verbatim (foundry trims it): a copy without the trailing newline
   PW_STYLUS="$(umask 077 && mktemp)"; trap 'rm -f "$PW_STYLUS"' EXIT
   tr -d '\r\n' < "$DEPLOYER_PASSWORD_FILE" > "$PW_STYLUS"
-  program() { # contract args… → address
+  LOGS="$ROOT/target/testnet-deploy/$CID"; mkdir -p "$LOGS"   # kept: the deploy logs survive a failed run
+  program() { # contract args… → address (the deployment tx stays in $LOGS/<contract>.log for testnet-verify)
     (cd "$WS" && cargo stylus deploy --no-verify --contract "$1" --endpoint "$RPC" --keystore-path "$KS" \
       --keystore-password-path "$PW_STYLUS" --constructor-args "${@:2}" 2>&1 | sed 's/\x1b\[[0-9;]*m//g') \
-      | grep -oE 'deployed code at address: 0x[0-9a-fA-F]{40}' | grep -oE '0x[0-9a-fA-F]{40}'
+      > "$LOGS/$1.log"
+    grep -oE 'deployed code at address: 0x[0-9a-fA-F]{40}' "$LOGS/$1.log" | grep -oE '0x[0-9a-fA-F]{40}' | tail -1
   }
+  dtx() { grep -oE 'deployment tx hash: 0x[0-9a-fA-F]{64}' "$LOGS/$1.log" | grep -oE '0x[0-9a-fA-F]{64}' | tail -1; }
   PRICING="$(program credence-risk-engine "$ROUTER" "$ROUTER")"; AUCTION="$(program credence-auction-math "$ROUTER")"
+  P_TX="$(dtx credence-risk-engine)"; A_TX="$(dtx credence-auction-math)"
   P_META="$(sha256sum "$WS/target/wasm32-unknown-unknown/release/deps/credence_risk_engine.wasm" | cut -d' ' -f1)"
   A_META="$(sha256sum "$WS/target/wasm32-unknown-unknown/release/deps/credence_auction_math.wasm" | cut -d' ' -f1)"
 fi
@@ -113,9 +129,11 @@ say "5/6 FinalizeTestnet (Gov Safe, delay $TIMELOCK_DELAY s, deployer roles revo
 (cd "$ROOT/contracts" && BOOK="$BOOK" forge script script/testnet/FinalizeTestnet.s.sol:FinalizeTestnet \
   --rpc-url "$RPC" --broadcast --slow "${KEY[@]}" --sender "$DEPLOYER" >/dev/null)
 TMP="$(mktemp)"
-jq --arg p "$PRICING" --arg a "$AUCTION" --arg pm "$P_META" --arg am "$A_META" \
-  '.stylus = {pricing: {address: $p, wasmSha256: $pm}, auctionMath: {address: $a, wasmSha256: $am}}' "$BOOK" > "$TMP" \
+jq --arg p "$PRICING" --arg a "$AUCTION" --arg pm "$P_META" --arg am "$A_META" --arg pt "$P_TX" --arg at "$A_TX" \
+  '.stylus = {pricing: {address: $p, wasmSha256: $pm, deployTx: $pt}, auctionMath: {address: $a, wasmSha256: $am, deployTx: $at}}' \
+  "$BOOK" > "$TMP" \
   && mv "$TMP" "$BOOK"
+STYLUS_FROM_BLOCK="$STYLUS_FROM_BLOCK" bash "$ROOT/contracts/script/testnet/book_meta.sh" "$BOOK" "$(cast chain-id --rpc-url "$RPC")"
 
 say "6/6 post-deploy check"
 bash "$ROOT/contracts/script/testnet/postdeploy_check.sh" "$STACK"

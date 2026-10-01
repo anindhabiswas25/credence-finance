@@ -5,6 +5,7 @@ CONTRACTS_DIR   := contracts
 # v0 is frozen history (S1), v1 = S2 (ADR-0104), v2 = S3 (ADR-0110), v3 = S4 (ADR-0111), v4 = S5 multiplier (ADR-0119),
 # v5 = S5 J3 revert (ADR-0114). Never re-export a version that has been handed over (v0..v4).
 ABI_VERSION     ?= v5
+ABI_TAG         ?= v5-testnet
 ABI_OUT         := deployments/abis/$(ABI_VERSION)
 DEVNODE_RPC     ?= http://127.0.0.1:8547
 # Pre-funded dev key of nitro-devnode (public, local only; never used on a real network).
@@ -31,7 +32,7 @@ ABI_IMPLS ?= CalendarStore AssetClock CredencePriceFeed OracleAdapter SequencerH
 
 .PHONY: abis-check local-deploy-clock contracts-deps contracts-build contracts-test contracts-invariant contracts-coverage contracts-fmt \
   contracts-fmt-check contracts-snapshot contracts-clean abis-export risk-build risk-test risk-lint risk-fmt stylus-test stylus-abi-check \
-  stylus-check stylus-export-abi devnode-up devnode-down devnode-deploy-engine stylus-diff risk-validate-set risk-load-set risk-py-develop risk-py-test risk-wasm risk-wasm-test local-deploy-core stylus-repro devnode-integration devnode-gas testnet-deploy testnet-dry-run testnet-postdeploy-check
+  stylus-check stylus-export-abi devnode-up devnode-down devnode-deploy-engine stylus-diff risk-validate-set risk-load-set risk-py-develop risk-py-test risk-wasm risk-wasm-test local-deploy-core stylus-repro devnode-integration devnode-gas testnet-deploy testnet-dry-run testnet-postdeploy-check testnet-keys testnet-dry-run-filled testnet-verify testnet-fork-rehearsal gov-propose gov-sign gov-exec gov-status gov-dry-run
 
 contracts-deps: ## Install pinned Solidity deps into contracts/lib (OZ, forge-std, solady) if missing
 	@cd $(CONTRACTS_DIR) && \
@@ -74,12 +75,13 @@ abis-export: contracts-build ## Export frozen ABIs to deployments/abis/$(ABI_VER
 	done
 	@echo "exported $$(ls $(ABI_OUT) | wc -l) ABIs to $(ABI_OUT)"
 
-abis-check: ## ABIs are additive release to release except the ADR-listed breaks (v0→v1, v1→v2, v2→v3, v4→v5; v3→v4 additive); regenerates each CHANGELOG.md
+abis-check: ## ABIs are additive release to release except the ADR-listed breaks (v0→v1, v1→v2, v2→v3, v4→v5; v3→v4 additive); regenerates each CHANGELOG.md; the frozen testnet tag ABI_TAG == v5 == the build
 	python3 $(CONTRACTS_DIR)/script/abi_diff.py deployments/abis/v0 deployments/abis/v1 --write deployments/abis/v1/CHANGELOG.md
 	python3 $(CONTRACTS_DIR)/script/abi_diff.py deployments/abis/v1 deployments/abis/v2 --write deployments/abis/v2/CHANGELOG.md
 	python3 $(CONTRACTS_DIR)/script/abi_diff.py deployments/abis/v2 deployments/abis/v3 --write deployments/abis/v3/CHANGELOG.md
 	python3 $(CONTRACTS_DIR)/script/abi_diff.py deployments/abis/v3 deployments/abis/v4 --write deployments/abis/v4/CHANGELOG.md
 	python3 $(CONTRACTS_DIR)/script/abi_diff.py deployments/abis/v4 deployments/abis/v5 --write deployments/abis/v5/CHANGELOG.md
+	python3 $(CONTRACTS_DIR)/script/abi_tag.py check deployments/abis $(ABI_TAG) $(CONTRACTS_DIR)/out
 
 risk-build: ## Build risk-core and risk-cli (native, release)
 	cargo build --release -p credence-risk-core -p credence-risk-cli
@@ -168,6 +170,36 @@ testnet-deploy: contracts-build ## Deploy one testnet stack: STACK=equity|nav (r
 
 testnet-dry-run: contracts-build ## Both testnet stacks end to end on a fresh plain anvil each (DRY_RUN=1), post-deploy check included
 	@for s in equity nav; do rm -f deployments/31337.$$s.dryrun.json; DRY_RUN=1 bash $(CONTRACTS_DIR)/script/testnet/deploy.sh $$s || exit 1; done
+
+testnet-keys: ## Service keystores of CHAIN=46630|421614 into KEYSTORE_DIR/<chainId>/<role>.json + .password; addresses only into config/<chainId>.json
+	@bash $(CONTRACTS_DIR)/script/testnet/keys.sh $(CHAIN)
+
+testnet-dry-run-filled: contracts-build ## testnet-dry-run on copies of both configs filled by testnet-keys (throwaway KEYSTORE_DIR; the committed configs are untouched)
+	@T="$$(mktemp -d)"; trap 'rm -rf "$$T"' EXIT; cp $(CONTRACTS_DIR)/script/testnet/config/*.json "$$T/"; \
+	for c in 46630 421614; do KEYSTORE_DIR="$$T/ks" TESTNET_CONFIG_DIR="$$T" bash $(CONTRACTS_DIR)/script/testnet/keys.sh $$c >/dev/null || exit 1; done; \
+	for s in equity nav; do rm -f deployments/31337.$$s.dryrun.json; \
+	  TESTNET_CONFIG_DIR="$$T" DRY_RUN=1 bash $(CONTRACTS_DIR)/script/testnet/deploy.sh $$s || exit 1; done
+
+testnet-verify: ## Verify one stack's contracts (STACK=equity|nav): Blockscout (46630) / Arbiscan (421614, ETHERSCAN_API_KEY) + cargo stylus verify; idempotent; status into the book's .verify
+	@bash $(CONTRACTS_DIR)/script/testnet/verify.sh $(STACK)
+
+testnet-fork-rehearsal: contracts-build ## Deploy pre-flight (≤ 30 min): the whole deploy of STACK=equity|nav on an anvil fork of its chain (Stylus stand-ins); book <chainId>.fork.json
+	@bash $(CONTRACTS_DIR)/script/testnet/fork_rehearsal.sh $(STACK)
+
+gov-propose: ## Governance proposal after the deploy: STACK=equity|nav ACTION=list-market|caps|risk-bundle|calendar|pause|unpause|unpause-gov ARGS="KEY=VALUE …" → deployments/gov/<chainId>/… (Safe Transaction Builder JSON + CLI)
+	@bash $(CONTRACTS_DIR)/script/testnet/gov.sh propose $(ACTION) $(ARGS)
+
+gov-sign: ## An owner signs a proposal step: PROPOSAL=<dir> STEP=<name>, OWNER_KEYSTORE + OWNER_PASSWORD_FILE
+	@bash $(CONTRACTS_DIR)/script/testnet/gov.sh sign $(PROPOSAL) $(STEP)
+
+gov-exec: ## Send a proposal step (execTransaction with the signatures, or the timelock execute): PROPOSAL= STEP=, SENDER_KEYSTORE + SENDER_PASSWORD_FILE
+	@bash $(CONTRACTS_DIR)/script/testnet/gov.sh exec $(PROPOSAL) $(STEP)
+
+gov-status: ## A proposal's steps, signatures and timelock operations: PROPOSAL=<dir>
+	@bash $(CONTRACTS_DIR)/script/testnet/gov.sh status $(PROPOSAL)
+
+gov-dry-run: contracts-build ## Every gov-propose action once, end to end, on its own anvil equity dry-run book (:8562)
+	@bash $(CONTRACTS_DIR)/script/testnet/gov_dryrun.sh
 
 testnet-postdeploy-check: ## Post-deploy check of both testnet books (46630.json, 421614.json); DRY_RUN=1 checks the dry-run books; STACK= for one
 	@for s in $(or $(STACK),equity nav); do bash $(CONTRACTS_DIR)/script/testnet/postdeploy_check.sh $$s || exit 1; done

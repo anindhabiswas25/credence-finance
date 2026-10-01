@@ -87,3 +87,64 @@ Blockscout explorer of 46630. `cargo stylus verify` for both programs on both ch
   read-back and `programTimeLeft` on the real chain.
 - The same owner set on both chains means one compromised owner set affects both testnet stacks. Accepted for testnet
   only; mainnet needs its own ruling.
+
+## Addendum (S5 finish, 2026-10-01): service keys, verification, pre-flight, ABI tag, governance
+
+**Service keys (`make testnet-keys CHAIN=…`, `keys.sh`).** Engineer B's layout (ADR-0014):
+`KEYSTORE_DIR/<chainId>/<role>.json` + `<role>.password`, 0600, `cast wallet new` scrypt keystores with a random
+password. Roles agreed on the board (A 17:05, B 17:06):
+- 46630: `relayer-a-node-1..3` → `relayers.feedA`, `relayer-b-node-1..3` → `relayers.feedB`, `sigma-1..3` →
+  `sigma.signers`, and the gas payers `relayer-a-submitter`, `relayer-b-submitter`, `keeper`;
+- 421614: `nav-1..3` → `relayers.nav`, `sigma-1..3` → `sigma.signers`, `issuer` → `fund.issuer` and
+  `fund.reserveWallet`, `keeper` → `registryOperators` (the allowlist job), `solver-main` → `navSolvers`, and
+  `nav-submitter`.
+
+Only addresses go into the config (plus a `serviceKeys` role → address map). An existing keystore is kept and read
+back, never overwritten. A config value that differs is refused unless `FORCE_CONFIG=1`. A `KEYSTORE_DIR` inside the
+repository is refused. No key or password is printed.
+
+**`fund.reserveWallet` = the `issuer` EOA (decision).** `fulfillRedeem` pulls the redemption USDC from the reserve
+wallet with `transferFrom`. With one key that both fulfils and approves, the T+1 redemption can be automated next to
+`nav-strike --publish`. The wallet only ever holds Circle test USDC. Mainnet: the real fund's wallet.
+
+**The dry run keeps a filled config.** It fills only the inputs the config leaves empty. `make testnet-dry-run-filled`
+runs both stacks on copies of the configs filled by `testnet-keys` with a throwaway `KEYSTORE_DIR`.
+
+**The book (`book_meta.sh`, after FinalizeTestnet):**
+- `deployBlocks`: each contract's creation block, which the indexers use as start blocks (for the Stylus programs,
+  the block before their deploy);
+- `creations`: name, source, address, block, compiler profile and constructor arguments, taken from the broadcast;
+- `libraries`;
+- `abiTag`;
+- `stylus.*.deployTx`.
+
+**Verification (`make testnet-verify STACK=…`, `verify.sh`).** `forge verify-contract` for every creation, with the
+linked libraries and `--compilation-profile size` where the deploy used it:
+- 46630: Blockscout, no key;
+- 421614: Etherscan v2 (`ETHERSCAN_API_KEY`).
+
+The Safes are canonical proxies. `cargo stylus verify --no-verify --deployment-tx` checks the same local build that
+was deployed. The status goes into the book's `verify` map. A `verified` entry is skipped, and a failure is only
+recorded, so the command can be re-run.
+
+**Pre-flight (`make testnet-fork-rehearsal STACK=…`).** The whole `deploy.sh` runs against `anvil --fork-url` of the
+real chain, with a throwaway deployer keystore, the book `<chainId>.fork.json` and the broadcasts in
+`contracts/broadcast-fork/`. It runs once per stack, right before the real deploy. It uses the Stylus stand-ins.
+
+**Frozen ABIs.** `deployments/abis/v5-testnet/` is a byte copy of v5 plus a `MANIFEST.json`. `make abis-check`
+requires tag == v5 == the build. If an ABI changes before the deploy, the tag is bumped.
+
+**Governance (`gov.sh`, `make gov-propose|gov-sign|gov-exec|gov-status`).** A proposal is a list of steps under
+`deployments/gov/<chainId>/`. Each step is either one Safe transaction (MultiSendCallOnly v1.4.1 when it has several
+calls) or one open call. Actions:
+- `list-market`, `caps`, `risk-bundle` and `calendar` go Gov Safe → `scheduleBatch` → `executeBatch` after the delay.
+  Batches hold at most 20 calls and 40 KB, and each one is chained to the batch before it;
+- `pause` and `unpause` (6 h) are Guardian Safe calls;
+- `unpause-gov` goes through the timelock.
+
+Each Safe step is also written as Safe Transaction Builder JSON. Safe{Wallet} serves 46630 but not Arbitrum Sepolia
+(421614), so owners there sign with `gov.sh sign` (`cast wallet sign --no-hash` of the Safe transaction hash, at the
+step's future nonce), and `gov.sh exec` sends `execTransaction`. Calendar coverage is the timelock's
+(`CalendarStore.appendSessions`). `make gov-dry-run` runs every action once on an anvil book (the dry run also copies the
+canonical MultiSendCallOnly, which a delegatecall to empty code would otherwise "run" silently; `gov.sh` refuses a
+chain without it).

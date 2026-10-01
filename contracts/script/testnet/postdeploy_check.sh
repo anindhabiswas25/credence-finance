@@ -53,13 +53,14 @@ fi
 for p in pricing auction; do
   a="$(cast call --rpc-url "$RPC" "$ROUTER" "$p()(address)")"
   [ -n "$(cast code --rpc-url "$RPC" "$a" | sed 's/^0x$//')" ] || { echo "MISMATCH engine $p program has no code"; fail=1; }
-  if [ "${DRY_RUN:-0}" != 1 ]; then
+  if [ "${DRY_RUN:-0}" != 1 ] && [ "${FORK:-0}" != 1 ]; then
     left="$(cast call --rpc-url "$RPC" 0x0000000000000000000000000000000000000071 'programTimeLeft(address)(uint64)' "$a" | cut -d' ' -f1)"
     [ "$left" -gt $((360 * 86400)) ] && echo "ok   $p program: $((left / 86400)) days of activation left" \
       || { echo "MISMATCH $p program: $left s of activation left (< 360 days)"; fail=1; }
   fi
 done
 [ "${DRY_RUN:-0}" = 1 ] && echo "note: DRY RUN: the programs are Solidity stand-ins (anvil cannot run WASM); not a real engine"
+[ "${FORK:-0}" = 1 ] && echo "note: FORK REHEARSAL: the programs are Solidity stand-ins (anvil cannot run WASM); not a real engine"
 
 if [ $fail = 0 ]; then echo "POST-DEPLOY CHECK PASSED ($STACK, $BOOK)"; else echo "POST-DEPLOY CHECK FAILED ($STACK)"; fi
 exit $fail

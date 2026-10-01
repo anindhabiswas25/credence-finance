@@ -5,3 +5,6 @@ devnode.*.json
 31337.*
 *.risk-plan.*
 .check-plan.*
+# the fork rehearsal (fork_rehearsal.sh) and the gov dry run are local
+*.fork.json
+gov/31337/
