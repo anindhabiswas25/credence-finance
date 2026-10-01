@@ -27,14 +27,14 @@ prom() { curl -sf --max-time 10 "$PROM/api/v1/query" --data-urlencode "query=$1"
 echo "1. services"
 ps="$($DC ps -a --format json 2>/dev/null | jq -s 'if type == "array" and (.[0] | type) == "array" then .[0] else . end')"
 [ -n "$ps" ] && [ "$ps" != "[]" ] || { bad "the stack is not running (make testnet-up)"; exit 1; }
-while IFS=$'\t' read -r svc state health code; do
+while IFS='|' read -r svc state health code; do
   case "$svc" in
     migrate) [ "$state" = exited ] && [ "$code" = 0 ] && ok "migrate exited 0" || bad "migrate: $state (exit $code)" ;;
     *) if [ "$state" != running ]; then bad "$svc: $state"
        elif [ -n "$health" ] && [ "$health" != healthy ]; then bad "$svc: $health"
        else ok "$svc ${health:-running}"; fi ;;
   esac
-done < <(echo "$ps" | jq -r '.[] | [.Service, .State, (.Health // ""), (.ExitCode // 0 | tostring)] | @tsv' | sort)
+done < <(echo "$ps" | jq -r '.[] | [.Service, .State, (.Health // ""), (.ExitCode // 0 | tostring)] | join("|")' | sort)
 
 echo "2. indexers caught up"
 for c in $CHAINS; do
