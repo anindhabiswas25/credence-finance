@@ -78,6 +78,13 @@ async fn main() -> Result<()> {
     env::load_dotenv();
     telemetry::init("credence-solver");
     let cli = Cli::parse();
+    // /healthz + /readyz (Railway-ready, Amendment 2); ready once the solvers are set up. Private by default.
+    let ops = credence_common::ops::OpsState::new("credence-solver");
+    credence_common::ops::serve(
+        env::parse_or("SOLVER_OPS_ADDR", "127.0.0.1:9105".parse()?)?,
+        ops.router(),
+    )
+    .await?;
     let cfg: SolverConfig = serde_json::from_str(&std::fs::read_to_string(&cli.config)?)?;
     let read = ProviderBuilder::new()
         .connect_http(cli.rpc.parse()?)
@@ -132,6 +139,7 @@ async fn main() -> Result<()> {
     let mut scanned = 0u64;
     let started = std::time::Instant::now();
     tracing::info!(%venue, solvers = solvers.len(), "solver bot running");
+    ops.set_ready(true);
     loop {
         if cli.exit_after_s > 0 && started.elapsed() > Duration::from_secs(cli.exit_after_s) {
             return Ok(());
