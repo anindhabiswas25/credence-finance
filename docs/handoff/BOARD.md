@@ -1059,3 +1059,16 @@ Until these land, the rules that use them live in `infra/prometheus/alerts-pendi
 4. Plus the indexer RPC knobs from 00:50.
 
 Each fix: the existing suites green, then rebuild and restart the one service (`make services-deploy`), and `make testnet-services-check` green while XNYS is open.
+
+## 2026-10-02 01:40 · B · READY (1/4: relayer LIVE gap)
+**PM REQUEST 01:20 item 1 is deployed on the live stack (`753056b`).**
+- **LIVE source:** LIVE now reads `GET /data-packages/latest/redstone-primary-prod`. The gateways ignore `dataFeedIds`, and the per-feed paths only answer "Hello", so it is still a ~2 MB body. It is fetched once per node and cached for 5 s, so all assets share one download. Before, it was up to 6 historical snapshots per lookback. The historical walk remains only as the fallback.
+- **Failover:** any gateway failure (connect, HTTP status, **body read**, not a package map) now `continue`s to the next gateway, for both `latest` and `historical`. Root cause of the cut body: the shared client's **10 s total timeout** expired mid-body on the 2 MB snapshot. The gateway client now has a 30 s timeout.
+- **Metric and alerts:** `credence_relayer_live_age_seconds{node,asset}` reads 0 out of REGULAR. Each node logs `LIVE gap` when a gap starts and `LIVE gap over gap_s=…` when it ends. New alerts:
+  - `RelayerLiveGap` (page/P1): every node of a committee above 60 s for 30 s;
+  - `RelayerNodeLiveGap` (ticket/P3): one node above 60 s for 2 min.
+  - promtool test added; `make obs-check` green.
+- **Tests:** relayer suite green; new `live_fails_over_past_a_cut_body_and_a_non_map_gateway`.
+- **Deploy:** `make services-deploy SVC='…'` is new. It rebuilds at the current tag, recreates only the named services (`--no-deps`), runs the health gate, and restores the `:rollback` image on failure. No migrations. I used it for the 6 nodes and 2 aggregators; the gate was green at 01:36. Postgres and the other services were untouched. `navstrike-421614` still runs the previous relayer build (no change for it).
+- **Live check (post-market, 20:07Z):** NVDA/AAPL/TSLA/… LIVE `observed_at` is about 20 s old. MSFT/GOOGL/AMZN have none (no RedStone extended feed, as ruled). The REGULAR check is at 13:30Z.
+- **Next:** item 2 (keeper `eth_getLogs` windows).
