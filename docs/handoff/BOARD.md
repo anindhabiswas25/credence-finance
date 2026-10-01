@@ -940,3 +940,52 @@ Until these land, the rules that use them live in `infra/prometheus/alerts-pendi
   - the user's RPC keys (`make ops-secrets-init` → `secrets/rpc.env`) and `OPS_ADMIN_ADDRESSES`;
   - A's `make testnet-keys` with `KEYSTORE_DIR=$HOME/.credence/keys`.
 - **Then, per the brief:** `make ops-rpc-check` → `make testnet-up` → `make testnet-services-check` → the first NAV print → `make db-backup` → the final READY and `docs/handoff/sprint-5-backend-report.md`.
+
+## 2026-10-01 18:15 · BE-chain · READY
+**BUILD READY (Engineer A, finish brief items 1–7), commit `ce4c1e1`. Regression guard green on that tree: `make contracts-test` 366 passed / 0 failed, `risk-test` ok, `abis-check` ok (incl. the new tag check). No new tests (A4).**
+- **1. `make testnet-keys CHAIN=46630|421614`** (`keys.sh`): roles exactly as agreed (A 17:05 / B 17:06). **Run for real with `KEYSTORE_DIR=$HOME/.credence/keys`** (B's default; dir 0700, files 0600, outside the repo). Both configs now hold the committees, `sigma.signers`, `fund.issuer` = `fund.reserveWallet` = `issuer`, `registryOperators` = [`keeper`], `navSolvers` = [`solver-main`], plus a `serviceKeys` role → address map. Addresses only; nothing secret in git.
+- **Dry-run proof with filled configs:** `make testnet-dry-run-filled` (configs copied, filled by `testnet-keys` into a throwaway dir, then both stacks): equity 165 checks + 36 hashes, NAV 90 checks + 4 hashes, **PASSED in 5 min**. The dry run now replaces only the inputs a config leaves empty.
+- **2. `make testnet-verify STACK=…`** (`verify.sh`): `forge verify-contract` for every creation with its libraries and constructor args (Blockscout on 46630, no key; Etherscan v2 on 421614); `cargo stylus verify --no-verify --deployment-tx` for both programs. Idempotent; the status goes into the book's `.verify`. **Built, not run** (it needs a real deploy).
+- **3. `make testnet-fork-rehearsal STACK=…`** (`fork_rehearsal.sh`): the whole `deploy.sh` against `anvil --fork-url` of the real chain, with a throwaway deployer keystore, book `<id>.fork.json`, broadcasts in `contracts/broadcast-fork/`, and the Stylus stand-ins (the header says why). **Built, not run** (A4); it is deploy step 1.
+- **4. ABI tag `v5-testnet`** = `deployments/abis/v5-testnet/` (a byte copy of v5 + `MANIFEST.json`). `abis-check` now requires tag == v5 == the build. **B: pin to `v5-testnet`.** Each book now gets (`book_meta.sh`):
+  - `deployBlocks` (`"shared.timelock": n, "equity.market": n, …`; the Stylus programs get the block before their deploy);
+  - `creations` (constructor args, compiler profile);
+  - `libraries`, `abiTag` and `stylus.*.deployTx`.
+- **5. Governance** (`gov.sh` + `GovPropose.s.sol`; `make gov-propose ACTION= ARGS=`, `gov-sign`, `gov-exec`, `gov-status`):
+  - Actions: `list-market`, `caps`, `risk-bundle`, `calendar` (the timelock owns `appendSessions`) go Gov Safe → timelock; `pause` / `unpause` (6 h) are Guardian Safe calls; `unpause-gov` goes through the timelock.
+  - Output: Safe Transaction Builder JSON for each Safe step, plus a CLI path: owners sign with keystores at the step's future nonce, `exec` sends `execTransaction` or the open `executeBatch`.
+  - **`make gov-dry-run`: all 7 actions PASSED from a fresh anvil (11 min)**, including a MultiSend Safe transaction and the 57-call equity bundle as 5 chained batches, every hash read back.
+- **6–7. `pre-mainnet.md` §6:** Amendment 2 (PM-12..14), my dropped Phase 2 incl. the 17 Slither Medium + 4 Aderyn High keys with the multiplier path first (PM-15..21), **B's 17:32 list verbatim** (PM-22..26a), and deploy-tooling findings (PM-27..31). ADR-0122 has an addendum.
+- **Findings (no action needed for testnet; rows PM-27 and PM-30):**
+  - (a) forge deploys almost every contract from the `size` profile (optimizer_runs 200), because the deploy script shares a compilation unit with the market. Verify handles it; mainnet should pick profiles deliberately.
+  - (b) **Safe{Wallet} serves Robinhood Testnet 46630 but not Arbitrum Sepolia 421614** (Safe config service, checked today). On 421614 the owners sign with `make gov-sign` (CLI).
+- **Gas from the dry runs (anvil, Stylus stand-ins):** equity 93.4 M gas, NAV 62.4 M gas. Live gas prices: 46630 0.01 gwei, 421614 0.035 gwei. That is ≈ 0.001 ETH and ≈ 0.002 ETH of execution, plus the programs (0.00065 ETH measured on 46630) and the L1 data fee, which anvil doesn't model. Amounts with margin are in the REQUEST below.
+
+## 2026-10-01 18:16 · BE-chain · REQUEST
+**User (via the PM): everything the testnet deploy needs from you, in one place. Please don't paste keys or passwords on the board or in chat.**
+1. **A deployer keystore and test ETH.** Either:
+   - **(a)** run `cast wallet import credence-deployer --interactive` yourself and put its password in a file readable only by you (`chmod 600`), then tell the PM the account name and the file's path; or
+   - **(b)** say "A generates it": I create `~/.credence/deployer/deployer.json` + `.password` (0600) the same way as the service keys, and post only its address.
+
+   Then fund the deployer address:
+   - **Robinhood Chain testnet (46630): 0.1 ETH** (`faucet.testnet.chain.robinhood.com`);
+   - **Arbitrum Sepolia (421614): 0.1 ETH** (an Arbitrum Sepolia faucet, or bridge Sepolia ETH).
+
+   Each 0.1 is about 0.05 for the deploy (≈ 25× the measured execution gas, to cover the L1 data fee) plus 0.01 for each service gas wallet, which I top up from the deployer after the deploy:
+   - 46630: `relayer-a-submitter` 0x41438eD87BF428C08Dd619eE36cAa2415a853049, `relayer-b-submitter` 0xef96ada35Bd27934612262cF266D657f875563eE, `keeper` 0x9289517Fb1ac3E1500fFA85F13159Bef060aB730;
+   - 421614: `issuer` 0xb77c65Bc6b2Dcf5a053cE5808BE0B332b1EB78b8, `keeper` 0x1ADa417D2E74dE8703E91cB229D4b91E08C14f40, `solver-main` 0xE356fBd3E57A4D4e9C1f8C121E989e8d4a6A6EC5, `nav-submitter` 0xB70e3f4c901D9383851287b5Ecb407166664fe18.
+
+   The issuer also needs Circle test USDC on 421614 for T+1 redemptions (faucet.circle.com).
+2. **Safe owner addresses** (public addresses only; the same set on both chains is fine):
+   - **Gov: 5 addresses** (3-of-5): the timelock's proposer;
+   - **Guardian: 4 addresses** (2-of-4): pause;
+   - **Ops: ≥ 2 addresses** and its threshold: test-token issuer, vault allocator, faucet owner.
+
+   Hardware wallets are best. On 421614 owners sign from the command line (Safe{Wallet} doesn't serve Arbitrum Sepolia), so at least the signing owners need a keystore or a hardware wallet that `cast` can use.
+3. **`ETHERSCAN_API_KEY`**, a free Etherscan v2 key (etherscan.io → API keys; it covers Arbiscan Sepolia), in the git-ignored `.env`. **Blockscout (46630) needs no key.**
+4. **B's inputs (B 17:32, C 17:30):**
+   - the RPC keys, 2 providers per chain (Alchemy + Chainstack), via `make ops-secrets-init` → `infra/prod/secrets/rpc.env`; then say "RPC keys in place";
+   - `OPS_ADMIN_ADDRESSES` in `infra/prod/.env.prod`.
+5. **Not needed for the deploy:** RedStone's written permission (+ MSFT/GOOGL/AMZN extended hours) gates only a public link to the app (PM 17:20).
+
+**PM: after both BUILD READYs and these inputs, please post the deploy DECISION.** The order is per the brief: fork pre-flight for each stack → equity to 46630 → NAV to 421614 → verify → post-deploy checks → books committed → READY to B.
