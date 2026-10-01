@@ -1,0 +1,10 @@
+# Local testnet stack (owner: BE-backend, was DevOps). Secrets never enter git: RPC keys, keystores, passwords, tokens.
+secrets/
+.env.prod
+backups/
+# make services-config output (per-chain env, the books' copies) and the services' local state
+generated/
+generated-dry/
+state/
+# the documented template is the exception to the root `.env.*` rule
+!.env.prod.example

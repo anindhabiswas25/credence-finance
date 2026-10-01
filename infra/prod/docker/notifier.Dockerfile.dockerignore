@@ -1,0 +1,14 @@
+# Notifier: the Node workspace files it needs and the address books
+*
+!package.json
+!pnpm-lock.yaml
+!pnpm-workspace.yaml
+!packages/config
+!services/notifier
+!deployments
+!infra/prod/docker/entrypoint.sh
+**/node_modules
+**/dist
+**/.env
+**/*.key
+deployments/*.dryrun.json

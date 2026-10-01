@@ -1,0 +1,27 @@
+# Indexer: the Node workspace files it needs, the Rust sources for risk-wasm, and the runtime data
+*
+!package.json
+!pnpm-lock.yaml
+!pnpm-workspace.yaml
+!packages
+!indexer
+!services/relayer
+!services/keeper
+!services/bidder
+!Cargo.toml
+!Cargo.lock
+!rust-toolchain.toml
+!crates
+!stylus
+!calibration/out
+!deployments
+!infra/prod/docker/entrypoint.sh
+**/target
+**/node_modules
+**/dist
+**/.env
+**/*.key
+crates/risk-wasm/pkg
+deployments/*.dryrun.json
+**/.ponder
+indexer/generated

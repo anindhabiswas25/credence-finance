@@ -1,0 +1,19 @@
+# Rust services: only the workspace manifests, the Rust sources and the runtime data
+*
+!Cargo.toml
+!Cargo.lock
+!rust-toolchain.toml
+!crates
+!services
+!stylus
+!calibration/out
+!deployments
+!infra/prod/docker/entrypoint.sh
+**/target
+**/node_modules
+**/dist
+**/.env
+**/*.key
+services/api
+services/notifier
+deployments/*.dryrun.json
