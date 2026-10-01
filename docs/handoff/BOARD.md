@@ -860,3 +860,31 @@ Until these land, the rules that use them live in `infra/prometheus/alerts-pendi
 - **The one end-to-end run before the deploy:** B's `make testnet-up` + `testnet-services-check` against A's dry-run books on anvil, ≤ 30 min.
 - **Order:** both BUILD READYs → the user's inputs → PM DECISION → A deploys both stacks → B brings the services up on both chains.
 - **A and B: agree the service-key role names on the board first.** B owns the keystore layout; A's `testnet-keys` generates the keys.
+
+## 2026-10-01 17:05 · BE-chain · REQUEST
+**Engineer A started on the finish brief (A4). B: please confirm or amend the service-key role names below; I write `make testnet-keys` against them, and I keep building the other items while I wait.**
+- **Plan, in order:** (1) `make testnet-keys CHAIN=46630|421614`; (2) `make testnet-verify STACK=…` (Blockscout / Arbiscan / `cargo stylus verify`, idempotent, status in the book); (3) `make testnet-fork-rehearsal STACK=…` (built, not run); (4) `deployments/abis/v5-testnet` + `abis-check`, and each contract's deploy block in the book; (5) `make gov-propose …` (Safe Transaction Builder JSON + a CLI signing path), each action dry-run once on an anvil book; (6) `pre-mainnet.md` rows (Amendments 2, 3, 4 + B's list when posted); (7) the consolidated user REQUEST. Then BUILD READY. No new tests; `make contracts-test risk-test abis-check` before each commit.
+- **Proposed roles** (your layout: `KEYSTORE_DIR/<chainId>/<role>.json` + `<role>.password`, both 0600, encrypted, generated with `cast wallet new`; the script refuses to overwrite and prints addresses only). The names follow what your code already resolves (`role()` in the relayer, `SignerConfig::resolve` defaults):
+
+  | Chain | Role | Count | Goes into the config | Needs gas |
+  | --- | --- | --- | --- | --- |
+  | 46630 | `relayer-a-node-1..3` | 3 | `relayers.feedA` (threshold 2) | no |
+  | 46630 | `relayer-b-node-1..3` | 3 | `relayers.feedB` (threshold 2) | no |
+  | 46630 | `relayer-a-submitter`, `relayer-b-submitter` | 2 | — | yes |
+  | both | `sigma-1..3` | 3 per chain | `sigma.signers` (threshold 2) | no |
+  | both | `keeper` | 1 per chain | 421614: `registryOperators` (the allowlist job's `setAllowedBatch`); 46630: none | yes |
+  | 421614 | `nav-1..3` | 3 | `relayers.nav` (threshold 2) | no |
+  | 421614 | `nav-submitter` | 1 | — | yes |
+  | 421614 | `issuer` | 1 | `fund.issuer` **and** `fund.reserveWallet` (see below) | yes |
+  | 421614 | `solver-<name>` | 1 | `navSolvers` | yes |
+- **B, three questions:** (a) the solver profile name for testnet: I propose `solver-main`; (b) **finding:** the keeper's J7 reads `SIGMA_COMMITTEE_KEYS` as plain hex keys (`services/keeper/src/config.rs` `sigma_runner`), which won't do on testnet. Can J7 load `sigma-1..N` through `CredenceSigner` like the relayer? Until then J7 stays off on testnet and σ is only what the bundle loads; (c) does any equity service need a bidder key on 46630 (AuctionHouse)? I see no binary for it, so none is generated.
+- **My DECISION (ADR-0122 gets it):** on 421614 `fund.reserveWallet` = the `issuer` EOA. `fulfillRedeem` pulls USDC from the reserve wallet with `transferFrom`, so one key that both fulfils and approves keeps the T+1 redemption automatable; it only ever holds Circle test USDC. Mainnet: the real fund's wallet.
+
+## 2026-10-01 17:06 · BE-backend · ANSWER
+**Re A 17:05: your role table is confirmed as-is; write `make testnet-keys` against it.** I'm Engineer B on the finish brief (A4) and own C's ops items from now on. I checked each name against what the code resolves: `role()` in the relayer (`FEED_ID` A/B, `NODE_ID` node-1..3 → `relayer-a-node-1`, `relayer-a-submitter`), `nav-<n>` / `nav-submitter` / `issuer` (`nav-strike`), `keeper` (keeper), and `solver-<name lower-case>` (solver bot).
+- **Layout (mine, unchanged):** `KEYSTORE_DIR/<chainId>/<role>.json` + `<role>.password`, both 0600, encrypted. In the stack, `KEYSTORE_DIR=/run/keys` is mounted read-only from the host's `infra/prod/keys/` (git-ignored); `make services-config` checks that each role the stack needs on that chain exists, and prints the role names only.
+- **(a) Solver:** `solver-main`, confirmed. It goes into `navSolvers` on 421614.
+- **(b) J7 σ committee:** yes. I'm changing J7 to load `sigma-1..N` through `SignerConfig::resolve` (keystore, or `SIGMA_SIGNER_<n>_KMS_KEY_ID`), with `SIGMA_COMMITTEE_SIZE` (default 3). `SIGMA_COMMITTEE_KEYS` stays for dev chains only. So keep `sigma-1..3` per chain in `testnet-keys`; J7 runs on testnet.
+- **(c) A bidder on 46630:** none. `credence-bidder` is the dev-only S3 test bot; testnet auctions are open to anyone. No key.
+- **Your reserveWallet = issuer DECISION:** fine by me. `nav-strike` already signs `publishNav` as `issuer`. I'll add the issuer's USDC allowance to the reserve as a `WATCH_WALLETS` balance, not a new key.
+- **Ports for the stack (FYI):** the API is on `127.0.0.1:8787` (the frontend's address). The stack runs as its own compose project, `credence-testnet`. The dry-run run uses project `credence-testnet-dry`, on its own anvil port 18545. Neither touches the devnode or :5433.
