@@ -56,8 +56,9 @@ testnet-logs: ## Follow one service's log: SVC=keeper-46630 (default: every serv
 testnet-services-check: ## The steady state after a deploy: services, indexers, feeds, keepers, API, first NAV print, alerts
 	@$(OPS_SRC) DC="$(OPS_COMPOSE)" bash $(OPS_DIR)/scripts/services-check.sh
 
-services-deploy: ## Build the images as TAG (default: git short sha), migrate up, switch, health gate (back to the old tag on failure)
-	@$(OPS_SRC) DC="$(OPS_COMPOSE)" STATE_DIR=$(OPS_STATE) bash $(OPS_DIR)/scripts/deploy.sh deploy $(TAG)
+services-deploy: ## Build the images as TAG (default: git short sha), migrate up, switch, health gate (back to the old tag on failure); SVC='a b' rebuilds and restarts only those services
+	@$(OPS_SRC) DC="$(OPS_COMPOSE)" STATE_DIR=$(OPS_STATE) bash $(OPS_DIR)/scripts/deploy.sh \
+	  $(if $(SVC),service $(SVC),deploy $(TAG))
 
 services-rollback: ## Back to the previous image tag; MIGRATIONS=n rolls back n migrations first
 	@$(OPS_SRC) DC="$(OPS_COMPOSE)" STATE_DIR=$(OPS_STATE) bash $(OPS_DIR)/scripts/deploy.sh rollback $(or $(MIGRATIONS),0)

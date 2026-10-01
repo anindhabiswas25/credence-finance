@@ -201,6 +201,26 @@ pub fn aggregate(
     })
 }
 
+/// [`aggregate`] over packages of mixed timestamps (the gateway's `latest`): the newest timestamp that aggregates.
+pub fn aggregate_newest(
+    feed: &str,
+    pkgs: &[GatewayPackage],
+    signers: &[Address],
+    threshold: usize,
+) -> Option<Aggregated> {
+    let mut ts: Vec<u64> = pkgs.iter().map(|p| p.timestamp_milliseconds).collect();
+    ts.sort_unstable_by(|a, b| b.cmp(a));
+    ts.dedup();
+    ts.into_iter().find_map(|t| {
+        let at: Vec<GatewayPackage> = pkgs
+            .iter()
+            .filter(|p| p.timestamp_milliseconds == t)
+            .cloned()
+            .collect();
+        aggregate(feed, &at, signers, threshold)
+    })
+}
+
 /// OPEN (D1): the first package at or after `open + 5 s` whose value differs from `prior_close`.
 /// `series` is ascending by time.
 pub fn derive_open(series: &[Aggregated], open: u64, prior_close8: u128) -> Option<&Aggregated> {
@@ -250,13 +270,27 @@ pub trait PackageSource: Send + Sync {
     /// The packages of `feed` signed at `ts` (unix seconds on the 10 s grid); `None` if there are none
     /// (yet).
     async fn at(&self, feed: &str, ts: u64) -> VendorResult<Option<Vec<GatewayPackage>>>;
+
+    /// Whether [`Self::latest`] is served (the live gateway); otherwise LIVE walks back through [`Self::at`].
+    fn serves_latest(&self) -> bool {
+        false
+    }
+
+    /// The newest packages of `feed` (any timestamp); `None` if the source has none.
+    async fn latest(&self, _feed: &str) -> VendorResult<Option<Vec<GatewayPackage>>> {
+        Ok(None)
+    }
 }
 
-/// `GET <gateway>/data-packages/historical/redstone-primary-prod/<ms>` (about 24 h of history).
+/// `GET <gateway>/data-packages/historical/redstone-primary-prod/<ms>` (about 24 h of history) for OPEN / CLOSE,
+/// `GET <gateway>/data-packages/latest/redstone-primary-prod` for LIVE. Both answer every feed (~2 MB, the gateways
+/// ignore `dataFeedIds`), so each response is cached and shared by all assets.
 pub struct Gateway {
     pub urls: Vec<String>,
     http: reqwest::Client,
     cache: tokio::sync::Mutex<HashMap<u64, Arc<Snapshot>>>,
+    /// The last `latest` snapshot and when it was fetched; the lock is held across a fetch (one download at a time).
+    latest: tokio::sync::Mutex<Option<(std::time::Instant, Arc<Snapshot>)>>,
 }
 
 pub const HISTORY_GATEWAYS: [&str; 2] = [
@@ -264,13 +298,56 @@ pub const HISTORY_GATEWAYS: [&str; 2] = [
     "https://oracle-gateway-1.a.redstone.finance",
 ];
 
+/// A `latest` snapshot is reused for this long (packages come on a 10 s grid; every asset of a poll shares one).
+pub const LATEST_TTL: std::time::Duration = std::time::Duration::from_secs(5);
+
 impl Gateway {
     pub fn new(urls: Vec<String>) -> Self {
         Self {
             urls,
-            http: super::http_client(),
+            // the snapshots are ~2 MB: the shared client's 10 s total timeout cut bodies mid-read
+            http: reqwest::Client::builder()
+                .timeout(std::time::Duration::from_secs(30))
+                .connect_timeout(std::time::Duration::from_secs(5))
+                .user_agent(concat!("credence-relayer/", env!("CARGO_PKG_VERSION")))
+                .build()
+                .expect("reqwest client"),
             cache: Default::default(),
+            latest: Default::default(),
         }
+    }
+
+    /// The first gateway that answers `path` with a package map; any failure (connect, status, body read,
+    /// not a map) moves on to the next gateway. `Err` carries the last failure.
+    async fn fetch(&self, path: &str) -> Result<Snapshot, String> {
+        let mut last = String::from("no gateway configured");
+        for u in &self.urls {
+            let url = format!("{u}/{path}");
+            let res = match self.http.get(&url).send().await {
+                Ok(r) => r,
+                Err(e) => {
+                    last = format!("{u}: {e}");
+                    continue;
+                }
+            };
+            if !res.status().is_success() {
+                last = format!("{u}: HTTP {}", res.status());
+                continue;
+            }
+            let body = match res.bytes().await {
+                Ok(b) => b,
+                Err(e) => {
+                    last = format!("{u}: body: {e}");
+                    continue;
+                }
+            };
+            // gateway-1 answers "Hello! I am working correctly" for history it does not serve
+            match serde_json::from_slice::<Snapshot>(&body) {
+                Ok(m) => return Ok(m),
+                Err(_) => last = format!("{u}: not a package map"),
+            }
+        }
+        Err(last)
     }
 }
 
@@ -280,43 +357,46 @@ impl Gateway {
         if let Some(m) = self.cache.lock().await.get(&ts) {
             return Ok(Some(m.clone()));
         }
-        let mut last = None;
-        for u in &self.urls {
-            let url = format!(
-                "{u}/data-packages/historical/redstone-primary-prod/{}",
+        let m = match self
+            .fetch(&format!(
+                "data-packages/historical/redstone-primary-prod/{}",
                 ts * 1000
-            );
-            let res = match self.http.get(&url).send().await {
-                Ok(r) => r,
-                Err(e) => {
-                    last = Some(e.to_string());
-                    continue;
-                }
-            };
-            if !res.status().is_success() {
-                last = Some(format!("HTTP {}", res.status()));
-                continue;
+            ))
+            .await
+        {
+            Ok(m) => Arc::new(m),
+            Err(error) => {
+                tracing::debug!(ts, %error, "redstone: no history at this timestamp");
+                return Ok(None);
             }
-            let body = res.text().await.map_err(|e| VendorError::Http {
-                vendor: "redstone",
-                endpoint: "historical".into(),
-                message: e.to_string(),
-            })?;
-            // gateway-1 answers "Hello! I am working correctly" for history it does not serve
-            let Ok(m) = serde_json::from_str::<HashMap<String, Vec<GatewayPackage>>>(&body) else {
-                last = Some(format!("{u}: not a package map"));
-                continue;
-            };
-            let m = Arc::new(m);
-            let mut c = self.cache.lock().await;
-            if c.len() > 256 {
-                c.clear();
-            }
-            c.insert(ts, m.clone());
-            return Ok(Some(m));
+        };
+        let mut c = self.cache.lock().await;
+        if c.len() > 256 {
+            c.clear();
         }
-        tracing::debug!(ts, error = ?last, "redstone: no history at this timestamp");
-        Ok(None)
+        c.insert(ts, m.clone());
+        Ok(Some(m))
+    }
+
+    /// Every feed's newest packages, at most [`LATEST_TTL`] old; `Err` once every gateway failed.
+    pub async fn latest_snapshot(&self) -> VendorResult<Arc<Snapshot>> {
+        let mut slot = self.latest.lock().await;
+        if let Some((at, m)) = slot.as_ref() {
+            if at.elapsed() < LATEST_TTL {
+                return Ok(m.clone());
+            }
+        }
+        let m = Arc::new(
+            self.fetch("data-packages/latest/redstone-primary-prod")
+                .await
+                .map_err(|message| VendorError::Http {
+                    vendor: "redstone",
+                    endpoint: "latest".into(),
+                    message,
+                })?,
+        );
+        *slot = Some((std::time::Instant::now(), m.clone()));
+        Ok(m)
     }
 
     /// A recording of `feeds` from `from` to `to` (inclusive, 10 s grid), in the `Recorded` format.
@@ -346,6 +426,14 @@ impl Gateway {
 impl PackageSource for Gateway {
     async fn at(&self, feed: &str, ts: u64) -> VendorResult<Option<Vec<GatewayPackage>>> {
         Ok(self.snapshot(ts).await?.and_then(|m| m.get(feed).cloned()))
+    }
+
+    fn serves_latest(&self) -> bool {
+        true
+    }
+
+    async fn latest(&self, feed: &str) -> VendorResult<Option<Vec<GatewayPackage>>> {
+        Ok(self.latest_snapshot().await?.get(feed).cloned())
     }
 }
 
@@ -587,9 +675,28 @@ impl RedStoneLive {
         }
     }
 
-    /// The newest verified package at or before now.
+    /// The newest verified package at or before now: the gateway's `latest` when it is served and within the
+    /// lookback, else a walk back through the history (a `latest` outage costs history downloads, not LIVE).
     pub async fn latest(&self, feed: &str) -> VendorResult<Option<Aggregated>> {
-        let mut t = grid_down((self.now)());
+        let now = (self.now)();
+        let oldest = grid_down(now).saturating_sub((LIVE_LOOKBACK_SLOTS - 1) * GRID_S);
+        if self.source.serves_latest() {
+            match self.source.latest(feed).await {
+                Ok(Some(p)) => {
+                    if let Some(a) = aggregate_newest(feed, &p, &self.signers, self.threshold)
+                        .filter(|a| a.at() >= oldest && a.at() <= now)
+                    {
+                        return Ok(Some(a));
+                    }
+                    tracing::debug!(feed, "redstone: latest has no fresh package, walking the history");
+                }
+                Ok(None) => {}
+                Err(e) => {
+                    tracing::warn!(feed, error = %e, "redstone: latest failed, walking the history")
+                }
+            }
+        }
+        let mut t = grid_down(now);
         for _ in 0..LIVE_LOOKBACK_SLOTS {
             if let Some(a) = self
                 .source

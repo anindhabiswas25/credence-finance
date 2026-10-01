@@ -17,6 +17,22 @@ groups:
         annotations:
           summary: "Feed {{ $labels.feed }} {{ $labels.asset }}: last LIVE {{ $value | humanizeDuration }} ago in REGULAR"
           runbook: RB-04
+      - alert: RelayerLiveGap
+        # node-side, before the chain sees it (01:20 PM REQUEST): every node of a committee (scrape label) without a LIVE observation for
+        # > 60 s in REGULAR means the aggregator has no LIVE quorum (gauge is 0 out of REGULAR)
+        expr: min by (chain, committee, asset) (credence_relayer_live_age_seconds) > 60
+        for: 30s
+        labels: { severity: page, priority: P1 }
+        annotations:
+          summary: "Committee {{ $labels.committee }} {{ $labels.asset }}: no node has a LIVE price for {{ $value | humanizeDuration }} in REGULAR"
+          runbook: RB-04
+      - alert: RelayerNodeLiveGap
+        expr: credence_relayer_live_age_seconds > 60
+        for: 2m
+        labels: { severity: ticket, priority: P3 }
+        annotations:
+          summary: "Node {{ $labels.node }} {{ $labels.asset }}: no LIVE price for {{ $value | humanizeDuration }} in REGULAR"
+          runbook: RB-04
       - alert: FeedDisagreement
         expr: credence_relayer_vendor_disagreement_ppm > 15000
         for: 2m

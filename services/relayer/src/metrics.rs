@@ -30,6 +30,9 @@ pub struct Metrics {
     pub last_seq: IntGaugeVec,
     /// exchange time (unix s) of the last accepted LIVE report per asset: the "feed stale" alert (§16.1).
     pub last_live_at: IntGaugeVec,
+    /// Per node and asset in REGULAR: seconds since the newest LIVE observation the node holds (0 out of REGULAR),
+    /// so a node-side LIVE gap pages before the on-chain staleness does.
+    pub live_age: IntGaugeVec,
     /// `marketStatus` of the last accepted LIVE/STATUS report per asset (0 closed, 1 pre, 2 regular,
     /// 3 post, 4 overnight, 5 halted), so staleness is only alerted during REGULAR.
     pub market_status: IntGaugeVec,
@@ -110,6 +113,13 @@ impl Metrics {
                 ),
                 &["feed", "asset"],
             )?,
+            live_age: IntGaugeVec::new(
+                Opts::new(
+                    "relayer_live_age_seconds",
+                    "age of the node's newest LIVE observation in REGULAR (0 out of REGULAR)",
+                ),
+                &["node", "asset"],
+            )?,
             market_status: IntGaugeVec::new(
                 Opts::new(
                     "relayer_market_status",
@@ -147,6 +157,7 @@ impl Metrics {
         registry.register(Box::new(m.refusals.clone()))?;
         registry.register(Box::new(m.last_seq.clone()))?;
         registry.register(Box::new(m.last_live_at.clone()))?;
+        registry.register(Box::new(m.live_age.clone()))?;
         registry.register(Box::new(m.market_status.clone()))?;
         registry.register(Box::new(m.stream_connected.clone()))?;
         registry.register(Box::new(m.stream_reconnects.clone()))?;

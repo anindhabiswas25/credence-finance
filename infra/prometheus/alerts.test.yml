@@ -27,6 +27,33 @@ tests:
               summary: "Feed A NVDA: last LIVE 1m 40s ago in REGULAR"
               runbook: RB-04
 
+  - name: relayer LIVE gap pages only when every node of the committee has none
+    interval: 10s
+    input_series:
+      # committee A: nodes 1 and 2 lose LIVE from t=0 (age climbs 10 s per step), node 3 keeps it (age 5 s)
+      - series: 'credence_relayer_live_age_seconds{chain="46630",committee="A",node="a-1",asset="NVDA"}'
+        values: "0+10x30"
+      - series: 'credence_relayer_live_age_seconds{chain="46630",committee="A",node="a-2",asset="NVDA"}'
+        values: "0+10x30"
+      - series: 'credence_relayer_live_age_seconds{chain="46630",committee="A",node="a-3",asset="NVDA"}'
+        values: "5x30"
+      # committee B: every node lost LIVE
+      - series: 'credence_relayer_live_age_seconds{chain="46630",committee="B",node="b-1",asset="NVDA"}'
+        values: "0+10x30"
+      - series: 'credence_relayer_live_age_seconds{chain="46630",committee="B",node="b-2",asset="NVDA"}'
+        values: "0+10x30"
+    alert_rule_test:
+      - eval_time: 60s # 60 s: not yet (> 60)
+        alertname: RelayerLiveGap
+        exp_alerts: []
+      - eval_time: 100s # above 60 since 70 s, pending 30 s → firing, committee B only
+        alertname: RelayerLiveGap
+        exp_alerts:
+          - exp_labels: { severity: page, priority: P1, chain: "46630", committee: B, asset: NVDA }
+            exp_annotations:
+              summary: "Committee B NVDA: no node has a LIVE price for 1m 40s in REGULAR"
+              runbook: RB-04
+
   - name: disagreement P2 then P1
     interval: 30s
     input_series:

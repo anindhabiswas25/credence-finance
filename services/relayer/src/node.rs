@@ -52,8 +52,16 @@ pub struct Node {
     last_print_poll: RwLock<HashMap<(B256, Kind), u64>>,
     /// OFF-01: the highest seq this node signed per asset.
     signed_seq: RwLock<HashMap<B256, u64>>,
+    /// Per asset: observedAt of the newest LIVE observation, and since when the current LIVE gap runs.
+    live_seen: RwLock<HashMap<B256, LiveSeen>>,
     metrics: Metrics,
     clock: fn() -> u64,
+}
+
+#[derive(Debug, Default, Clone, Copy)]
+struct LiveSeen {
+    last: Option<u64>,
+    gap_since: Option<u64>,
 }
 
 /// Stream events arriving within this window are handled as one re-observation.
@@ -122,6 +130,7 @@ impl Node {
             state: Default::default(),
             last_print_poll: Default::default(),
             signed_seq: Default::default(),
+            live_seen: Default::default(),
             metrics,
             clock: now_s,
         }
@@ -211,6 +220,8 @@ impl Node {
             }
         }
 
+        self.track_live(asset, status, live.as_ref().map(|o| o.observed_at), now)
+            .await;
         let (open, close) = self.poll_prints(asset, now, prev.as_ref()).await;
         AssetObservation {
             asset_id: asset.id,
@@ -220,6 +231,45 @@ impl Node {
             open,
             close,
         }
+    }
+
+    /// LIVE gaps in REGULAR: logged when they start and end, and `relayer_live_age_seconds` per asset. A failed
+    /// STATUS leaves both as they were.
+    async fn track_live(
+        &self,
+        asset: &Asset,
+        status: Option<MarketStatus>,
+        observed_at: Option<u64>,
+        now: u64,
+    ) {
+        let Some(status) = status else { return };
+        let gauge = self
+            .metrics
+            .live_age
+            .with_label_values(&[&self.cfg.id, &asset.symbol]);
+        let mut m = self.live_seen.write().await;
+        let seen = m.entry(asset.id).or_default();
+        if let Some(t) = observed_at {
+            seen.last = Some(seen.last.map_or(t, |l| l.max(t)));
+        }
+        if status != MarketStatus::Regular {
+            gauge.set(0);
+            seen.gap_since = None;
+            return;
+        }
+        match (observed_at, seen.gap_since) {
+            (Some(_), Some(since)) => {
+                tracing::info!(node = %self.cfg.id, asset = %asset.symbol, gap_s = now.saturating_sub(since), "LIVE gap over");
+                seen.gap_since = None;
+            }
+            (None, None) => {
+                tracing::warn!(node = %self.cfg.id, asset = %asset.symbol, last_live = ?seen.last, "LIVE gap: no LIVE observation in REGULAR");
+                seen.gap_since = Some(now);
+            }
+            _ => {}
+        }
+        let from = seen.last.or(seen.gap_since).unwrap_or(now);
+        gauge.set(now.saturating_sub(from) as i64);
     }
 
     /// OPEN from the current session's open until found; CLOSE from the close until found.

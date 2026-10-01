@@ -6,6 +6,9 @@
 #                                    a failed gate switches the images back to the previous tag (make services-deploy)
 #   deploy.sh rollback [N]           roll back N migrations (default 0), then switch to the previous tag, gate
 #                                    (make services-rollback MIGRATIONS=N)
+#   deploy.sh service SVC…           rebuild the named services' images at the current tag and recreate only those
+#                                    (--no-deps: Postgres and every other service keep running), gate; a failed gate
+#                                    restores the images kept as :rollback. No migrations (make services-deploy SVC=…)
 #   deploy.sh wait                   the health gate alone
 #
 # The tags live in $STATE_DIR/tag.current and tag.previous. DC is the compose command (mk/ops.mk).
@@ -79,6 +82,26 @@ case "${1:-up}" in
     echo "$to" > "$STATE/tag.current"; echo "$from" > "$STATE/tag.previous"
     say "services-rollback: running $to"
     ;;
+  service)
+    shift
+    [ $# -gt 0 ] || { echo "services-deploy SVC='<service> …': name the service(s)" >&2; exit 2; }
+    tag="$(cur)"
+    imgs="$(TAG="$tag" $DC config --format json | jq -r --args '.services | to_entries[]
+      | select(.key as $k | $ARGS.positional | index($k)) | .value.image' "$@" | sort -u)"
+    [ -n "$imgs" ] || { echo "services-deploy: no such service: $*" >&2; exit 2; }
+    for i in $imgs; do docker image tag "$i" "${i%:*}:rollback"; done
+    say "services-deploy SVC=$*: rebuild $(echo $imgs) at $tag, recreate only these, gate"
+    TAG="$tag" $DC build "$@"
+    TAG="$tag" $DC up -d --no-deps "$@"
+    if TAG="$tag" wait_healthy; then
+      say "services-deploy: $* running the new build at $tag (old images kept as :rollback)"
+    else
+      say "services-deploy: the gate failed; restoring the :rollback images of $*"
+      for i in $imgs; do docker image tag "${i%:*}:rollback" "$i"; done
+      TAG="$tag" $DC up -d --no-deps --force-recreate "$@"; TAG="$tag" wait_healthy || true
+      exit 1
+    fi
+    ;;
   wait) TAG="$(cur)" wait_healthy ;;
-  *) echo "usage: deploy.sh up|deploy [TAG]|rollback [N]|wait" >&2; exit 2 ;;
+  *) echo "usage: deploy.sh up|deploy [TAG]|service SVC…|rollback [N]|wait" >&2; exit 2 ;;
 esac
