@@ -8,6 +8,14 @@ import { StreamHub, attachStream } from "./stream.ts";
 import { SESSION_COOKIE, verifySession } from "./session.ts";
 import { assetVenues, boundariesAfter, loadCalendars } from "./calendar.ts";
 import { forChain, loadConfig } from "./config.ts";
+import { readFileSync } from "node:fs";
+import {
+  opsAdmins,
+  pgAppStream,
+  pgInboxRepo,
+  pgOpsRepo,
+  webhookSecret,
+} from "./inbox.ts";
 import { pgRepos } from "./repo.ts";
 import { log } from "./log.ts";
 import { createMetrics } from "./metrics.ts";
@@ -33,6 +41,15 @@ const metrics = createMetrics();
 const limiters = newLimiters(config);
 // sessions, accounts and preferences are per address in one database: every chain's app shares them
 const shared = pgRepos(config.databaseUrl, chains[0]!.indexerSchema);
+// Amendment 2: the in-app inbox and ops alerts (one database for every chain)
+const inbox = pgInboxRepo(shared.sql);
+const ops = pgOpsRepo(shared.sql);
+const admins = opsAdmins(process.env.OPS_ADMIN_ADDRESSES);
+const secret = webhookSecret(process.env, (p) => readFileSync(p, "utf8"));
+if (!secret)
+  log.warn(
+    "OPS_ALERT_WEBHOOK_SECRET not set: POST /v1/ops/alerts is not mounted",
+  );
 
 /** ADR-0014: one app per served chain, with its own indexer views, RPC (RPC_URL_<id>) and assets (ASSETS_<id>). */
 const served = chains.map(({ chainId, indexerSchema }) => {
@@ -68,6 +85,10 @@ const served = chains.map(({ chainId, indexerSchema }) => {
     sets,
     publicClient,
     limiters,
+    inbox,
+    ops,
+    webhookSecret: secret,
+    opsAdmins: admins,
     // OFF-04c: a logout ends that session's bell:<owner> streams on every chain's hub
     onLogout: (sid) => {
       for (const s of served) s.hub.dropSession(sid);
@@ -78,11 +99,17 @@ const served = chains.map(({ chainId, indexerSchema }) => {
       return s ? boundariesAfter(s, now) : undefined;
     },
   });
-  const hub = new StreamHub(repos.stream, toAssetId, {
+  // Amendment 2: inbox:<owner> for this chain (the default chain also gets account-level rows and ops)
+  const source = {
+    ...repos.stream,
+    ...pgAppStream(shared.sql, chainId, chainId === chains[0]!.chainId),
+  };
+  const hub = new StreamHub(source, toAssetId, {
     pollMs: Number(process.env.STREAM_POLL_MS ?? 1000),
     batch: 500,
     maxAssets: 100,
   });
+  hub.opsAdmins = admins;
   return { chainId, indexerSchema, repos, app, hub };
 });
 

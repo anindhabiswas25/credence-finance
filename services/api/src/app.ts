@@ -31,6 +31,7 @@ import {
 } from "./rt.ts";
 import { registerSettlementRoutes, type SettlementRepo } from "./settlement.ts";
 import { registerMeRoutes, type MeRepo } from "./me.ts";
+import { registerInboxRoutes, type InboxRepo, type OpsRepo } from "./inbox.ts";
 import { FixedWindow, clientIp, rateLimit } from "./ratelimit.ts";
 import {
   SESSION_COOKIE,
@@ -68,6 +69,12 @@ export interface Deps {
   /** ADR-0014: one API serves several chains through one app per chain; they share these windows, so a client
    * gets one quota whatever chain it asks for. */
   limiters?: Limiters;
+  /** Amendment 2: the in-app inbox (GET /v1/me/inbox, POST /v1/me/inbox/read); mounted only when present. */
+  inbox?: InboxRepo;
+  /** Amendment 2: ops alerts (GET /v1/ops/alerts; POST /v1/ops/alerts with `webhookSecret`). */
+  ops?: OpsRepo;
+  webhookSecret?: string;
+  opsAdmins?: ReadonlySet<string>;
   /** OFF-04c: called with the session id at logout (the server ends that session's `bell:<owner>` streams). */
   onLogout?: (session: string) => void;
 }
@@ -382,6 +389,16 @@ export function createApp(deps: Deps) {
     });
   if (deps.settlement)
     registerSettlementRoutes(app, { settlement: deps.settlement, now });
+  if (deps.inbox)
+    registerInboxRoutes(app, {
+      auth: deps.auth,
+      inbox: deps.inbox,
+      ops: deps.ops,
+      sessionSecret: config.sessionSecret,
+      now,
+      webhookSecret: deps.webhookSecret,
+      opsAdmins: deps.opsAdmins ?? new Set(),
+    });
   if (deps.me) {
     registerMeRoutes(app, {
       auth: deps.auth,

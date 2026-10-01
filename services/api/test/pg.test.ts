@@ -5,6 +5,7 @@ import { afterAll, describe, expect, it } from "vitest";
 import { getAddress, type Address } from "viem";
 import { pgRepos } from "../src/repo.ts";
 import { sha256 } from "../src/me.ts";
+import { pgAppStream, pgInboxRepo, pgOpsRepo } from "../src/inbox.ts";
 
 const url = process.env.TEST_DATABASE_URL;
 const repos = url ? pgRepos(url, "indexer") : undefined;
@@ -145,5 +146,78 @@ describe.skipIf(!url)("pg MeRepo", () => {
     });
     await repos!
       .sql`delete from app.notification_job where dedupe_key = ${key}`;
+  });
+});
+
+describe.skipIf(!url)("pg inbox and ops alerts (Amendment 2)", () => {
+  it("inbox: own rows, paging, mark read; the stream source filters by chain", async () => {
+    const sql = repos!.sql;
+    const inbox = pgInboxRepo(sql);
+    const a = addr();
+    const b = addr();
+    const buf = (x: Address) => Buffer.from(x.slice(2).toLowerCase(), "hex");
+    const src46 = pgAppStream(sql, 46630, true);
+    const src421 = pgAppStream(sql, 421614, false);
+    const head = await src46.inboxHead();
+    for (const [who, chain, key] of [
+      [a, 46630, "k1"],
+      [a, 421614, "k2"],
+      [b, 46630, "k3"],
+      [a, 0, "k4"],
+    ] as const)
+      await sql`insert into app.inbox (chain_id, address, event, dedupe_key, subject, body, payload)
+                values (${chain}, ${buf(who)}, 'withdrawal_claimable', ${key}, ${key}, 'b', '{}')`;
+    const rows = await inbox.list(a, { unread: false, limit: 10 });
+    expect(rows.map((r) => r.subject)).toEqual(["k4", "k2", "k1"]);
+    expect(await inbox.unreadCount(a)).toBe(3);
+    const other = (await inbox.list(b, { unread: false, limit: 10 }))[0]!;
+    expect(await inbox.markRead(a, [rows[2]!.id, other.id], new Date())).toBe(
+      1,
+    );
+    expect(await inbox.unreadCount(b)).toBe(1);
+    expect(await inbox.markRead(a, "all", new Date())).toBe(2);
+    // the default chain's hub gets its chain and account-level rows; the other hub only its chain
+    expect(
+      (await src46.inboxSince(head, 50)).map((e) => e.chainId).sort(),
+    ).toEqual([0, 46630, 46630]);
+    expect((await src421.inboxSince(head, 50)).map((e) => e.chainId)).toEqual([
+      421614,
+    ]);
+    expect(src421.opsAlertsSince).toBeUndefined();
+  });
+
+  it("ops: stored once per (fingerprint, startsAt), resolved in place, pushed as changed", async () => {
+    const sql = repos!.sql;
+    const ops = pgOpsRepo(sql);
+    const fp = `fp-${randomBytes(4).toString("hex")}`;
+    const since = Date.now() - 1000;
+    const alert = (status: "firing" | "resolved") => ({
+      fingerprint: fp,
+      status,
+      labels: { alertname: "FeedStale", chain: "46630", severity: "page" },
+      annotations: { summary: "stale" },
+      startsAt: new Date("2026-09-30T12:00:00Z"),
+      endsAt: status === "resolved" ? new Date("2026-09-30T12:05:00Z") : null,
+    });
+    await ops.store([alert("firing")]);
+    await ops.store([alert("firing")]);
+    expect(await ops.store([alert("resolved")])).toEqual({
+      stored: 1,
+      resolved: 1,
+    });
+    const [row] =
+      await sql`select status, chain_id, severity, ends_at from ops.alert where fingerprint = ${fp}`;
+    expect(row).toMatchObject({ status: "resolved", severity: "page" });
+    expect(Number(row!.chain_id)).toBe(46630);
+    const n =
+      await sql`select count(*)::int as n from ops.alert where fingerprint = ${fp}`;
+    expect(n[0]!.n).toBe(1);
+    const pushed = await pgAppStream(sql, 46630, true).opsAlertsSince!(
+      since,
+      50,
+    );
+    expect(
+      pushed.filter((p) => p.alertname === "FeedStale").at(-1)!.status,
+    ).toBe("resolved");
   });
 });

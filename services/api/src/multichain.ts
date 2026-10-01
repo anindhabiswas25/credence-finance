@@ -17,6 +17,7 @@ const AGNOSTIC = [
   /^\/v1\/auth\//,
   /^\/v1\/me(\/|$)/,
   /^\/v1\/testnet\//,
+  /^\/v1\/ops\//,
 ];
 
 export const isChainAgnostic = (path: string) =>

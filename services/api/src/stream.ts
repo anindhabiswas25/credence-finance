@@ -18,8 +18,40 @@ import { formatUnits, type Hex } from "viem";
 import { clockStateName } from "@credence/sdk";
 
 export const CHANNELS = ["clock", "prices", "auctions"] as const;
-export type Channel = (typeof CHANNELS)[number] | `bell:${string}`;
+export type Channel =
+  (typeof CHANNELS)[number] | `bell:${string}` | `inbox:${string}` | "ops";
 const BELL = /^bell:(0x[0-9a-fA-F]{40})$/;
+/** Amendment 2: the owner's in-app inbox, with the same session rule as `bell:<owner>`. */
+const INBOX = /^inbox:(0x[0-9a-fA-F]{40})$/;
+const OWNER_CHANNEL = /^(?:bell|inbox):(0x[0-9a-fA-F]{40})$/;
+/** Amendment 2: ops alerts, for sessions of an OPS_ADMIN_ADDRESSES address. */
+export const OPS_CHANNEL = "ops";
+
+/** A new in-app inbox row (app.inbox). */
+export interface InboxEvent {
+  id: bigint;
+  chainId: number;
+  owner: Hex;
+  event: string;
+  subject: string;
+  body: string;
+  url: string | null;
+  createdAt: number;
+}
+/** An ops alert as stored from Alertmanager's webhook (ops.alert), new or changed. */
+export interface OpsAlertEvent {
+  id: bigint;
+  alertname: string;
+  status: string;
+  chainId: number | null;
+  severity: string | null;
+  summary: string | null;
+  runbook: string | null;
+  startsAt: number;
+  endsAt: number | null;
+  /** ms, the cursor */
+  updatedAt: number;
+}
 
 export interface AuctionEvent {
   auctionId: bigint;
@@ -76,6 +108,11 @@ export interface StreamSource {
   pricesSince(block: bigint, limit: number): Promise<PriceEvent[]>;
   auctionsSince(block: bigint, limit: number): Promise<AuctionEvent[]>;
   ownerEventsSince(block: bigint, limit: number): Promise<OwnerEvent[]>;
+  /** Amendment 2 (optional): inbox rows after `id` for this hub's chain; the newest id. */
+  inboxSince?(id: bigint, limit: number): Promise<InboxEvent[]>;
+  inboxHead?(): Promise<bigint>;
+  /** Amendment 2 (optional, the default chain's hub only): ops alerts changed after `ms`. */
+  opsAlertsSince?(ms: number, limit: number): Promise<OpsAlertEvent[]>;
 }
 
 export interface Socket {
@@ -112,6 +149,10 @@ export class StreamHub {
   private cursorPrices = -1n;
   private cursorAuctions = -1n;
   private cursorOwners = -1n;
+  private cursorInbox = -1n;
+  private cursorOps = -1;
+  /** Lower-case addresses whose sessions may subscribe to `ops` (OPS_ADMIN_ADDRESSES). */
+  opsAdmins: ReadonlySet<string> = new Set();
   private timer: NodeJS.Timeout | undefined;
   private running = false;
 
@@ -153,13 +194,14 @@ export class StreamHub {
     sub.owner = null;
     sub.session = null;
     for (const c of [...sub.channels])
-      if (c.startsWith("bell:")) sub.channels.delete(c);
+      if (c.startsWith("bell:") || c.startsWith("inbox:") || c === OPS_CHANNEL)
+        sub.channels.delete(c);
     try {
       ws.send(
         JSON.stringify({
           type: "session_ended",
           message:
-            "bell:<owner> ended with the session: sign in again, then reconnect",
+            "bell:<owner>, inbox:<owner> and ops ended with the session: sign in again, then reconnect",
         }),
       );
     } catch {
@@ -211,16 +253,17 @@ export class StreamHub {
     const bad = channels.find(
       (c) =>
         !CHANNELS.includes(c as (typeof CHANNELS)[number]) &&
-        !(typeof c === "string" && BELL.test(c)),
+        c !== OPS_CHANNEL &&
+        !(typeof c === "string" && (BELL.test(c) || INBOX.test(c))),
     );
     if (bad !== undefined)
       return this.err(
         ws,
-        `unknown channel ${JSON.stringify(bad)} (available: ${CHANNELS.join(", ")}, bell:<owner>)`,
+        `unknown channel ${JSON.stringify(bad)} (available: ${CHANNELS.join(", ")}, bell:<owner>, inbox:<owner>, ops)`,
       );
     if (m.op === "subscribe") {
       const denied = channels.find((c) => {
-        const x = typeof c === "string" ? BELL.exec(c) : null;
+        const x = typeof c === "string" ? OWNER_CHANNEL.exec(c) : null;
         return x !== null && x[1]!.toLowerCase() !== sub.owner;
       });
       if (denied !== undefined)
@@ -228,11 +271,18 @@ export class StreamHub {
           ws,
           `${String(denied)} needs a SIWE session for that address (POST /v1/auth/siwe/verify, then reconnect)`,
         );
+      if (
+        channels.includes(OPS_CHANNEL) &&
+        !(sub.owner && this.opsAdmins.has(sub.owner))
+      )
+        return this.err(ws, "ops needs the SIWE session of an ops admin");
     }
     if (m.op === "subscribe") {
       for (const c of channels)
         sub.channels.add(
-          (BELL.test(c as string) ? (c as string).toLowerCase() : c) as Channel,
+          (OWNER_CHANNEL.test(c as string)
+            ? (c as string).toLowerCase()
+            : c) as Channel,
         );
       if (m.assets !== undefined) {
         if (!Array.isArray(m.assets) || m.assets.length > this.opts.maxAssets)
@@ -282,6 +332,46 @@ export class StreamHub {
     }
   }
 
+  /** Amendment 2: new inbox rows (`inbox:<owner>`) and new or changed ops alerts (`ops`). */
+  private async pollApp(): Promise<void> {
+    if (this.source.inboxSince) {
+      for (const e of await this.source.inboxSince(
+        this.cursorInbox,
+        this.opts.batch,
+      )) {
+        this.broadcast(`inbox:${e.owner.toLowerCase()}`, null, {
+          id: e.id.toString(),
+          chainId: e.chainId,
+          event: e.event,
+          subject: e.subject,
+          body: e.body,
+          url: e.url,
+          createdAt: e.createdAt,
+        });
+        if (e.id > this.cursorInbox) this.cursorInbox = e.id;
+      }
+    }
+    if (this.source.opsAlertsSince) {
+      for (const a of await this.source.opsAlertsSince(
+        this.cursorOps,
+        this.opts.batch,
+      )) {
+        this.broadcast(OPS_CHANNEL, null, {
+          id: a.id.toString(),
+          alertname: a.alertname,
+          status: a.status,
+          chainId: a.chainId,
+          severity: a.severity,
+          summary: a.summary,
+          runbook: a.runbook,
+          startsAt: a.startsAt,
+          endsAt: a.endsAt,
+        });
+        if (a.updatedAt > this.cursorOps) this.cursorOps = a.updatedAt;
+      }
+    }
+  }
+
   /** One poll: new rows since the cursors are broadcast; the first poll only positions the cursors. */
   async poll(): Promise<void> {
     if (this.cursorClock < 0n || this.cursorPrices < 0n) {
@@ -291,8 +381,11 @@ export class StreamHub {
         this.cursorAuctions =
         this.cursorOwners =
           h;
+      this.cursorInbox = (await this.source.inboxHead?.()) ?? 0n;
+      this.cursorOps = Date.now();
       return;
     }
+    await this.pollApp();
     const [auctions, owners] = await Promise.all([
       this.source
         .auctionsSince(this.cursorAuctions, this.opts.batch)
