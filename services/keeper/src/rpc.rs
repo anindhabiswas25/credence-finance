@@ -9,7 +9,7 @@
 
 use alloy::providers::{DynProvider, Provider, ProviderBuilder};
 use anyhow::{anyhow, bail, Context, Result};
-use prometheus::IntCounterVec;
+use prometheus::{IntCounterVec, IntGaugeVec};
 use std::{
     future::Future,
     sync::atomic::{AtomicUsize, Ordering},
@@ -24,6 +24,8 @@ pub const HEALTH_TIMEOUT: Duration = Duration::from_secs(3);
 pub struct Rpc {
     providers: Vec<(String, DynProvider)>,
     failovers: Option<IntCounterVec>,
+    /// `rpc_up{rpc}` / `rpc_active{rpc}` (S5 alerts: one chain's RPC down), set by each health check.
+    health: Option<(IntGaugeVec, IntGaugeVec)>,
     active: AtomicUsize,
     pub max_lag: u64,
 }
@@ -67,9 +69,16 @@ impl Rpc {
         Ok(Self {
             providers,
             failovers,
+            health: None,
             active: AtomicUsize::new(0),
             max_lag: DEFAULT_MAX_LAG,
         })
+    }
+
+    /// Publish each health check as `rpc_up{rpc}` (1 = answers within the lag) and `rpc_active{rpc}`.
+    pub fn with_health_gauges(mut self, up: IntGaugeVec, active: IntGaugeVec) -> Self {
+        self.health = Some((up, active));
+        self
     }
 
     /// The active provider (the configured primary unless a health check switched away from it).
@@ -103,6 +112,16 @@ impl Rpc {
             if let Some(c) = &self.failovers {
                 c.with_label_values(&[self.providers[next].0.as_str()])
                     .inc();
+            }
+        }
+        if let Some((up, active)) = &self.health {
+            let best = heads.iter().flatten().max().copied();
+            for (i, ((name, _), h)) in self.providers.iter().zip(&heads).enumerate() {
+                let ok = matches!((h, best), (Some(h), Some(b)) if h + self.max_lag >= b);
+                up.with_label_values(&[name.as_str()]).set(ok as i64);
+                active
+                    .with_label_values(&[name.as_str()])
+                    .set((i == next) as i64);
             }
         }
         Health {

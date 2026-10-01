@@ -235,6 +235,34 @@ pub fn reopen_pending_s(ctx: &RiskCtx, now: u64) -> u64 {
     now.saturating_sub(ctx.open_print_at + ctx.phase_extension)
 }
 
+/// The ±50 % open-print page (threat-model row 4): (open print − the closure's frozen reference close) ÷ that
+/// close, signed. `None` before the closure's open print is written or without a reference.
+pub fn open_print_deviation(ctx: &RiskCtx) -> Option<f64> {
+    if ctx.open_print_at == 0 || ctx.ref_price.is_zero() || ctx.open_print.is_zero() {
+        return None;
+    }
+    let (o, r) = (f64::from(ctx.open_print), f64::from(ctx.ref_price));
+    Some((o - r) / r)
+}
+
+/// NAV print missing (PM 16:30): seconds past the end of the latest ended USBANK session when no NAV print has
+/// landed since that session opened; 0 otherwise (and before the calendar's first session ends).
+pub fn nav_print_overdue_s(
+    cal: &credence_common::calendar::Calendar,
+    now: u64,
+    last_print: u64,
+) -> u64 {
+    let ended = cal.sessions.partition_point(|s| s.close <= now);
+    let Some(s) = ended.checked_sub(1).and_then(|i| cal.sessions.get(i)) else {
+        return 0;
+    };
+    if last_print >= s.open {
+        0
+    } else {
+        now - s.close
+    }
+}
+
 /// Which heads-up stage is due for a close at `close_at` (and a Bell deadline `bell_at`), if any.
 pub fn headsup_stage(now: u64, close_at: u64, bell_at: u64) -> Option<&'static str> {
     if close_at <= now {
@@ -259,6 +287,42 @@ fn s(v: U256) -> String {
 }
 
 impl Keeper {
+    /// `nav_last_print_timestamp_seconds` and `nav_print_overdue_seconds` for a NAV market (the oracle's latest NAV,
+    /// against its USBANK calendar).
+    async fn nav_print_metrics(&self, m: &CoreMarket, now: u64) -> Result<()> {
+        let (market, id) = (m.market, m.id);
+        let t = self
+            .rpc
+            .with_failover("nav.lastPrint", |p| async move {
+                let mk = crate::core::abi::ICredenceMarket::new(market, &p);
+                let oracle = mk.wiring().call().await?.oracle;
+                let asset = mk.marketParams(id).call().await?.assetId;
+                let r = crate::core::abi::IOracleAdapter::new(oracle, &p)
+                    .lastRegularClose(asset)
+                    .call()
+                    .await;
+                // no NAV yet (a fresh deploy): never printed
+                Ok(r.map(|r| r.t.to::<u64>()).unwrap_or(0))
+            })
+            .await?;
+        self.metrics
+            .nav_last_print_timestamp
+            .with_label_values(&[&m.asset])
+            .set(t as i64);
+        let cal = self
+            .assets
+            .iter()
+            .find(|a| a.label == m.asset)
+            .or_else(|| self.assets.iter().find(|a| a.venue == "USBANK"));
+        if let Some(a) = cal {
+            self.metrics
+                .nav_print_overdue
+                .with_label_values(&[&m.asset])
+                .set(nav_print_overdue_s(&a.calendar, now, t) as i64);
+        }
+        Ok(())
+    }
+
     pub(crate) async fn core_tick(
         &self,
         conn: &mut PgConnection,
@@ -269,6 +333,12 @@ impl Keeper {
         };
         let now = self.clock.now();
         for m in &core.markets {
+            // NAV print missing (S5): read on its own, so it works while the market is HALTED without a price
+            if core.is_nav_settled(m) {
+                if let Err(e) = self.nav_print_metrics(m, now).await {
+                    tracing::warn!(asset = %m.asset, error = %e, "NAV print read failed");
+                }
+            }
             let read = read_ctx(self.rpc.primary(), m.market, m.id, None).await;
             let state = match &read {
                 Ok(_) => ReadState::Live,
@@ -304,6 +374,16 @@ impl Keeper {
                 .reopen_pending_seconds
                 .with_label_values(&[&m.asset])
                 .set(reopen_pending_s(&ctx, now) as i64);
+            if let Some(d) = open_print_deviation(&ctx) {
+                self.metrics
+                    .open_print_deviation
+                    .with_label_values(&[&m.asset])
+                    .set(d);
+                self.metrics
+                    .open_print_timestamp
+                    .with_label_values(&[&m.asset])
+                    .set(ctx.open_print_at as i64);
+            }
             for (name, r) in [
                 ("J2", self.j2(conn, &core, m, &ctx, now).await),
                 ("J3", self.j3(conn, &core, m, &ctx, now, rep).await),

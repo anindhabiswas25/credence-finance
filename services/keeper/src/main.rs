@@ -84,10 +84,10 @@ async fn main() -> Result<()> {
         Err(e) => return Err(e),
     };
     let signer = CredenceSigner::load(&signer_cfg, cfg.chain_id).await?;
-    let rpc = Arc::new(Rpc::connect(
-        &cfg.rpc_urls,
-        Some(metrics.rpc_failovers.clone()),
-    )?);
+    let rpc = Arc::new(
+        Rpc::connect(&cfg.rpc_urls, Some(metrics.rpc_failovers.clone()))?
+            .with_health_gauges(metrics.rpc_up.clone(), metrics.rpc_active.clone()),
+    );
     let actual = rpc.chain_id().await?;
     if actual != cfg.chain_id {
         bail!("RPC chain id {actual} != CHAIN_ID {}", cfg.chain_id);
@@ -149,11 +149,13 @@ async fn main() -> Result<()> {
     keeper.alert_webhook = cfg.alert_webhook.clone();
     keeper.watch_wallets = cfg.watch_wallets.clone();
     keeper.min_balance_wei = cfg.min_balance_wei;
+    keeper.tips = credence_keeper::config::tips_contracts(cfg.chain_id);
     keeper.core = credence_keeper::config::core_jobs(cfg.chain_id)?.map(std::sync::Arc::new);
     keeper.sigma = credence_keeper::config::sigma_runner(
         cfg.chain_id,
         &credence_keeper::config::load_calendars()?,
-    )?
+    )
+    .await?
     .map(std::sync::Arc::new);
     if let Some(c) = &keeper.core {
         tracing::info!(

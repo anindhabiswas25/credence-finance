@@ -68,6 +68,24 @@ pub fn clock_address(chain_id: u64) -> Result<Address> {
         .context("no clock address in the address book")
 }
 
+/// Each stack's KeeperTips (`equity.tips`, `nav.tips`) in the address book, for J12's budget gauge (S5).
+pub fn tips_contracts(chain_id: u64) -> Vec<(String, Address)> {
+    let Ok(book) = address_book(chain_id) else {
+        return Vec::new();
+    };
+    ["equity", "nav"]
+        .iter()
+        .filter_map(|stack| {
+            let a = book
+                .pointer(&format!("/{stack}/tips"))?
+                .as_str()?
+                .parse()
+                .ok()?;
+            Some(((*stack).to_owned(), a))
+        })
+        .collect()
+}
+
 /// Lending-core jobs from the address book (`equity`/`nav` markets and vaults, `shared.registry`), or
 /// `None` before a core stack is deployed or with `KEEPER_CORE=0`.
 pub fn core_jobs(chain_id: u64) -> Result<Option<crate::core_jobs::CoreJobs>> {
@@ -106,10 +124,11 @@ pub fn core_jobs(chain_id: u64) -> Result<Option<crate::core_jobs::CoreJobs>> {
 }
 
 /// J7 from env and the address book: `SIGMA_ORACLE_ADDRESS` (else `shared.sigmaOracle`), the engine,
-/// `SIGMA_SNAPSHOT` (else the newest `calibration/out/sigma/sigma-*.json`) and the committee keys
-/// `SIGMA_COMMITTEE_KEYS` (comma-separated; KMS signers replace them before testnet). `None` if any is
-/// missing: J7 then stays off and says why.
-pub fn sigma_runner(
+/// `SIGMA_SNAPSHOT` (else the newest `calibration/out/sigma/sigma-*.json`) and the committee: on testnet the
+/// encrypted keystores `$KEYSTORE_DIR/<chainId>/sigma-1..N` (`SIGMA_COMMITTEE_SIZE`, default 3; ADR-0014), on dev
+/// chains `SIGMA_COMMITTEE_KEYS` (comma-separated plain keys) when set. `None` if any is missing: J7 then stays
+/// off and says why.
+pub async fn sigma_runner(
     chain_id: u64,
     calendars: &HashMap<String, Arc<Calendar>>,
 ) -> Result<Option<crate::sigma_runner::SigmaRunner>> {
@@ -127,16 +146,37 @@ pub fn sigma_runner(
         return why("no riskEngine in the address book");
     };
     let keys = env::list("SIGMA_COMMITTEE_KEYS");
-    if keys.is_empty() {
-        return why("SIGMA_COMMITTEE_KEYS not set");
-    }
-    let committee = keys
-        .iter()
-        .map(|k| {
-            k.parse::<alloy::signers::local::PrivateKeySigner>()
-                .context("SIGMA_COMMITTEE_KEYS")
-        })
-        .collect::<Result<Vec<_>>>()?;
+    let committee = if !keys.is_empty() {
+        if !credence_common::is_dev_chain(chain_id) {
+            bail!("SIGMA_COMMITTEE_KEYS (plain keys) is dev-only; chain {chain_id} uses the sigma-<n> keystores");
+        }
+        keys.iter()
+            .map(|k| {
+                k.parse::<alloy::signers::local::PrivateKeySigner>()
+                    .context("SIGMA_COMMITTEE_KEYS")
+            })
+            .collect::<Result<Vec<_>>>()?
+    } else {
+        use credence_common::signer::{CredenceSigner, SignerConfig};
+        let n: usize = env::parse_or("SIGMA_COMMITTEE_SIZE", 3)?;
+        let mut v = Vec::new();
+        for i in 1..=n {
+            let Ok(cfg) = SignerConfig::resolve(
+                &format!("SIGMA_SIGNER_{i}"),
+                chain_id,
+                &format!("sigma-{i}"),
+            ) else {
+                return why("no sigma-<n> keystores and no SIGMA_COMMITTEE_KEYS");
+            };
+            match CredenceSigner::load(&cfg, chain_id).await? {
+                CredenceSigner::Local(s) => v.push(s),
+                CredenceSigner::Aws(_) => {
+                    bail!("sigma-{i}: a KMS key is not supported for the σ committee yet")
+                }
+            }
+        }
+        v
+    };
     let snap_path = match env::optional("SIGMA_SNAPSHOT") {
         Some(p) => PathBuf::from(p),
         None => {

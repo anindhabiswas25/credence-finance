@@ -120,6 +120,15 @@ pub fn j12_key(check: &str, now: u64) -> String {
     format!("J12:{check}:{day}")
 }
 
+/// An hourly J12 key (`J12:<check>:YYYY-MM-DDTHH`): wallet balances and the tip budget (S5: a wallet running
+/// dry is seen within the hour, not a day late).
+pub fn j12_hourly_key(check: &str, now: u64) -> String {
+    let hour = chrono::DateTime::from_timestamp(now as i64, 0)
+        .map(|d| d.format("%Y-%m-%dT%H").to_string())
+        .unwrap_or_default();
+    format!("J12:{check}:{hour}")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

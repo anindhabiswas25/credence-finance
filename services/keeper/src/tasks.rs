@@ -5,8 +5,9 @@
 //! are due in the same tick (e.g. after a restart), one poke covers them all: `poke` is lazy and brings
 //! the clock fully up to date, so the newest key sends and the others are marked covered by it.
 //!
-//! **J12 housekeeping** (daily): calendar coverage < 30 days, wallet balances below the floor, and the
-//! Stylus `programTimeLeft` < 30 days (ArbWasm precompile, `shared.riskEngine`). Alerts go to
+//! **J12 housekeeping** (daily): calendar coverage < 30 days and the Stylus `programTimeLeft` < 30 days (ArbWasm
+//! precompile, `shared.riskEngine`); hourly (S5): wallet balances below the floor and the KeeperTips budget in days
+//! of the last 24 h's spend. Alerts go to
 //! `ALERT_WEBHOOK_URL` (PagerDuty / Opsgenie-style JSON) and the `keeper_alerts_total` metric.
 
 use crate::{
@@ -25,7 +26,37 @@ use alloy::{
 };
 use anyhow::Result;
 use sqlx::postgres::PgConnection;
-use std::{collections::BTreeSet, sync::Arc};
+use std::{
+    collections::{BTreeSet, HashMap, VecDeque},
+    sync::{Arc, Mutex},
+};
+
+alloy::sol! {
+    #[sol(rpc)]
+    interface IKeeperTipsBudget {
+        function budget() external view returns (uint256);
+        function token() external view returns (address);
+    }
+}
+
+/// Days a tip budget lasts at the spend seen in `samples` ((unix s, budget), oldest first, the last 24 h): spend is
+/// the sum of the drops (a top-up is not spend). 365 when nothing was spent or the window is under an hour.
+pub fn tips_days(samples: &VecDeque<(u64, f64)>) -> f64 {
+    const CAP: f64 = 365.0;
+    let (Some(first), Some(last)) = (samples.front(), samples.back()) else {
+        return CAP;
+    };
+    let span = last.0.saturating_sub(first.0);
+    let spent: f64 = samples
+        .iter()
+        .zip(samples.iter().skip(1))
+        .map(|(a, b)| (a.1 - b.1).max(0.0))
+        .sum();
+    if span < 3600 || spent <= 0.0 {
+        return CAP;
+    }
+    (last.1 / (spent / span as f64 * 86_400.0)).min(CAP)
+}
 
 pub const COVERAGE_ALERT_DAYS: u64 = 30;
 pub const STYLUS_ALERT_DAYS: u64 = 30;
@@ -44,6 +75,9 @@ pub struct Keeper {
     pub min_balance_wei: u128,
     /// Stylus programs whose activation J12 watches: (label, address), e.g. ("riskEngine", shared.riskEngine).
     pub stylus_programs: Vec<(String, Address)>,
+    /// KeeperTips per stack (`equity.tips` / `nav.tips`): J12 publishes the budget and its days of spend (S5).
+    pub tips: Vec<(String, Address)>,
+    tips_history: Mutex<HashMap<String, VecDeque<(u64, f64)>>>,
     /// Lending-core jobs (J2, J3/J4 dry-run, J8, allowlist) once a core stack is in the address book.
     pub core: Option<crate::core_jobs::SharedCore>,
     /// J7 σ updates (snapshot, committee, SigmaOracle), once the oracle is in the address book.
@@ -92,6 +126,8 @@ impl Keeper {
             watch_wallets: Vec::new(),
             min_balance_wei: 0,
             stylus_programs: Vec::new(),
+            tips: Vec::new(),
+            tips_history: Mutex::new(HashMap::new()),
             core: None,
             sigma: None,
             bell: schedule::BellLeads::default(),
@@ -106,6 +142,17 @@ impl Keeper {
     pub async fn tick(&self, conn: &mut PgConnection) -> Result<TickReport> {
         let mut rep = TickReport::default();
         self.rpc.health_check().await; // RPC failover: pick the active provider for this tick's reads
+                                       // S5: the chain head's age (the sequencer down, or every RPC stale)
+        if let Ok(Some(b)) = self
+            .rpc
+            .primary()
+            .get_block_by_number(alloy::eips::BlockNumberOrTag::Latest)
+            .await
+        {
+            self.metrics
+                .chain_head_age
+                .set(self.clock.now().saturating_sub(b.header.timestamp) as i64);
+        }
         if let Err(e) = self.reconcile_submitted(conn, &mut rep).await {
             tracing::warn!(error = %e, "reconciling submitted jobs failed");
         }
@@ -331,8 +378,8 @@ impl Keeper {
         rep: &mut TickReport,
         now: u64,
     ) -> Result<()> {
-        // wallet balances (keeper sender + watched relayer wallets)
-        let key = schedule::j12_key("wallet-balances", now);
+        // wallet balances (keeper sender + watched relayer wallets), hourly
+        let key = schedule::j12_hourly_key("wallet-balances", now);
         if matches!(
             jobs::claim(conn, &key, "J12", &serde_json::json!({}), &self.instance).await?,
             Claim::Run { .. }
@@ -360,8 +407,50 @@ impl Keeper {
                 }
             }
             jobs::mark(conn, &key, "done", None).await?;
+            if let Err(e) = self.j12_tips(now).await {
+                tracing::warn!(error = %e, "J12 tip budget failed");
+            }
         }
 
+        Ok(())
+    }
+
+    /// The tip budget of each stack (whole loan tokens) and the days it lasts at the last 24 h's spend.
+    async fn j12_tips(&self, now: u64) -> Result<()> {
+        for (stack, addr) in &self.tips {
+            let addr = *addr;
+            let (budget, dec) = self
+                .rpc
+                .with_failover("tips.budget", |p| async move {
+                    let t = IKeeperTipsBudget::new(addr, &p);
+                    let b = t.budget().call().await?;
+                    let token = t.token().call().await?;
+                    let d = crate::core::abi::IERC20Decimals::new(token, &p)
+                        .decimals()
+                        .call()
+                        .await?;
+                    Ok((b, d))
+                })
+                .await?;
+            let whole = f64::from(budget) / 10f64.powi(dec as i32);
+            let days = {
+                let mut h = self.tips_history.lock().expect("tips history");
+                let q = h.entry(stack.clone()).or_default();
+                q.push_back((now, whole));
+                while q.front().is_some_and(|(t, _)| *t + 86_400 < now) {
+                    q.pop_front();
+                }
+                tips_days(q)
+            };
+            self.metrics
+                .tips_budget
+                .with_label_values(&[stack])
+                .set(whole);
+            self.metrics
+                .tips_budget_days
+                .with_label_values(&[stack])
+                .set(days);
+        }
         Ok(())
     }
 

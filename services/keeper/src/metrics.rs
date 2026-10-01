@@ -34,6 +34,24 @@ pub struct Metrics {
     pub pool_utilisation: GaugeVec,
     /// Shortfalls since the book's start block that reached a loss layer beyond the pool (layer=reserve|senior).
     pub shortfall_escalations: IntGaugeVec,
+    // S5 alert inputs (DevOps 17:50 REQUEST; every one is per chain through the `chain` target label)
+    /// (open print − the closure's frozen reference close) ÷ that close, signed, per asset: the ±50 % page.
+    pub open_print_deviation: GaugeVec,
+    /// When that open print was written (unix s), so the page lasts an hour after it and then resolves.
+    pub open_print_timestamp: IntGaugeVec,
+    /// Each health check: 1 when the provider answers within the lag (`rpc` = the host, never the URL).
+    pub rpc_up: IntGaugeVec,
+    /// 1 on the provider the keeper reads from.
+    pub rpc_active: IntGaugeVec,
+    /// Wall clock − the latest block's timestamp, each tick (sequencer down / every RPC stale).
+    pub chain_head_age: IntGauge,
+    /// Seconds past the end of the latest USBANK session with no NAV print since it opened (0 otherwise).
+    pub nav_print_overdue: IntGaugeVec,
+    /// The NAV feed's last print time (`lastRegularClose(asset).t`).
+    pub nav_last_print_timestamp: IntGaugeVec,
+    /// The KeeperTips budget (loan units, whole tokens) and the days it lasts at the last 24 h's spend.
+    pub tips_budget: GaugeVec,
+    pub tips_budget_days: GaugeVec,
 }
 
 impl Metrics {
@@ -148,7 +166,73 @@ impl Metrics {
                 ),
                 &["layer"],
             )?,
+            open_print_deviation: GaugeVec::new(
+                Opts::new(
+                    "keeper_open_print_deviation_ratio",
+                    "(open print - frozen reference close) / reference close, signed (threat model row 4)",
+                ),
+                &["asset"],
+            )?,
+            open_print_timestamp: IntGaugeVec::new(
+                Opts::new(
+                    "keeper_open_print_timestamp_seconds",
+                    "when the current closure's open print was written",
+                ),
+                &["asset"],
+            )?,
+            rpc_up: IntGaugeVec::new(
+                Opts::new(
+                    "keeper_rpc_up",
+                    "1 when the RPC answered the last health check within the lag",
+                ),
+                &["rpc"],
+            )?,
+            rpc_active: IntGaugeVec::new(
+                Opts::new("keeper_rpc_active", "1 on the RPC the keeper reads from"),
+                &["rpc"],
+            )?,
+            chain_head_age: IntGauge::new(
+                "keeper_chain_head_age_seconds",
+                "wall clock minus the latest block's timestamp",
+            )?,
+            nav_print_overdue: IntGaugeVec::new(
+                Opts::new(
+                    "keeper_nav_print_overdue_seconds",
+                    "seconds past the latest USBANK session's end with no NAV print for it (0 otherwise)",
+                ),
+                &["asset"],
+            )?,
+            nav_last_print_timestamp: IntGaugeVec::new(
+                Opts::new(
+                    "keeper_nav_last_print_timestamp_seconds",
+                    "the NAV feed's last print time",
+                ),
+                &["asset"],
+            )?,
+            tips_budget: GaugeVec::new(
+                Opts::new(
+                    "keeper_tips_budget",
+                    "KeeperTips.budget() in whole loan tokens",
+                ),
+                &["stack"],
+            )?,
+            tips_budget_days: GaugeVec::new(
+                Opts::new(
+                    "keeper_tips_budget_days",
+                    "days the tip budget lasts at the last 24 h's spend (365 when nothing was spent)",
+                ),
+                &["stack"],
+            )?,
         };
+        r.register(Box::new(m.open_print_deviation.clone()))?;
+        r.register(Box::new(m.open_print_timestamp.clone()))?;
+        r.register(Box::new(m.rpc_up.clone()))?;
+        r.register(Box::new(m.rpc_active.clone()))?;
+        r.register(Box::new(m.chain_head_age.clone()))?;
+        r.register(Box::new(m.nav_print_overdue.clone()))?;
+        r.register(Box::new(m.nav_last_print_timestamp.clone()))?;
+        r.register(Box::new(m.tips_budget.clone()))?;
+        r.register(Box::new(m.tips_budget_days.clone()))?;
         r.register(Box::new(m.is_leader.clone()))?;
         r.register(Box::new(m.failed_txs.clone()))?;
         r.register(Box::new(m.markets_unpriced.clone()))?;

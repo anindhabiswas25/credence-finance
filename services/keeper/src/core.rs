@@ -91,6 +91,9 @@ pub struct RiskCtx {
     /// REOPEN: when the open print was written (0 = not yet), and the sequencer-gap extension (R-20).
     pub open_print_at: u64,
     pub phase_extension: u64,
+    /// ClockData.refPrice (the last regular close, frozen at the close) and openPrint (written at REOPEN), WAD.
+    pub ref_price: U256,
+    pub open_print: U256,
     /// ClockData.venueEpoch (R-10): the pool epoch of the current / most recent closure.
     pub venue_epoch: u64,
     pub epoch_id: u64,
@@ -382,6 +385,8 @@ pub async fn read_ctx(
         next_close_at: info.nextCloseAt.to::<u64>(),
         open_print_at: info.openPrintAt.to::<u64>(),
         phase_extension: info.phaseExtension.to::<u64>(),
+        ref_price: U256::from(info.refPrice),
+        open_print: U256::from(info.openPrint),
         venue_epoch: info.venueEpoch,
         epoch_id: info.sessionCursor as u64,
         max_ltv_eff: max_eff,
@@ -538,6 +543,8 @@ mod tests {
             next_close_at: 0,
             open_print_at: 0,
             phase_extension: 0,
+            ref_price: U256::ZERO,
+            open_print: U256::ZERO,
             venue_epoch: 0,
             epoch_id: 0,
             max_ltv_eff: wad("0.75"),
