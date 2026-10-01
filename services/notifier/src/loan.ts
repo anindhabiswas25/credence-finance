@@ -59,14 +59,26 @@ export async function resolveLoanToken(
     return { symbol: c.loanSymbol, decimals: c.loanDecimals ?? 6 };
   const addr = loanAddress(book);
   if (c.rpcUrl && addr) {
-    const [s, d] = await Promise.all([
-      call(c.rpcUrl, addr, "0x95d89b41"), // symbol()
-      call(c.rpcUrl, addr, "0x313ce567"), // decimals()
-    ]);
-    return {
-      symbol: decodeString(s),
-      decimals: c.loanDecimals ?? Number(BigInt(d)),
-    };
+    // S5: RPC_URL_<id> may be an ordered failover list (comma-separated): the first that answers
+    let last: unknown;
+    for (const url of c.rpcUrl
+      .split(",")
+      .map((u) => u.trim())
+      .filter(Boolean)) {
+      try {
+        const [s, d] = await Promise.all([
+          call(url, addr, "0x95d89b41"), // symbol()
+          call(url, addr, "0x313ce567"), // decimals()
+        ]);
+        return {
+          symbol: decodeString(s),
+          decimals: c.loanDecimals ?? Number(BigInt(d)),
+        };
+      } catch (e) {
+        last = e;
+      }
+    }
+    throw last;
   }
   if (book.tokens?.usdc && !book.tokens.loan)
     return { symbol: "USDC", decimals: c.loanDecimals ?? 6 }; // a local book names its loan token
