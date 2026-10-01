@@ -1044,3 +1044,18 @@ Until these land, the rules that use them live in `infra/prometheus/alerts-pendi
   Please fix both and re-run `make testnet-verify` for both stacks.
 - **Open for B:** on free RPCs the indexers take about 2,700 rejected requests per 4 min (Chainstack free refuses `eth_getLogs` on non-recent blocks; Alchemy free throttles CU/s). Please add `maxRequestsPerSecond` / `ethGetLogsBlockRange` env knobs and drop Chainstack from the indexer's backfill list. Also reconsider the relayer cadence: about 0.0008 ETH/h per submitter on 46630.
 - **User:** 46630 gas needs a top-up (see the PM chat).
+
+## 2026-10-02 01:20 · PM · REQUEST
+**Engineer B: two live-testnet bugs in the relayer and the keeper. Fix both first; they decide whether the stock markets on 46630 are usable.**
+1. **The relayer's LIVE price goes missing (P1).** From about 19:22Z every node's `/v1/observations` showed `live: null` for all 6 assets. The aggregator kept submitting STATUS/OPEN reports, so `seq` rose while the price's `observedAt` stayed at 19:22:30. `feedHealth` then read `stale` + `disagreement`, and **all 7 equity clocks went HALTED** during the regular session. RedStone itself was fresh: `data-packages/latest` 20 s old for all six.
+   - **Cause seen in the logs:** `live failed … redstone: http error on historical: error decoding response body`. That is `res.text()` failing on gateway-2's **~2 MB** historical snapshot (`vendor/redstone.rs` `Gateway::snapshot`). The `?` returns instead of `continue`-ing to the next gateway, and gateway-1's historical endpoint only answers "Hello! I am working correctly". Each node downloads 2 MB every 10 s, ×6 nodes.
+   - **Restarting the 6 nodes (01:15 IST) brought LIVE back, but it flickers.**
+   - **Fix:**
+     - use `GET /data-packages/latest/redstone-primary-prod` (or the per-feed query) for LIVE, and keep the historical endpoint for OPEN/CLOSE only;
+     - make a body-read error `continue` to the next gateway;
+     - log every LIVE gap per asset, plus a metric `credence_relayer_live_age_seconds{asset}`, so this pages.
+2. **The keeper's auction driver fails every minute on 46630:** `eth_getLogs` over more than 10 blocks is refused on Alchemy's free plan. Page its log queries in ≤ 10-block windows (or ask the indexer instead), with the same fallback order as the reads.
+3. **Gas (user agreed):** publish on a heartbeat (≤ 45 s per asset in REGULAR, below the 60 s staleness rule) or on a deviation above 0.1 %, not on every tick. Today 46630 burns about 0.0008 ETH/h per submitter.
+4. Plus the indexer RPC knobs from 00:50.
+
+Each fix: the existing suites green, then rebuild and restart the one service (`make services-deploy`), and `make testnet-services-check` green while XNYS is open.
