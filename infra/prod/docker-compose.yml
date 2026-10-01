@@ -108,7 +108,14 @@ services:
     image: credence/indexer:${TAG:-latest}
     build: { context: ../.., dockerfile: infra/prod/docker/indexer.Dockerfile }
     env_file: ["${GEN_DIR:-./generated}/46630/chain.env"]
-    environment: { <<: *db-env, RPC_ENV_FILE: /run/secrets/rpc_env, PORT: "42069" }
+    environment:
+      <<: *db-env
+      RPC_ENV_FILE: /run/secrets/rpc_env
+      PORT: "42069"
+      # free RPC plans (B, 01:20 PM REQUEST): no Chainstack (refuses non-recent eth_getLogs), ≤ 10 req/s per chain
+      PONDER_RPC_TIERS: "${PONDER_RPC_TIERS:-PRIMARY PUBLIC}"
+      PONDER_MAX_REQUESTS_PER_SECOND: "${PONDER_MAX_REQUESTS_PER_SECOND:-10}"
+      PONDER_ETH_GET_LOGS_BLOCK_RANGE: "${PONDER_ETH_GET_LOGS_BLOCK_RANGE:-}"
     secrets: [pg_password, rpc_env]
     volumes: ["${GEN_DIR:-./generated}/46630/book.json:/run/config/book.json:ro"]
     healthcheck:
@@ -195,7 +202,14 @@ services:
     <<: *service
     image: credence/indexer:${TAG:-latest}
     env_file: ["${GEN_DIR:-./generated}/421614/chain.env"]
-    environment: { <<: *db-env, RPC_ENV_FILE: /run/secrets/rpc_env, PORT: "42069" }
+    environment:
+      <<: *db-env
+      RPC_ENV_FILE: /run/secrets/rpc_env
+      PORT: "42069"
+      # free RPC plans (B, 01:20 PM REQUEST): no Chainstack (refuses non-recent eth_getLogs), ≤ 10 req/s per chain
+      PONDER_RPC_TIERS: "${PONDER_RPC_TIERS:-PRIMARY PUBLIC}"
+      PONDER_MAX_REQUESTS_PER_SECOND: "${PONDER_MAX_REQUESTS_PER_SECOND:-10}"
+      PONDER_ETH_GET_LOGS_BLOCK_RANGE: "${PONDER_ETH_GET_LOGS_BLOCK_RANGE:-}"
     secrets: [pg_password, rpc_env]
     volumes: ["${GEN_DIR:-./generated}/421614/book.json:/run/config/book.json:ro"]
     healthcheck:

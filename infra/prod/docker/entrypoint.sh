@@ -7,7 +7,8 @@
 #   RPC_ENV_FILE=<path>      a KEY=VALUE file with RPC_<chainId>_PRIMARY / _SECONDARY (the user's keyed URLs)
 #   RPC_CHAINS="<id> [<id>]" the chains this service talks to; with RPC_<id>_PUBLIC (keyless, from compose) builds
 #                            RPC_URL_<id>          the whole ordered list (the API and the notifier fail over through it)
-#                            PONDER_RPC_URL_<id>   the same list (the indexer)
+#                            PONDER_RPC_URL_<id>   the same list (the indexer), or only the tiers in PONDER_RPC_TIERS
+#                                                  (e.g. "PRIMARY PUBLIC": Chainstack free refuses non-recent eth_getLogs)
 #                            and, when exactly one chain is listed:
 #                            RPC_URL               the first URL, RPC_URL_FALLBACK the rest (keeper, relayer, solver)
 #   DATABASE_URL unset and PGHOST set: DATABASE_URL=postgres://PGUSER:PGPASSWORD@PGHOST:PGPORT/PGDATABASE
@@ -45,7 +46,13 @@ if [ -n "${RPC_CHAINS:-}" ]; then
     first="${list%%,*}"
     rest=""
     case "$list" in *,*) rest="${list#*,}" ;; esac
-    export "RPC_URL_${id}=$list" "PONDER_RPC_URL_${id}=$list"
+    plist=""
+    for tier in ${PONDER_RPC_TIERS:-PRIMARY SECONDARY PUBLIC}; do
+      eval "u=\${RPC_${id}_${tier}:-}"
+      [ -n "$u" ] && plist="${plist:+$plist,}$u"
+    done
+    [ -n "$plist" ] || plist="$list"
+    export "RPC_URL_${id}=$list" "PONDER_RPC_URL_${id}=$plist"
     if [ "$n" = 1 ]; then
       export "RPC_URL=$first" "RPC_URL_FALLBACK=$rest"
     fi

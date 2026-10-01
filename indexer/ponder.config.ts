@@ -3,6 +3,8 @@
 //
 // Env: PONDER_CHAIN_ID (default 412346, the devnode), PONDER_RPC_URL (else PONDER_RPC_URL_<chainId>,
 // else RPC_URL; a comma-separated list is a failover list), PONDER_WS_URL, DATABASE_URL, DEPLOYMENTS_FILE (else deployments/<chainId>[.local].json).
+// Free-tier RPC knobs (B, 01:20 PM REQUEST): PONDER_MAX_REQUESTS_PER_SECOND (Ponder's default 50 is above Alchemy free's
+// CU/s; every refusal is a retry) and PONDER_ETH_GET_LOGS_BLOCK_RANGE (Ponder's default: learned from the errors).
 import { createConfig } from "ponder";
 import { parseAbiItem } from "viem";
 import {
@@ -26,6 +28,11 @@ import {
 } from "./src/book";
 
 const chainId = Number(process.env.PONDER_CHAIN_ID ?? 412346);
+/** A positive integer env value, else undefined (Ponder's default). */
+function positive(v: string | undefined): number | undefined {
+  const n = Number(v);
+  return v && Number.isInteger(n) && n > 0 ? n : undefined;
+}
 const rpcs = rpcUrls(chainId);
 const rpc = rpcs.length === 1 ? rpcs[0]! : rpcs;
 const ws = process.env.PONDER_WS_URL ?? process.env[`PONDER_WS_URL_${chainId}`];
@@ -65,6 +72,8 @@ export default createConfig({
       rpc,
       ws,
       pollingInterval: Number(process.env.PONDER_POLLING_MS ?? 1000),
+      maxRequestsPerSecond: positive(process.env.PONDER_MAX_REQUESTS_PER_SECOND),
+      ethGetLogsBlockRange: positive(process.env.PONDER_ETH_GET_LOGS_BLOCK_RANGE),
     },
   },
   contracts: {
