@@ -11,13 +11,13 @@ OPS_GEN     := $(CURDIR)/$(OPS_DIR)/generated
 OPS_STATE   := $(CURDIR)/$(OPS_DIR)/state
 # the non-secret settings (.env.prod, from .env.prod.example), exported to every recipe line that sources it
 OPS_SRC     := set -a; [ -f $(OPS_ENV) ] && . ./$(OPS_ENV); set +a;
-OPS_COMPOSE  = HOST_UID=$$(id -u) HOST_GID=$$(id -g) GEN_DIR=$(OPS_GEN) STATE_DIR=$(OPS_STATE) \
+OPS_COMPOSE  = env HOST_UID=$$(id -u) HOST_GID=$$(id -g) GEN_DIR=$(OPS_GEN) STATE_DIR=$(OPS_STATE) \
                docker compose -p credence-testnet -f $(OPS_DIR)/docker-compose.yml \
                $(if $(wildcard $(OPS_ENV)),--env-file $(OPS_ENV))
 OPS_TAG      = $$(cat $(OPS_STATE)/tag.current 2>/dev/null || echo latest)
 # the dry run (testnet-dry-*): its own project, directories and ports
 DRY_DIR     := $(CURDIR)/target/testnet-dry
-DRY_COMPOSE  = HOST_UID=$$(id -u) HOST_GID=$$(id -g) GEN_DIR=$(DRY_DIR)/generated STATE_DIR=$(DRY_DIR)/state \
+DRY_COMPOSE  = env HOST_UID=$$(id -u) HOST_GID=$$(id -g) GEN_DIR=$(DRY_DIR)/generated STATE_DIR=$(DRY_DIR)/state \
                SECRETS_DIR=$(DRY_DIR)/secrets KEYS_DIR=$(DRY_DIR)/keys BACKUP_HOST_DIR=$(DRY_DIR)/backups \
                API_PORT=18787 GRAFANA_PORT=13002 PROMETHEUS_PORT=19091 ALERTMANAGER_PORT=19094 TAG=dry \
                OPS_ADMIN_ADDRESSES=0x70997970C51812dc3A010C7d01b50e0d17dc79C8 \
