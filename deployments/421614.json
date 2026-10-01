@@ -39,7 +39,7 @@
     "timelock": "0xC8c8279E822434E5390448c177900B97073227a7"
   },
   "stack": "nav",
-  "startBlock": 11823726,
+  "startBlock": 314729088,
   "tokens": {
     "loan": "0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d",
     "tTBILL": "0x9cB6783f7E418D9b2b64e863134EaD5E41fbCE8e"
@@ -114,5 +114,52 @@
       "constructorArgs": "0x000000000000000000000000c8c8279e822434e5390448c177900b97073227a700000000000000000000000075faf114eafb1bdbe2f0316df893fd58ce46aa4d555342414e4b000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000a00000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000002143726564656e636520556e6465727772697465722055534443202866756e647329000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000008636655502d4e4156000000000000000000000000000000000000000000000000",
       "block": 314729247
     }
-  ]
+  ],
+  "verify": {
+    "0x3705a16e586029421a99ccde4652314cb6d750e0": {
+      "name": "ListingParamsEngine",
+      "status": "verified",
+      "at": "2026-10-01T19:04:33Z"
+    },
+    "0x22e66634001a266f279bc78816df40229750d499": {
+      "name": "CredenceMarket",
+      "status": "verified",
+      "at": "2026-10-01T19:05:01Z"
+    },
+    "0xeed693b799d807dc9d3a999538f98c9b4395ce52": {
+      "name": "UnderwriterPool",
+      "status": "verified",
+      "at": "2026-10-01T19:05:26Z"
+    },
+    "0x77e40e10241d6bdf1e884bd96788fc65f16ed315": {
+      "name": "Safe(gov)",
+      "status": "canonical",
+      "at": "2026-10-01T19:05:26Z",
+      "detail": "SafeProxy of the canonical Safe v1.4.1 factory"
+    },
+    "0x1362dbeca0f024297060ad272a52a8d108923d2a": {
+      "name": "Safe(guardian)",
+      "status": "canonical",
+      "at": "2026-10-01T19:05:26Z",
+      "detail": "SafeProxy of the canonical Safe v1.4.1 factory"
+    },
+    "0x8c65f517306537ac53fc52da398686f6c25ef062": {
+      "name": "Safe(ops)",
+      "status": "canonical",
+      "at": "2026-10-01T19:05:26Z",
+      "detail": "SafeProxy of the canonical Safe v1.4.1 factory"
+    },
+    "0x7937aca1cd45caf31d55e3ed4e920ddc16ec60da": {
+      "name": "stylus:credence-risk-engine",
+      "status": "failed",
+      "at": "2026-10-01T19:06:12Z",
+      "detail": "error: failed to run contract"
+    },
+    "0xd69ccb29203d8ab39dcc533caec1e6872bb9dff7": {
+      "name": "stylus:credence-auction-math",
+      "status": "failed",
+      "at": "2026-10-01T19:06:53Z",
+      "detail": "error: failed to run contract"
+    }
+  }
 }

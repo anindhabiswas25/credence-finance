@@ -1020,3 +1020,27 @@ Until these land, the rules that use them live in `infra/prometheus/alerts-pendi
   Same set on both chains. **Pre-mainnet:** hardware-wallet owners on separate holders.
 - **Pre-flight:** `fork_rehearsal.sh` fix `1d407ef` (`CAST_UNSAFE_PASSWORD`). Both stacks pass on forks; the equity stack passed again with the real owners (3 min).
 - **Order:** equity → 46630 now; NAV → 421614 when the bridged ETH lands; then `testnet-verify`, the post-deploy checks, service-wallet top-ups from the deployer, and B's services (`testnet-up`, `testnet-services-check`).
+
+## 2026-10-02 00:50 · PM · READY
+**Testnet is LIVE on both chains. `make testnet-services-check`: GREEN.** Deployed from the PM terminal.
+- **46630 equity:** `deployments/46630.json`, post-deploy check PASSED 00:12, 7 markets.
+- **421614 NAV:** `deployments/421614.json`, PASSED 00:28, 1 market. The first NAV run failed at the Stylus step (max fee below a rising base fee). Its step-1 book is kept as `421614.abandoned-stylus-fee.json` (never wired or finalized). The fix is in `deploy.sh` (`--max-fee-per-gas-gwei`, 3× the gas price); the Safes were reused.
+- **Services (local, project `credence-testnet`):**
+  - all 22 healthy;
+  - both indexers following the head;
+  - feeds A and B with 203 reports each in 10 min;
+  - both keepers leader with no reverts;
+  - the API on 127.0.0.1:8787 (46630: 7 markets, 421614: 1);
+  - 1 NAV print indexed;
+  - Alertmanager OK.
+- **Bugs found on the real chains, all in tooling (none in the contracts):**
+  1. `fork_rehearsal.sh` password env (`1d407ef`).
+  2. The Stylus max fee (above).
+  3. **`startBlock` was the parent chain's block** (`block.number` on Arbitrum chains = the L1 Sepolia block), so the indexers backfilled from ~11.8M. `book_meta.sh` now takes the minimum receipt block. Both books are patched, and the indexer schemas were dropped (empty) and re-synced per `indexer-reindex.md`, with a backup taken first.
+- **Open for A (not blocking):** `testnet-verify` verified 9 contracts on 46630 and 3 on 421614. Two gaps:
+  - (a) `book_meta.sh` records only top-level CREATEs in `.creations`: 9 of 31 on 46630 and 3 of 23 on 421614, so most contracts are never attempted;
+  - (b) `cargo stylus verify` fails with "could not determine which binary to run" in the 2-program workspace.
+
+  Please fix both and re-run `make testnet-verify` for both stacks.
+- **Open for B:** on free RPCs the indexers take about 2,700 rejected requests per 4 min (Chainstack free refuses `eth_getLogs` on non-recent blocks; Alchemy free throttles CU/s). Please add `maxRequestsPerSecond` / `ethGetLogsBlockRange` env knobs and drop Chainstack from the indexer's backfill list. Also reconsider the relayer cadence: about 0.0008 ETH/h per submitter on 46630.
+- **User:** 46630 gas needs a top-up (see the PM chat).

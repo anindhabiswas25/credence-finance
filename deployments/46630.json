@@ -50,7 +50,7 @@
     "timelock": "0xEd720868fa19431B2EAB25c6Bb358e1934fEa297"
   },
   "stack": "equity",
-  "startBlock": 11823610,
+  "startBlock": 127256343,
   "tokens": {
     "loan": "0x9de1Fd6B9f2E2F4dC4C90471c7da6344B32A2a7F",
     "tAAPL": "0xD43407E0be57640cd80aC51fB71B2D5A5dDdf893",
@@ -205,5 +205,82 @@
       "constructorArgs": "0x000000000000000000000000ed720868fa19431b2eab25c6bb358e1934fea297",
       "block": 127256685
     }
-  ]
+  ],
+  "verify": {
+    "0x421b8d9c06ba28b375d918a05ac75e3dc5949e49": {
+      "name": "BorrowLogic",
+      "status": "verified",
+      "at": "2026-10-01T18:59:38Z"
+    },
+    "0xeee51c4daad2dfda23e2fc60e06af955680e2721": {
+      "name": "PoolLib",
+      "status": "verified",
+      "at": "2026-10-01T18:59:59Z"
+    },
+    "0x7e0325866c7a7bbd16e3b63cf5b3f6b768fc3e37": {
+      "name": "LiquidationLogic",
+      "status": "verified",
+      "at": "2026-10-01T19:00:19Z"
+    },
+    "0xbfd1cbf4c4dccba09731f44faaa032b1384078f7": {
+      "name": "GdaLib",
+      "status": "verified",
+      "at": "2026-10-01T19:00:39Z"
+    },
+    "0x6bdace1f35538a58eb4be104df8a614aa9e54c12": {
+      "name": "CoverLogic",
+      "status": "verified",
+      "at": "2026-10-01T19:00:58Z"
+    },
+    "0x22939e09ea29e945dbd9afe9ed483503ddb3685a": {
+      "name": "ListingParamsEngine",
+      "status": "verified",
+      "at": "2026-10-01T19:01:17Z"
+    },
+    "0xe58b9870401a4db8dc340af8c4a85c12142f62bf": {
+      "name": "CredenceMarket",
+      "status": "verified",
+      "at": "2026-10-01T19:01:52Z"
+    },
+    "0x228236ed9be9f7af935412db00d9a970ef2944c6": {
+      "name": "UnderwriterPool",
+      "status": "verified",
+      "at": "2026-10-01T19:02:11Z"
+    },
+    "0x053bb76ca3b17a3a17966e519a79f9cd81853032": {
+      "name": "AuctionHouse",
+      "status": "verified",
+      "at": "2026-10-01T19:02:31Z"
+    },
+    "0x6bf8dd01adae9b983849be65832a6e44595c41e9": {
+      "name": "Safe(gov)",
+      "status": "canonical",
+      "at": "2026-10-01T19:02:31Z",
+      "detail": "SafeProxy of the canonical Safe v1.4.1 factory"
+    },
+    "0xa1adb2c1ed9aa63e5c55fa7facb9b601a1ab15f9": {
+      "name": "Safe(guardian)",
+      "status": "canonical",
+      "at": "2026-10-01T19:02:31Z",
+      "detail": "SafeProxy of the canonical Safe v1.4.1 factory"
+    },
+    "0x7781c0ff8d18f8456ea53f404f19258a677726a3": {
+      "name": "Safe(ops)",
+      "status": "canonical",
+      "at": "2026-10-01T19:02:31Z",
+      "detail": "SafeProxy of the canonical Safe v1.4.1 factory"
+    },
+    "0x740b6a46585474eb113f81999c1117e69d4be1be": {
+      "name": "stylus:credence-risk-engine",
+      "status": "failed",
+      "at": "2026-10-01T19:03:23Z",
+      "detail": "error: failed to run contract"
+    },
+    "0x46e21eed59ad0652b638231653e11c5f7b3e7f9b": {
+      "name": "stylus:credence-auction-math",
+      "status": "failed",
+      "at": "2026-10-01T19:04:10Z",
+      "detail": "error: failed to run contract"
+    }
+  }
 }

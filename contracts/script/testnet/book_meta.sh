@@ -37,6 +37,9 @@ jq --slurpfile bc "$BC" --arg stylus "${STYLUS_FROM_BLOCK:-}" --arg tag "${ABI_T
          else [{key: "stylus.pricing", value: ($stylus | tonumber)}, {key: "stylus.auctionMath", value: ($stylus | tonumber)}]
          end)
       | from_entries)
+  # the chain'"'"'s own first deploy block. DeployTestnet'"'"'s `block.number` is the parent chain'"'"'s block on Arbitrum chains
+  # (L1 Sepolia on 421614 and 46630), so the indexers backfilled from ~11.8M (2026-10-02); the receipts are L2 blocks
+  | .startBlock = ([$blk[]] | min)
   | .libraries = ([$bc[0].transactions[] | select(.transactionType == "CREATE2" and .contractName != null)
       | {key: (.contractName | rtrimstr(".size")), value: .contractAddress}] | from_entries)
   | .abiTag = $tag
