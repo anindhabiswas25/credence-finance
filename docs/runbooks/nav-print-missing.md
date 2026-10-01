@@ -11,7 +11,7 @@ The `navstrike-421614` service runs `credence-relayer nav-strike --publish` once
 3. Strike by hand (the same command the timer runs):
    ```sh
    docker compose -p credence-testnet -f infra/prod/docker-compose.yml --env-file infra/prod/.env.prod \
-     exec navstrike-421614 credence-relayer nav-strike --publish
+     exec navstrike-421614 /usr/local/bin/credence-entrypoint credence-relayer nav-strike --publish
    ```
    `--dry-run` signs and prints without sending.
 4. The timer then sees the session as done only after its own successful run; a manual strike plus the timer's makes two prints in one session, which is harmless (a tiny extra accrual).
