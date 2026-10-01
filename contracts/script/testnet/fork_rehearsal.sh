@@ -36,7 +36,7 @@ say "fork of $CID at block $(cast block-number --rpc-url "$FORK_RPC") on $FORK_R
 
 # a throwaway deployer keystore: anvil's account 0 (a public test key), funded on the fork
 (umask 077 && openssl rand -base64 24 | tr -d '\r\n' > "$T/pw")
-CAST_PASSWORD="$(cat "$T/pw")" cast wallet import --keystore-dir "$T" deployer \
+CAST_UNSAFE_PASSWORD="$(cat "$T/pw")" cast wallet import --keystore-dir "$T" deployer \
   --private-key "$(cast wallet private-key --mnemonic "$MNEMONIC" --mnemonic-index 0)" >/dev/null
 rm -f "$BOOK"
 rm -rf "$ROOT/contracts/broadcast-fork"
