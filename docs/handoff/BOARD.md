@@ -1072,3 +1072,30 @@ Each fix: the existing suites green, then rebuild and restart the one service (`
 - **Deploy:** `make services-deploy SVC='…'` is new. It rebuilds at the current tag, recreates only the named services (`--no-deps`), runs the health gate, and restores the `:rollback` image on failure. No migrations. I used it for the 6 nodes and 2 aggregators; the gate was green at 01:36. Postgres and the other services were untouched. `navstrike-421614` still runs the previous relayer build (no change for it).
 - **Live check (post-market, 20:07Z):** NVDA/AAPL/TSLA/… LIVE `observed_at` is about 20 s old. MSFT/GOOGL/AMZN have none (no RedStone extended feed, as ruled). The REGULAR check is at 13:30Z.
 - **Next:** item 2 (keeper `eth_getLogs` windows).
+
+## 2026-10-02 02:35 · B · READY (2–4/4) + FINDINGS
+**PM REQUEST 01:20 items 2–4 are deployed on the live stack, one service at a time (`make services-deploy SVC=…`).** Postgres and the other services were untouched. `make testnet-services-check` is **GREEN** at 02:33 (post-market). The new clock check is in `3cacd99`; the in-session run (all 7 clocks REGULAR) is due after 13:45Z; see the last bullet.
+- **2 · keeper `eth_getLogs` (`7079ba4`, cooldown `4c25b5c`):**
+  - `Rpc::logs_paged` asks each provider for 10,000 blocks. On a range refusal (Alchemy free) that provider drops to **10-block windows** and is retried. Any other error fails over in the read order. A provider whose getLogs failed (Chainstack free: "Archive … not available") goes last for 5 min, with one warning.
+  - During a catch-up (> 30 of its windows) a small-range provider goes after a wide one, which is the public RPC here.
+  - Each scan has a budget of 60 calls; the cursor keeps the rest.
+  - The auction scan is one cursor per stack: `AuctionCreated` + `LotReleased` + `PositionSettled`. Settlement reads that book only once the scan has reached the head. `unsettled()` used to scan from block 0, which can't be paged. The shortfall scan uses the same pager.
+  - Knobs: `KEEPER_LOGS_MAX_RANGE` / `_MIN_RANGE` / `_MAX_WINDOWS`.
+  - Tests: new `logs_paging`; `edge_restart` (the full auction cycle with a fresh keeper per tick), `core_e2e` and `keeper_e2e` are green on anvil + the dev Postgres.
+  - "auction driver failed" is gone on 46630.
+- **3 · cadence (`e8b8104`):**
+  - **Finding:** OracleAdapter's 60 s staleness counts from `observedAt`. A RedStone package is already 10–25 s old when the node observes it, so a 45 s *wall-clock* heartbeat would let the on-chain price reach ~70 s and stale the clocks.
+  - REGULAR therefore publishes on whichever comes first: 45 s since the last publish, the published price **≥ 50 s old** by the next tick, or a move ≥ 0.1 %. EXTENDED: 60 s / 240 s / 0.25 %.
+  - **Coalescing:** once a batch is due, every LIVE and STATUS report due within 20 s rides along.
+  - Measured post-market: feed A went from ~2 tx/min with 1–2 reports to **1 tx/min with 11 reports**. Expect about one tx per ~25–30 s in REGULAR, against one per tick before.
+  - Knobs: `RELAYER_HEARTBEAT_{REGULAR,EXTENDED}_S`, `RELAYER_MAX_AGE_{REGULAR,EXTENDED}_S`, `RELAYER_COALESCE_S`.
+  - Relayer suites and the anvil e2e are green.
+- **4 · indexer (`9190d24`):**
+  - New knobs: `PONDER_MAX_REQUESTS_PER_SECOND` (testnet 10), `PONDER_ETH_GET_LOGS_BLOCK_RANGE` (unset: Ponder learns it), and `PONDER_RPC_TIERS` in the entrypoint (testnet `PRIMARY PUBLIC`, so **no Chainstack**).
+  - Chain options are outside Ponder's build id, so both indexers resumed from their checkpoint with no reindex.
+  - RPC errors: 421614 went from ~117 per 5 min to 4 per 4 min; 46630 shows 4.
+- **Also fixed (finding):**
+  - **J7 failed every run** on 46630: `price_point.observed_at` is Ponder `bigint` = NUMERIC, read as i64. It is now cast to `::int8` (`2633043`). The test tables use int8, which is why no suite caught it.
+  - `keeper_e2e` J1 asserted 3 J12 rows, but `wallet-balances` has been hourly for a while.
+- **`testnet-services-check` change:** in XNYS's regular session (from open + 15 min) every equity clock must now be REGULAR; outside it, the states are printed. Right now: 4 EXTENDED, 3 HALTED (MSFT/GOOGL/AMZN have no extended feed, as ruled). Clock state comes from feed health on every poke, so they clear at the open.
+- **Open:** the done check is `make testnet-services-check` GREEN with 7/7 REGULAR after **13:45Z**. B will run it then and post the result. `navstrike-421614` still runs the pre-01:36 relayer build; its code is unchanged.
