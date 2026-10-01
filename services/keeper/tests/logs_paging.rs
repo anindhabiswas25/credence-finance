@@ -96,6 +96,13 @@ async fn a_catch_up_goes_wide_first_and_errors_fail_over() {
     assert_eq!(rpc.logs_paged(&Filter::new(), 1, 20).await.unwrap().1, 20);
     assert_eq!(wide_calls.lock().unwrap().as_slice(), &[(1, 20)]);
 
+    // a provider that failed is tried last for the cooldown (one failure, not one per window)
+    let (down, down_calls) = server(Mode::Down).await;
+    let (small, _) = server(Mode::Max10).await;
+    let rpc = Rpc::connect(&[down, small], None).unwrap();
+    assert_eq!(rpc.logs_paged(&Filter::new(), 1, 50).await.unwrap().1, 50);
+    assert_eq!(down_calls.lock().unwrap().len(), 1);
+
     // every provider down and nothing covered: an error
     let (down, _) = server(Mode::Down).await;
     let rpc = Rpc::connect(&[down], None).unwrap();

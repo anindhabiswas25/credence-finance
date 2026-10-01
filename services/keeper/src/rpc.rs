@@ -33,6 +33,9 @@ pub const LOGS_MAX_WINDOWS: usize = 60;
 /// A provider with a small range is tried after the wide ones while the backlog needs more than this many of its
 /// windows (a catch-up after a restart); otherwise the read order stands.
 pub const LOGS_DEFER_WINDOWS: u64 = 30;
+/// A provider whose `eth_getLogs` failed (not a range refusal: Chainstack free refuses non-recent blocks) is tried last
+/// for this long.
+pub const LOGS_COOLDOWN: Duration = Duration::from_secs(300);
 
 /// Whether an RPC error refuses the block range (or the result size) of an `eth_getLogs`.
 pub fn is_range_refusal(msg: &str) -> bool {
@@ -48,6 +51,9 @@ pub struct Rpc {
     providers: Vec<(String, DynProvider)>,
     /// Per provider: the `eth_getLogs` range it accepts (learned).
     log_caps: Vec<AtomicU64>,
+    /// Per provider: until when (ms since `epoch`) its `eth_getLogs` is tried last.
+    log_cooldown: Vec<AtomicU64>,
+    epoch: std::time::Instant,
     pub logs_min_range: u64,
     pub logs_max_windows: usize,
     failovers: Option<IntCounterVec>,
@@ -98,6 +104,8 @@ impl Rpc {
                 .iter()
                 .map(|_| AtomicU64::new(LOGS_MAX_RANGE))
                 .collect(),
+            log_cooldown: providers.iter().map(|_| AtomicU64::new(0)).collect(),
+            epoch: std::time::Instant::now(),
             logs_min_range: LOGS_MIN_RANGE,
             logs_max_windows: LOGS_MAX_WINDOWS,
             providers,
@@ -204,6 +212,7 @@ impl Rpc {
             .iter()
             .map(|_| AtomicU64::new(max_range.max(min_range)))
             .collect();
+        self.log_cooldown = self.providers.iter().map(|_| AtomicU64::new(0)).collect();
         self.logs_min_range = min_range;
         self.logs_max_windows = max_windows.max(1);
         self
@@ -223,8 +232,12 @@ impl Rpc {
             let mut order: Vec<usize> = std::iter::once(first)
                 .chain((0..self.providers.len()).filter(|&i| i != first))
                 .collect();
+            let now_ms = self.epoch.elapsed().as_millis() as u64;
             order.sort_by_key(|&i| {
-                self.log_caps[i].load(Ordering::Relaxed) * LOGS_DEFER_WINDOWS < remaining
+                (
+                    self.log_cooldown[i].load(Ordering::Relaxed) > now_ms,
+                    self.log_caps[i].load(Ordering::Relaxed) * LOGS_DEFER_WINDOWS < remaining,
+                )
             });
             let mut got = None;
             let mut last = None;
@@ -251,7 +264,14 @@ impl Rpc {
                             self.log_caps[i].store(self.logs_min_range, Ordering::Relaxed);
                         }
                         Err(e) => {
-                            tracing::warn!(rpc = %name, what = "eth_getLogs", error = %e, "rpc call failed");
+                            let until = self.epoch.elapsed().as_millis() as u64
+                                + LOGS_COOLDOWN.as_millis() as u64;
+                            // one warning per cooldown, not one per window
+                            if self.log_cooldown[i].swap(until, Ordering::Relaxed)
+                                <= self.epoch.elapsed().as_millis() as u64
+                            {
+                                tracing::warn!(rpc = %name, what = "eth_getLogs", error = %e, cooldown_s = LOGS_COOLDOWN.as_secs(), "rpc call failed; tried last for the cooldown");
+                            }
                             last = Some(anyhow!(e));
                             continue 'providers;
                         }
