@@ -267,7 +267,7 @@ async fn aggregator(
         assets: common
             .assets
             .iter()
-            .map(|a| (a.id, a.symbol.clone()))
+            .map(|a| (a.id, a.label.clone()))
             .collect(),
     };
     let _ = ops;
