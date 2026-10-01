@@ -6,6 +6,7 @@ use std::{collections::BTreeSet, path::PathBuf, time::Duration};
 
 use alloy::{
     eips::BlockNumberOrTag,
+    network::EthereumWallet,
     primitives::{Address, U256},
     providers::{DynProvider, Provider, ProviderBuilder},
     rpc::types::Filter,
@@ -43,8 +44,12 @@ sol! {
 struct Cli {
     #[arg(long, env = "SOLVER_CONFIG")]
     config: PathBuf,
+    /// An ordered failover list (comma-separated), like the keeper's: the first that answers is used.
     #[arg(long, env = "RPC_URL", default_value = "http://127.0.0.1:8547")]
     rpc: String,
+    /// More fallbacks after `--rpc` (comma-separated; S5, the same env as the keeper and the relayer).
+    #[arg(long, env = "RPC_URL_FALLBACK", default_value = "")]
+    rpc_fallback: String,
     /// SolverAuction (default: the book's nav.solverAuction).
     #[arg(long, env = "SOLVER_AUCTION")]
     venue: Option<Address>,
@@ -58,7 +63,40 @@ struct Cli {
 struct Solver {
     p: SolverProfile,
     addr: Address,
+    wallet: EthereumWallet,
     w: DynProvider,
+}
+
+fn wallet_provider(url: &str, wallet: &EthereumWallet) -> Result<DynProvider> {
+    Ok(ProviderBuilder::new()
+        .with_simple_nonce_management()
+        .wallet(wallet.clone())
+        .connect_http(url.parse().context("rpc url")?)
+        .erased())
+}
+
+/// The first RPC, in configured order, that answers within 3 s (S5 failover). Logs hosts only, never the URL.
+async fn pick(urls: &[String]) -> Result<(usize, DynProvider)> {
+    for (i, u) in urls.iter().enumerate() {
+        let p = ProviderBuilder::new()
+            .connect_http(u.parse().context("rpc url")?)
+            .erased();
+        if let Ok(Ok(_)) = tokio::time::timeout(Duration::from_secs(3), p.get_block_number()).await
+        {
+            return Ok((i, p));
+        }
+        tracing::warn!(rpc = %host(u), "rpc does not answer");
+    }
+    anyhow::bail!("no RPC answers ({} configured)", urls.len())
+}
+
+fn host(url: &str) -> &str {
+    url.split("://")
+        .nth(1)
+        .unwrap_or(url)
+        .split(['/', '?'])
+        .next()
+        .unwrap_or(url)
 }
 
 fn book_addr(chain_id: u64, pointer: &str) -> Result<Address> {
@@ -86,9 +124,15 @@ async fn main() -> Result<()> {
     )
     .await?;
     let cfg: SolverConfig = serde_json::from_str(&std::fs::read_to_string(&cli.config)?)?;
-    let read = ProviderBuilder::new()
-        .connect_http(cli.rpc.parse()?)
-        .erased();
+    let urls: Vec<String> = cli
+        .rpc
+        .split(',')
+        .chain(cli.rpc_fallback.split(','))
+        .map(str::trim)
+        .filter(|u| !u.is_empty())
+        .map(str::to_owned)
+        .collect();
+    let (mut active, mut read) = pick(&urls).await?;
     let chain_id = read.get_chain_id().await?;
     let venue = match cli.venue {
         Some(v) => v,
@@ -113,11 +157,8 @@ async fn main() -> Result<()> {
             .await
             .with_context(|| format!("key of {}", p.name))?;
         let addr = s.address();
-        let w = ProviderBuilder::new()
-            .with_simple_nonce_management()
-            .wallet(s.wallet())
-            .connect_http(cli.rpc.parse()?)
-            .erased();
+        let wallet = s.wallet();
+        let w = wallet_provider(&urls[active], &wallet)?;
         if p.bid {
             if !va.isSolver(addr).call().await? {
                 tracing::warn!(solver = %p.name, %addr, "not allowlisted on the SolverAuction: it will not bid");
@@ -132,7 +173,7 @@ async fn main() -> Result<()> {
                     .await?;
             }
         }
-        solvers.push(Solver { p, addr, w });
+        solvers.push(Solver { p, addr, wallet, w });
     }
     let mut known: BTreeSet<u64> = BTreeSet::new();
     let mut done: BTreeSet<u64> = BTreeSet::new();
@@ -144,74 +185,93 @@ async fn main() -> Result<()> {
         if cli.exit_after_s > 0 && started.elapsed() > Duration::from_secs(cli.exit_after_s) {
             return Ok(());
         }
-        let blk = read
-            .get_block_by_number(BlockNumberOrTag::Latest)
-            .await?
-            .context("latest block")?;
-        let (head, now) = (blk.header.number, blk.header.timestamp);
-        if head >= scanned {
-            for l in read
-                .get_logs(
-                    &Filter::new()
-                        .address(venue)
-                        .event_signature(ISolverAuctionV3::SolverWindowOpened::SIGNATURE_HASH)
-                        .from_block(scanned)
-                        .to_block(head),
-                )
+        let va = ISolverAuctionV3::new(venue, &read);
+        let res: Result<()> = async {
+            let blk = read
+                .get_block_by_number(BlockNumberOrTag::Latest)
                 .await?
-            {
-                if let Ok(e) = ISolverAuctionV3::SolverWindowOpened::decode_log_data(l.data()) {
-                    known.insert(e.id);
-                }
-            }
-            scanned = head + 1;
-        }
-        for id in known.difference(&done.clone()).copied().collect::<Vec<_>>() {
-            let lot = va.lot(id).call().await?;
-            if lot.finalized || now >= lot.endsAt.to::<u64>() {
-                done.insert(id);
-                continue;
-            }
-            for s in solvers.iter().filter(|s| s.p.bid) {
-                // re-read per solver: an earlier solver's bid this tick moves best and minBid
-                let lot = va.lot(id).call().await?;
-                let w = Window {
-                    floor: U256::from(lot.floorPrice),
-                    best: lot.best,
-                    best_price: U256::from(lot.bestPrice),
-                    ends_at: lot.endsAt.to::<u64>(),
-                    finalized: lot.finalized,
-                    min_bid: va.minBid(id).call().await?,
-                };
-                let Some(price) = solver_bid(&s.p, s.addr, &w, now) else {
-                    continue;
-                };
-                if !IFundHold::new(lot.token, &read)
-                    .canHold(s.addr)
-                    .call()
-                    .await
-                    .unwrap_or(false)
+                .context("latest block")?;
+            let (head, now) = (blk.header.number, blk.header.timestamp);
+            if head >= scanned {
+                for l in read
+                    .get_logs(
+                        &Filter::new()
+                            .address(venue)
+                            .event_signature(ISolverAuctionV3::SolverWindowOpened::SIGNATURE_HASH)
+                            .from_block(scanned)
+                            .to_block(head),
+                    )
+                    .await?
                 {
-                    tracing::warn!(solver = %s.p.name, settlement = id, "the fund refuses this solver (canHold): no bid");
+                    if let Ok(e) = ISolverAuctionV3::SolverWindowOpened::decode_log_data(l.data()) {
+                        known.insert(e.id);
+                    }
+                }
+                scanned = head + 1;
+            }
+            for id in known.difference(&done.clone()).copied().collect::<Vec<_>>() {
+                let lot = va.lot(id).call().await?;
+                if lot.finalized || now >= lot.endsAt.to::<u64>() {
+                    done.insert(id);
                     continue;
                 }
-                let v = ISolverAuctionV3::new(venue, &s.w);
-                let call = v.bid(id, price);
-                if let Err(e) = call.call().await {
-                    tracing::warn!(solver = %s.p.name, settlement = id, %price, error = %e, "bid pre-check reverted: not sent");
-                    continue;
-                }
-                match call.send().await {
-                    Ok(pending) => match pending.get_receipt().await {
-                        Ok(r) => {
-                            tracing::info!(solver = %s.p.name, settlement = id, %price, ok = r.status(), "solver bid")
-                        }
+                for s in solvers.iter().filter(|s| s.p.bid) {
+                    // re-read per solver: an earlier solver's bid this tick moves best and minBid
+                    let lot = va.lot(id).call().await?;
+                    let w = Window {
+                        floor: U256::from(lot.floorPrice),
+                        best: lot.best,
+                        best_price: U256::from(lot.bestPrice),
+                        ends_at: lot.endsAt.to::<u64>(),
+                        finalized: lot.finalized,
+                        min_bid: va.minBid(id).call().await?,
+                    };
+                    let Some(price) = solver_bid(&s.p, s.addr, &w, now) else {
+                        continue;
+                    };
+                    if !IFundHold::new(lot.token, &read)
+                        .canHold(s.addr)
+                        .call()
+                        .await
+                        .unwrap_or(false)
+                    {
+                        tracing::warn!(solver = %s.p.name, settlement = id, "the fund refuses this solver (canHold): no bid");
+                        continue;
+                    }
+                    let v = ISolverAuctionV3::new(venue, &s.w);
+                    let call = v.bid(id, price);
+                    if let Err(e) = call.call().await {
+                        tracing::warn!(solver = %s.p.name, settlement = id, %price, error = %e, "bid pre-check reverted: not sent");
+                        continue;
+                    }
+                    match call.send().await {
+                        Ok(pending) => match pending.get_receipt().await {
+                            Ok(r) => {
+                                tracing::info!(solver = %s.p.name, settlement = id, %price, ok = r.status(), "solver bid")
+                            }
+                            Err(e) => {
+                                tracing::warn!(solver = %s.p.name, settlement = id, error = %e, "bid receipt")
+                            }
+                        },
                         Err(e) => {
-                            tracing::warn!(solver = %s.p.name, settlement = id, error = %e, "bid receipt")
+                            tracing::warn!(solver = %s.p.name, settlement = id, error = %e, "bid send failed")
                         }
-                    },
-                    Err(e) => {
-                        tracing::warn!(solver = %s.p.name, settlement = id, error = %e, "bid send failed")
+                    }
+                }
+            }
+            Ok(())
+        }
+        .await;
+        if let Err(e) = res {
+            tracing::warn!(error = %e, "solver tick failed");
+            // S5: fail over to the next RPC that answers (back to the preferred one once it is healthy)
+            if let Ok((i, r)) = pick(&urls).await {
+                if i != active {
+                    tracing::warn!(from = %host(&urls[active]), to = %host(&urls[i]), "RPC failover");
+                    active = i;
+                    read = r;
+                    for s in solvers.iter_mut() {
+                        s.w = wallet_provider(&urls[active], &s.wallet)?;
                     }
                 }
             }
