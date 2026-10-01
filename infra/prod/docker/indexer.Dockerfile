@@ -45,7 +45,7 @@ COPY infra/prod/docker/entrypoint.sh /usr/local/bin/credence-entrypoint
 WORKDIR /app/indexer
 # ponder writes its build cache and generated schema at start; the container may run as the host user
 
-RUN mkdir -p .ponder generated && chmod -R a+rwX .ponder generated
+RUN mkdir -p .ponder generated && touch ponder-env.d.ts && chmod -R a+rwX .ponder generated ponder-env.d.ts && chmod a+rwx .
 ENV NODE_ENV=production
 USER credence
 EXPOSE 42069
