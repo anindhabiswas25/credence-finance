@@ -213,12 +213,26 @@ export function Row({ children, specs }: { children?: ReactNode; specs: Spec[] }
 
 // ── Borrow ───────────────────────────────────────────────────────────────────────────────────────
 
-/** Why new borrowing is unavailable in this market right now (never blocks repay or add). */
+/** Why new borrowing is unavailable in this market right now (never blocks repay or add). Closed and Halted
+ * markets still lend, up to the closure's safe LTV (BorrowLogic.borrow); only Reopen and Corp. action stop it. */
 export function borrowBlock(m: Market): string | null {
-  if (m.state === "Closed" || m.state === "Halted" || m.state === "Corp. action")
-    return `Borrowing is paused while ${ticker(m.symbol)} is ${m.state.toLowerCase()}; you can still repay or add collateral.`;
+  if (m.state === "Reopen" || m.state === "Corp. action")
+    return `Borrowing is paused while ${ticker(m.symbol)} is ${m.state === "Reopen" ? "reopening" : "in a corporate action"}; you can still repay or add collateral.`;
   if (m.pause) return m.pause.message;
   return null;
+}
+
+/**
+ * The borrow limit the contract applies right now (MarketLib.limit): max LTV in the open session before the
+ * Bell window, otherwise the closure's safe LTV with the debt projected to the reopen, D × (1 + r × days / 365)
+ * (KinkedRateModel.projected). `growth` is that projection factor (1 when the safe rule does not apply).
+ */
+export function borrowLimit(m: Market, p: Pick<Position, "borrowLimitLtv"> | undefined) {
+  const fromChain = p && p.borrowLimitLtv > 0 ? Math.min(m.maxLtvEffective, p.borrowLimitLtv) : null;
+  const limit = fromChain ?? (m.state === "Open" ? m.maxLtvEffective : (m.safeLtv ?? 0));
+  const safeRule = m.state !== "Open" || limit < m.maxLtvEffective;
+  const growth = safeRule ? 1 + (m.borrowApr * (m.nextClosure?.days ?? 3)) / 365 : 1;
+  return { limit, safeRule, growth };
 }
 
 const marketAddress = (m: Market) => STACKS[m.stack].market;
@@ -274,8 +288,9 @@ export function BorrowActions({
     ];
   };
 
-  const limit = Math.min(m.maxLtvEffective, p?.borrowLimitLtv || m.maxLtvEffective);
-  const canBorrow = Math.max(0, tokens * m.price * limit - debt);
+  const { limit, safeRule, growth } = borrowLimit(m, p);
+  // Never more than the market's idle liquidity (the contract reverts InsufficientLiquidity above it).
+  const canBorrow = Math.max(0, Math.min((tokens * m.price * limit) / growth - debt, m.liquidity));
   const premium = bell?.premium ?? null;
 
   const specs: Record<string, Spec> = {
@@ -380,11 +395,13 @@ export function BorrowActions({
     Borrow: {
       icon: "cash",
       title: "Borrow",
-      sub: "Up to your limit",
+      sub: safeRule ? "Closure-safe limit" : "Up to your limit",
       amount: `${num(canBorrow, 0)} ${loan}`,
       dialog: {
         title: `Borrow ${loan} against ${sym}`,
-        description: `Limit ${pct(limit)} LTV at ${usd(m.price)} per ${sym}. Rate ${pct(m.borrowApr)} APR, variable.`,
+        description: safeRule
+          ? `${m.state === "Open" ? "The Bell window is open" : `${ticker(m.symbol)} is ${m.state.toLowerCase()}`}: the limit is the closure-safe ${pct(limit)} LTV at ${usd(m.price)} per ${sym}, with interest counted to the reopen. Rate ${pct(m.borrowApr)} APR, variable.`
+          : `Limit ${pct(limit)} LTV at ${usd(m.price)} per ${sym}. Rate ${pct(m.borrowApr)} APR, variable.`,
         fields: [
           {
             key: "a",
@@ -397,7 +414,17 @@ export function BorrowActions({
         ],
         preview: (v) => [...after(debt + (v.a ?? 0), tokens), ["Available in market", `${num(m.liquidity, 0)} ${loan}`]],
         confirm: "Borrow",
-        blocked: borrowBlock(m) ?? (tokens <= 0 ? `Add ${sym} as collateral first.` : null),
+        blocked:
+          borrowBlock(m) ??
+          (tokens <= 0
+            ? `Add ${sym} as collateral first.`
+            : limit <= 0
+              ? `The closure-safe limit for ${ticker(m.symbol)} isn't available right now; try again shortly.`
+              : m.liquidity <= 0
+                ? `There is no ${loan} left to lend in this market right now.`
+                : canBorrow <= 0
+                  ? `Your loan is already at the ${pct(limit)} limit that applies right now.`
+                  : null),
         plan: (v) => {
           const a = units(v.a, decimals);
           return {

@@ -54,23 +54,16 @@ export function pauseReason(
               "On testnet RedStone publishes no extended-hours feed for MSFT, GOOGL and AMZN: this is expected, not a fault.",
           }
         : null;
+    // CLOSED and HALTED do not pause borrowing: the market lends up to the closure's safe LTV at the min price,
+    // on debt projected to the reopen (Architecture §1 state table; BorrowLogic.borrow, MarketLib.limit).
     case ClockState.CLOSED:
-      return {
-        reason: "CLOSED",
-        message:
-          "The venue is closed: new borrowing waits for the next session.",
-      };
+    case ClockState.HALTED:
+      return null;
     case ClockState.REOPEN:
       return {
         reason: "REOPEN",
         message:
           "The market is reopening after a closure (open print and settlement); borrowing resumes when it completes.",
-      };
-    case ClockState.HALTED:
-      return {
-        reason: "HALTED",
-        message:
-          "Trading in the asset is halted (or, for a NAV asset, no NAV print yet): borrowing is paused.",
       };
     case ClockState.CORP_ACTION:
       return {
