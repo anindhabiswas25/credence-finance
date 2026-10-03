@@ -216,7 +216,7 @@ impl FeedChain for ChainClient {
             match self.submit_via(p, reports, signatures.clone()).await {
                 Ok(o) => return Ok(o),
                 Err(e) => {
-                    tracing::warn!(error = %e, "submit failed on one RPC, trying the next");
+                    tracing::warn!(error = format!("{e:#}"), "submit failed on one RPC, trying the next");
                     last = Some(e)
                 }
             }

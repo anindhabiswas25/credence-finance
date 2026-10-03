@@ -538,7 +538,7 @@ impl Aggregator {
                 }
                 Err(e) => {
                     ready.set_ready(false);
-                    tracing::error!(feed = %self.cfg.feed, error = %e, "tick failed");
+                    tracing::error!(feed = %self.cfg.feed, error = format!("{e:#}"), "tick failed");
                 }
             }
         }
