@@ -25,3 +25,4 @@ calibration/data/
 
 # QA-sec project-local tool installs (charter §2)
 .tools/
+.vercel
