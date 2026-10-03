@@ -13,7 +13,8 @@ export function WalletButton() {
           return (
             <button type="button" className="cx-wallet" onClick={openConnectModal}>
               <Icon name="lock" size={17} strokeWidth={1.9} />
-              <span>Connect wallet</span>
+              <span className="cx-wallet-long">Connect wallet</span>
+              <span className="cx-wallet-short">Connect</span>
             </button>
           );
         }
@@ -21,7 +22,8 @@ export function WalletButton() {
           return (
             <button type="button" className="cx-wallet is-bad" onClick={openChainModal}>
               <Icon name="alert" size={17} strokeWidth={1.9} />
-              <span>Wrong network</span>
+              <span className="cx-wallet-long">Wrong network</span>
+              <span className="cx-wallet-short">Network</span>
             </button>
           );
         }
