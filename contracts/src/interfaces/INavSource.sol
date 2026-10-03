@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: BUSL-1.1
+// SPDX-License-Identifier: MIT
 pragma solidity 0.8.30;
 
 /// @title A NAV source (fund markets). Implemented by CredencePriceFeed for NAV reports.

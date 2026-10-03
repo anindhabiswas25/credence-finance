@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: BUSL-1.1
+// SPDX-License-Identifier: MIT
 pragma solidity 0.8.30;
 
 /// @title A DEX TWAP source for one collateral token (Build Guide §8.3.2 shallow-pool rule).

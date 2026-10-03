@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: BUSL-1.1
+// SPDX-License-Identifier: MIT
 pragma solidity 0.8.30;
 
 /// @title Packed integer vectors shared with risk-core (Build Guide §7.1, R-13, R-14).

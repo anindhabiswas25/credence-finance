@@ -6,7 +6,7 @@ build-backend = "maturin"
 name = "credence-risk-py"
 description = "Credence Finance risk-core (Rust) for Python: bit-identical to the Stylus Risk Engine"
 requires-python = ">=3.10"
-license = { text = "BUSL-1.1" }
+license = { text = "MIT" }
 dynamic = ["version"]
 
 [tool.maturin]

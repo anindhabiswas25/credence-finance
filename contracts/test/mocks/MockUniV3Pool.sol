@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: BUSL-1.1
+// SPDX-License-Identifier: MIT
 pragma solidity 0.8.30;
 
 /// @dev Uniswap v3 pool stub: a constant mean tick over any window, settable slot0 / liquidity, failure switches.

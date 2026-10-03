@@ -647,7 +647,7 @@ members = [
 
 [workspace.package]
 edition = "2021"
-license = "BUSL-1.1"
+license = "MIT"
 version = "0.1.0"
 
 [workspace.dependencies]
@@ -897,7 +897,7 @@ This section is the contract-level spec. For each contract it gives the purpose,
 ### 8.1 Shared types (`libraries/Types.sol`)
 
 ```solidity
-// SPDX-License-Identifier: BUSL-1.1
+// SPDX-License-Identifier: MIT
 pragma solidity 0.8.30;
 
 enum ClockState { REGULAR, EXTENDED, CLOSED, REOPEN, HALTED, CORP_ACTION }

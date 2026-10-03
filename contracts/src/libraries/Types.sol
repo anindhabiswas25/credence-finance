@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: BUSL-1.1
+// SPDX-License-Identifier: MIT
 pragma solidity 0.8.30;
 
 /// @title Credence shared types (Build Guide §8.1). Interfaces v1 (v0 + additive S2 types, ADR-0104).
