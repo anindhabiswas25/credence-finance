@@ -1,4 +1,5 @@
 # Credence Finance
+<img width="2850" height="1566" alt="Screenshot from 2026-09-29 01-25-13" src="https://github.com/user-attachments/assets/f926883d-a0be-42ec-9344-c82c63b902e6" />
 
 A lending protocol for tokenized stocks and tokenized Treasury funds that follows each asset's market clock.
 
